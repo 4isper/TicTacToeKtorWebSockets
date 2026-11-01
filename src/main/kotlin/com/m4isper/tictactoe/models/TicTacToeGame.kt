@@ -67,10 +67,10 @@ class TicTacToeGame {
 
         val currentPlayer = state.value.playerAtTurn
         state.update {
-            val newField = it.field.also { field ->
-                field[y][x] = currentPlayer
+            val newField = it.field.mapIndexed { row, cells ->
+                cells.mapIndexed { col, cell -> if (row == y && col == x) currentPlayer else cell }
             }
-            val isBoardFull = newField.all { it.all { it != null } }
+            val isBoardFull = newField.all { row -> row.all { it != null } }
             if (isBoardFull){
                 startNewRoundDelayed()
             }
