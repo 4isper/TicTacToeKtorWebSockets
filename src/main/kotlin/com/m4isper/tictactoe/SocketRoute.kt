@@ -7,6 +7,9 @@ import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.serialization.json.Json
+import org.slf4j.LoggerFactory
+
+private val logger = LoggerFactory.getLogger("com.m4isper.tictactoe.SocketRoute")
 
 fun Route.socket(game: TicTacToeGame){
     route("/play"){
@@ -26,7 +29,7 @@ fun Route.socket(game: TicTacToeGame){
                     }
                 }
             } catch (e: Exception){
-                e.printStackTrace()
+                logger.error("WebSocket session failed for player {}", player, e)
             } finally {
                 game.disconnectPlayer(player)
             }
