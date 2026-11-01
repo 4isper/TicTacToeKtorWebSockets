@@ -13,6 +13,7 @@ fun main(args: Array<String>) {
 
 fun Application.module() {
     val game = TicTacToeGame()
+    environment.monitor.subscribe(ApplicationStopped) { game.shutdown() }
     configureSockets()
     configureSerialization()
     configureMonitoring()

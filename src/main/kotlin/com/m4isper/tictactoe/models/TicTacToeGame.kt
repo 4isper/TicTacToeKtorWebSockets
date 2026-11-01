@@ -80,6 +80,10 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
         }
     }
 
+    fun shutdown() {
+        gameScope.cancel()
+    }
+
     private fun scheduleRoundRestart() {
         roundRestartJob?.cancel()
         roundRestartJob = gameScope.launch {
