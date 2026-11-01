@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.models.TicTacToeGame
 import com.example.plugins.configureMonitoring
 import com.example.plugins.configureRouting
 import com.example.plugins.configureSerialization
@@ -11,8 +12,9 @@ fun main(args: Array<String>) {
 }
 
 fun Application.module() {
+    val game = TicTacToeGame()
     configureSockets()
     configureSerialization()
     configureMonitoring()
-    configureRouting()
+    configureRouting(game)
 }
