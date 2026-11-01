@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.ktor)
     alias(libs.plugins.kotlin.plugin.serialization)
+    alias(libs.plugins.spotless)
+    alias(libs.plugins.detekt)
 }
 
 group = "com.m4isper"
@@ -30,4 +32,24 @@ dependencies {
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.ktor.client.websockets)
     testImplementation(libs.kotlin.test.junit)
+}
+
+spotless {
+    kotlin {
+        ktlint("1.8.0")
+            .editorConfigOverride(mapOf("ktlint_standard_no-wildcard-imports" to "disabled"))
+    }
+    kotlinGradle {
+        ktlint("1.8.0")
+            .editorConfigOverride(mapOf("ktlint_standard_no-wildcard-imports" to "disabled"))
+    }
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    config.setFrom(file("config/detekt.yml"))
+}
+
+tasks.named("check") {
+    dependsOn(tasks.spotlessCheck, tasks.detekt)
 }

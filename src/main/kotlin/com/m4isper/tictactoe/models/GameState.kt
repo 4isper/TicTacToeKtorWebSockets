@@ -10,9 +10,9 @@ data class GameState(
     val field: List<List<PlayerSymbol?>> = emptyField(),
     val winningPlayer: PlayerSymbol? = null,
     val isBoardFull: Boolean = false,
-    val connectionPlayers: List<PlayerSymbol> = emptyList()
-){
-    companion object{
+    val connectionPlayers: List<PlayerSymbol> = emptyList(),
+) {
+    companion object {
         fun emptyField(): List<List<PlayerSymbol?>> = GameRules.emptyField()
     }
 }

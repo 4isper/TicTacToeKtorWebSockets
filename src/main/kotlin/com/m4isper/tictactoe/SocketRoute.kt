@@ -11,12 +11,12 @@ import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("com.m4isper.tictactoe.SocketRoute")
 
-fun Route.socket(game: TicTacToeGame){
-    route("/play"){
+fun Route.socket(game: TicTacToeGame) {
+    route("/play") {
         webSocket {
             val player = game.connectPlayer(this)
 
-            if (player == null){
+            if (player == null) {
                 close(CloseReason(CloseReason.Codes.CANNOT_ACCEPT, "2 players already connected"))
                 return@webSocket
             }
@@ -28,7 +28,7 @@ fun Route.socket(game: TicTacToeGame){
                         game.finishTurn(player, action.x, action.y)
                     }
                 }
-            } catch (e: Exception){
+            } catch (e: Exception) {
                 logger.error("WebSocket session failed for player {}", player, e)
             } finally {
                 game.disconnectPlayer(player)
@@ -37,10 +37,12 @@ fun Route.socket(game: TicTacToeGame){
     }
 }
 
-private fun extractAction(message: String): MakeTurn{
+private fun extractAction(message: String): MakeTurn {
     val type = message.substringBefore("#")
     val body = message.substringAfter("#")
     return if (type == "make_turn") {
         Json.decodeFromString(body)
-    } else MakeTurn(-1, -1)
+    } else {
+        MakeTurn(-1, -1)
+    }
 }

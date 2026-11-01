@@ -44,11 +44,11 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
         state.value = state.value.copy(connectionPlayers = state.value.connectionPlayers - player)
     }
 
-    suspend fun broadcast(state: GameState){
+    suspend fun broadcast(state: GameState) {
         playerSockets.values.forEach { socket ->
             try {
                 socket.send(
-                    Json.encodeToString(state)
+                    Json.encodeToString(state),
                 )
             } catch (e: Exception) {
                 logger.warn("Failed to broadcast game state to a socket", e)
@@ -58,12 +58,9 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
 
     fun finishTurn(player: PlayerSymbol, x: Int, y: Int) {
         synchronized(lock) {
-            val size = GameRules.BOARD_SIZE
-            if (x !in 0 until size || y !in 0 until size) return
-            val current = state.value
-            if (current.field[y][x] != null || current.winningPlayer != null) return
-            if (current.playerAtTurn != player) return
+            if (!isLegalMove(player, x, y)) return
 
+            val current = state.value
             val newField = current.field.mapIndexed { row, cells ->
                 cells.mapIndexed { col, cell -> if (row == y && col == x) player else cell }
             }
@@ -74,10 +71,19 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
                 playerAtTurn = player.other,
                 field = newField,
                 isBoardFull = isBoardFull,
-                winningPlayer = winningPlayer
+                winningPlayer = winningPlayer,
             )
             if (winningPlayer != null || isBoardFull) scheduleRoundRestart()
         }
+    }
+
+    private fun isLegalMove(player: PlayerSymbol, x: Int, y: Int): Boolean {
+        val size = GameRules.BOARD_SIZE
+        val current = state.value
+        return x in 0 until size && y in 0 until size &&
+            current.field[y][x] == null &&
+            current.winningPlayer == null &&
+            current.playerAtTurn == player
     }
 
     fun shutdown() {
@@ -93,7 +99,7 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
                     playerAtTurn = PlayerSymbol.X,
                     field = GameState.emptyField(),
                     winningPlayer = null,
-                    isBoardFull = false
+                    isBoardFull = false,
                 )
             }
         }

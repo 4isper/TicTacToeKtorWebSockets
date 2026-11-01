@@ -41,7 +41,7 @@ class GameRulesTest {
         val field = listOf(
             listOf(PlayerSymbol.X, PlayerSymbol.O, PlayerSymbol.X),
             listOf(PlayerSymbol.O, PlayerSymbol.O, PlayerSymbol.X),
-            listOf(PlayerSymbol.X, PlayerSymbol.X, PlayerSymbol.O)
+            listOf(PlayerSymbol.X, PlayerSymbol.X, PlayerSymbol.O),
         )
         assertNull(GameRules.winningPlayer(field))
         assertTrue(GameRules.isBoardFull(field))
