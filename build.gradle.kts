@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.plugin.serialization)
 }
 
-group = "com.example"
+group = "com.m4isper"
 version = "0.0.1"
 
 application {
@@ -28,5 +28,6 @@ dependencies {
     implementation(libs.ktor.server.netty)
     implementation(libs.logback.classic)
     testImplementation(libs.ktor.server.test.host)
+    testImplementation(libs.ktor.client.websockets)
     testImplementation(libs.kotlin.test.junit)
 }
