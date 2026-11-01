@@ -91,6 +91,53 @@ class ApplicationTest {
     }
 
     @Test
+    fun `winning move is detected immediately`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play") {
+            withTimeout(5_000) { incoming.receive() }
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                client.webSocket("/play") {
+                    withTimeout(5_000) { incoming.receive() }
+                    oReady.complete(Unit)
+                    withTimeout(5_000) { incoming.receive() }
+                    send(Frame.Text("make_turn#{\"x\":1,\"y\":0}"))
+                    withTimeout(5_000) { incoming.receive() }
+                    withTimeout(5_000) { incoming.receive() }
+                    send(Frame.Text("make_turn#{\"x\":1,\"y\":1}"))
+                    withTimeout(5_000) { incoming.receive() }
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            withTimeout(5_000) { incoming.receive() } // broadcast of O's connect
+
+            send(Frame.Text("make_turn#{\"x\":0,\"y\":0}"))
+            withTimeout(5_000) { incoming.receive() }
+            withTimeout(5_000) { incoming.receive() }
+            send(Frame.Text("make_turn#{\"x\":0,\"y\":1}"))
+            withTimeout(5_000) { incoming.receive() }
+            withTimeout(5_000) { incoming.receive() }
+            send(Frame.Text("make_turn#{\"x\":0,\"y\":2}"))
+
+            val frame = withTimeout(5_000) { incoming.receive() }
+            val state = Json.decodeFromString<GameState>((frame as Frame.Text).readText())
+            assertEquals('X', state.winningPlayer)
+
+            second.cancel()
+        }
+    }
+
+    @Test
     fun `third connection is rejected when both players are connected`() = testApplication {
         application {
             module()
