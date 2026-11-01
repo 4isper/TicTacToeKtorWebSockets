@@ -59,7 +59,8 @@ class TicTacToeGame {
     }
 
     fun finishTurn(player: Char, x:Int, y:Int){
-        if (state.value.field[x][y] != null || state.value.winningPlayer != null) {
+        if (x !in 0..2 || y !in 0..2) return
+        if (state.value.field[y][x] != null || state.value.winningPlayer != null) {
             return
         }
         if (state.value.playerAtTurn != player) return

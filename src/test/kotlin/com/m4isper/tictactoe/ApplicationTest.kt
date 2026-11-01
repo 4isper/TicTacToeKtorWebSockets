@@ -33,6 +33,64 @@ class ApplicationTest {
     }
 
     @Test
+    fun `non-turn message does not drop the connection`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play") {
+            withTimeout(5_000) { incoming.receive() }
+
+            send(Frame.Text("unknown_type#{}"))
+
+            send(Frame.Text("make_turn#{\"x\":0,\"y\":0}"))
+            val frame = withTimeout(5_000) { incoming.receive() }
+            val state = Json.decodeFromString<GameState>((frame as Frame.Text).readText())
+            assertEquals('X', state.field[0][0])
+        }
+    }
+
+    @Test
+    fun `occupied cell is not overwritten by the opponent`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play") {
+            withTimeout(5_000) { incoming.receive() }
+
+            send(Frame.Text("make_turn#{\"x\":2,\"y\":0}"))
+            withTimeout(5_000) { incoming.receive() }
+
+            val done = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                client.webSocket("/play") {
+                    withTimeout(5_000) { incoming.receive() }
+
+                    send(Frame.Text("make_turn#{\"x\":2,\"y\":0}"))
+                    send(Frame.Text("make_turn#{\"x\":0,\"y\":0}"))
+
+                    val frame = withTimeout(5_000) { incoming.receive() }
+                    val state = Json.decodeFromString<GameState>((frame as Frame.Text).readText())
+                    assertEquals('X', state.field[0][2])
+                    assertEquals('O', state.field[0][0])
+                    done.complete(Unit)
+                    awaitCancellation()
+                }
+            }
+            done.await()
+            second.cancel()
+        }
+    }
+
+    @Test
     fun `third connection is rejected when both players are connected`() = testApplication {
         application {
             module()
