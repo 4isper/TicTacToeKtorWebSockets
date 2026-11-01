@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe
 
+import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.models.GameState
 import io.ktor.client.plugins.websocket.*
 import io.ktor.server.testing.*
@@ -27,8 +28,8 @@ class ApplicationTest {
             val frame = withTimeout(5_000) { incoming.receive() }
             val text = (frame as? Frame.Text)?.readText()
             val state = text?.let { Json.decodeFromString<GameState>(it) }
-            assertEquals('X', state?.playerAtTurn)
-            assertEquals(listOf('X'), state?.connectionPlayers)
+            assertEquals(PlayerSymbol.X, state?.playerAtTurn)
+            assertEquals(listOf(PlayerSymbol.X), state?.connectionPlayers)
         }
     }
 
@@ -49,7 +50,7 @@ class ApplicationTest {
             send(Frame.Text("make_turn#{\"x\":0,\"y\":0}"))
             val frame = withTimeout(5_000) { incoming.receive() }
             val state = Json.decodeFromString<GameState>((frame as Frame.Text).readText())
-            assertEquals('X', state.field[0][0])
+            assertEquals(PlayerSymbol.X, state.field[0][0])
         }
     }
 
@@ -79,8 +80,8 @@ class ApplicationTest {
 
                     val frame = withTimeout(5_000) { incoming.receive() }
                     val state = Json.decodeFromString<GameState>((frame as Frame.Text).readText())
-                    assertEquals('X', state.field[0][2])
-                    assertEquals('O', state.field[0][0])
+                    assertEquals(PlayerSymbol.X, state.field[0][2])
+                    assertEquals(PlayerSymbol.O, state.field[0][0])
                     done.complete(Unit)
                     awaitCancellation()
                 }
@@ -131,7 +132,7 @@ class ApplicationTest {
 
             val frame = withTimeout(5_000) { incoming.receive() }
             val state = Json.decodeFromString<GameState>((frame as Frame.Text).readText())
-            assertEquals('X', state.winningPlayer)
+            assertEquals(PlayerSymbol.X, state.winningPlayer)
 
             second.cancel()
         }

@@ -1,5 +1,7 @@
 package com.m4isper.tictactoe.models
 
+import com.m4isper.tictactoe.domain.GameRules
+import com.m4isper.tictactoe.domain.PlayerSymbol
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +18,7 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
     private val state = MutableStateFlow(GameState())
     private val lock = Any()
 
-    private val playerSockets = ConcurrentHashMap<Char, WebSocketSession>()
+    private val playerSockets = ConcurrentHashMap<PlayerSymbol, WebSocketSession>()
 
     private val gameScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var roundRestartJob: Job? = null
@@ -25,9 +27,9 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
         state.onEach(::broadcast).launchIn(gameScope)
     }
 
-    fun connectPlayer(session: WebSocketSession): Char? = synchronized(lock) {
+    fun connectPlayer(session: WebSocketSession): PlayerSymbol? = synchronized(lock) {
         val current = state.value
-        val player = if ('X' in current.connectionPlayers) 'O' else 'X'
+        val player = if (PlayerSymbol.X in current.connectionPlayers) PlayerSymbol.O else PlayerSymbol.X
         if (player in current.connectionPlayers) {
             null
         } else {
@@ -37,7 +39,7 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
         }
     }
 
-    fun disconnectPlayer(player: Char): Unit = synchronized(lock) {
+    fun disconnectPlayer(player: PlayerSymbol): Unit = synchronized(lock) {
         playerSockets.remove(player)
         state.value = state.value.copy(connectionPlayers = state.value.connectionPlayers - player)
     }
@@ -54,9 +56,10 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
         }
     }
 
-    fun finishTurn(player: Char, x: Int, y: Int) {
+    fun finishTurn(player: PlayerSymbol, x: Int, y: Int) {
         synchronized(lock) {
-            if (x !in 0..2 || y !in 0..2) return
+            val size = GameRules.BOARD_SIZE
+            if (x !in 0 until size || y !in 0 until size) return
             val current = state.value
             if (current.field[y][x] != null || current.winningPlayer != null) return
             if (current.playerAtTurn != player) return
@@ -64,11 +67,11 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
             val newField = current.field.mapIndexed { row, cells ->
                 cells.mapIndexed { col, cell -> if (row == y && col == x) player else cell }
             }
-            val isBoardFull = newField.all { row -> row.all { it != null } }
-            val winningPlayer = getWinningPlayer(newField)
+            val isBoardFull = GameRules.isBoardFull(newField)
+            val winningPlayer = GameRules.winningPlayer(newField)
 
             state.value = current.copy(
-                playerAtTurn = if (player == 'X') 'O' else 'X',
+                playerAtTurn = player.other,
                 field = newField,
                 isBoardFull = isBoardFull,
                 winningPlayer = winningPlayer
@@ -77,33 +80,13 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
         }
     }
 
-    private fun getWinningPlayer(field: List<List<Char?>>): Char? {
-        return if (field[0][0] != null && field[0][0] == field[0][1] && field[0][1] == field[0][2]){
-            field[0][0]
-        } else if (field[1][0] != null && field[1][0] == field[1][1] && field[1][1] == field[1][2]){
-            field[1][0]
-        } else if (field[2][0] != null && field[2][0] == field[2][1] && field[2][1] == field[2][2]){
-            field[2][0]
-        } else if (field[0][0] != null && field[0][0] == field[1][0] && field[1][0] == field[2][0]){
-            field[0][0]
-        } else if (field[0][1] != null && field[0][1] == field[1][1] && field[1][1] == field[2][1]){
-            field[0][1]
-        } else if (field[0][2] != null && field[0][2] == field[1][2] && field[1][2] == field[2][2]){
-            field[0][2]
-        } else if (field[0][0] != null && field[0][0] == field[1][1] && field[1][1] == field[2][2]){
-            field[0][0]
-        } else if (field[0][2] != null && field[0][2] == field[1][1] && field[1][1] == field[2][0]){
-            field[0][2]
-        } else null
-    }
-
     private fun scheduleRoundRestart() {
         roundRestartJob?.cancel()
         roundRestartJob = gameScope.launch {
             delay(roundRestartDelayMs)
             synchronized(lock) {
                 state.value = state.value.copy(
-                    playerAtTurn = 'X',
+                    playerAtTurn = PlayerSymbol.X,
                     field = GameState.emptyField(),
                     winningPlayer = null,
                     isBoardFull = false
