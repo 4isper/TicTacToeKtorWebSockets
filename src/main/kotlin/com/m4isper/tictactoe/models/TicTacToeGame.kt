@@ -1,4 +1,4 @@
-package com.example.models
+package com.m4isper.tictactoe.models
 
 import io.ktor.websocket.*
 import kotlinx.coroutines.*

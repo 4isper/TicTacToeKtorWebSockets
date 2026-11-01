@@ -1,7 +1,7 @@
-package com.example.plugins
+package com.m4isper.tictactoe.plugins
 
-import com.example.models.TicTacToeGame
-import com.example.socket
+import com.m4isper.tictactoe.models.TicTacToeGame
+import com.m4isper.tictactoe.socket
 import io.ktor.server.application.*
 import io.ktor.server.routing.*
 

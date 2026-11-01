@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.plugin.serialization)
 }
 
-group = "com.example"
+group = "com.m4isper"
 version = "0.0.1"
 
 application {
