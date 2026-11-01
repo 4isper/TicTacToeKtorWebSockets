@@ -90,6 +90,10 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
         gameScope.cancel()
     }
 
+    fun isFull(): Boolean = state.value.connectionPlayers.size >= 2
+
+    fun isEmpty(): Boolean = state.value.connectionPlayers.isEmpty()
+
     private fun scheduleRoundRestart() {
         roundRestartJob?.cancel()
         roundRestartJob = gameScope.launch {

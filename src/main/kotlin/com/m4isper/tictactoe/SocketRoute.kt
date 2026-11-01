@@ -1,7 +1,6 @@
 package com.m4isper.tictactoe
 
 import com.m4isper.tictactoe.models.MakeTurn
-import com.m4isper.tictactoe.models.TicTacToeGame
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
@@ -11,15 +10,10 @@ import org.slf4j.LoggerFactory
 
 private val logger = LoggerFactory.getLogger("com.m4isper.tictactoe.SocketRoute")
 
-fun Route.socket(game: TicTacToeGame) {
+fun Route.socket(lobby: GameLobby) {
     route("/play") {
         webSocket {
-            val player = game.connectPlayer(this)
-
-            if (player == null) {
-                close(CloseReason(CloseReason.Codes.CANNOT_ACCEPT, "2 players already connected"))
-                return@webSocket
-            }
+            val (game, player) = lobby.join(this)
 
             try {
                 incoming.consumeEach { frame ->
@@ -31,7 +25,7 @@ fun Route.socket(game: TicTacToeGame) {
             } catch (e: Exception) {
                 logger.error("WebSocket session failed for player {}", player, e)
             } finally {
-                game.disconnectPlayer(player)
+                lobby.leave(game, player)
             }
         }
     }

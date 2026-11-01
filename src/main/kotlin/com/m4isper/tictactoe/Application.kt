@@ -1,6 +1,5 @@
 package com.m4isper.tictactoe
 
-import com.m4isper.tictactoe.models.TicTacToeGame
 import com.m4isper.tictactoe.plugins.configureMonitoring
 import com.m4isper.tictactoe.plugins.configureRouting
 import com.m4isper.tictactoe.plugins.configureSerialization
@@ -12,10 +11,10 @@ fun main(args: Array<String>) {
 }
 
 fun Application.module() {
-    val game = TicTacToeGame()
-    monitor.subscribe(ApplicationStopped) { game.shutdown() }
+    val lobby = GameLobby()
+    monitor.subscribe(ApplicationStopped) { lobby.shutdownAll() }
     configureSockets()
     configureSerialization()
     configureMonitoring()
-    configureRouting(game)
+    configureRouting(lobby)
 }

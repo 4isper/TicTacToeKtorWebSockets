@@ -11,7 +11,7 @@ A minimal tic-tac-toe game server: two players connect over WebSocket, every sta
 ## Protocol
 
 - Endpoint: `ws://localhost:8080/play`
-- The first two connections become `X` and `O`; a third one is closed with close code `1003 CANNOT_ACCEPT` ("2 players already connected").
+- Players are matched pairwise: the first two connections play one game, the next two get their own game, and so on. In each game the first connection plays `X`, the second `O`. An emptied game (both players left) is retired.
 - Client → server: a text frame `make_turn#{"x":<col>,"y":<row>}` where `x` is the column and `y` is the row, both `0..2`. Messages with any other type are ignored.
 - Server → client: on every state change a JSON `GameState`, for example:
 
@@ -35,7 +35,7 @@ CI runs `./gradlew build` on every push and pull request (GitHub Actions).
 
 ## Roadmap
 
-- Rooms / matchmaking — currently one global game shared by everyone
-- Reconnect handling (a dropped socket frees the slot immediately)
+- Reconnect handling (a dropped socket frees the slot; the next joiner inherits the ongoing game)
 - Score across rounds
 - Configurable board size
+- Named rooms / invite links (pairing is currently automatic)

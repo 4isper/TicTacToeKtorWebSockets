@@ -139,7 +139,7 @@ class ApplicationTest {
     }
 
     @Test
-    fun `third connection is rejected when both players are connected`() = testApplication {
+    fun `each new pair of connections gets its own game`() = testApplication {
         application {
             module()
         }
@@ -150,20 +150,22 @@ class ApplicationTest {
         client.webSocket("/play") {
             withTimeout(5_000) { incoming.receive() }
 
-            val secondRegistered = CompletableDeferred<Unit>()
+            val oReady = CompletableDeferred<Unit>()
             val scope = CoroutineScope(coroutineContext)
             val second = scope.launch {
                 client.webSocket("/play") {
                     withTimeout(5_000) { incoming.receive() }
-                    secondRegistered.complete(Unit)
+                    oReady.complete(Unit)
                     awaitCancellation()
                 }
             }
-            secondRegistered.await()
+            oReady.await()
 
             client.webSocket("/play") {
-                val reason = withTimeout(5_000) { closeReason.await() }
-                assertEquals(CloseReason.Codes.CANNOT_ACCEPT.code, reason?.code)
+                val frame = withTimeout(5_000) { incoming.receive() }
+                val state = Json.decodeFromString<GameState>((frame as Frame.Text).readText())
+                assertEquals(listOf(PlayerSymbol.X), state.connectionPlayers)
+                assertNull(state.field[0][0])
             }
 
             second.cancel()

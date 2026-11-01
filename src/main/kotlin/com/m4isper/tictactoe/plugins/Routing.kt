@@ -1,12 +1,12 @@
 package com.m4isper.tictactoe.plugins
 
-import com.m4isper.tictactoe.models.TicTacToeGame
+import com.m4isper.tictactoe.GameLobby
 import com.m4isper.tictactoe.socket
 import io.ktor.server.application.*
 import io.ktor.server.routing.*
 
-fun Application.configureRouting(game: TicTacToeGame) {
+fun Application.configureRouting(lobby: GameLobby) {
     routing {
-        socket(game)
+        socket(lobby)
     }
 }
