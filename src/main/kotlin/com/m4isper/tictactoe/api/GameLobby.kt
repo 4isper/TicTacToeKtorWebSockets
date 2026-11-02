@@ -1,7 +1,7 @@
-package com.m4isper.tictactoe
+package com.m4isper.tictactoe.api
 
 import com.m4isper.tictactoe.domain.PlayerSymbol
-import com.m4isper.tictactoe.models.TicTacToeGame
+import com.m4isper.tictactoe.game.TicTacToeGame
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
 import java.util.UUID

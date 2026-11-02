@@ -1,10 +1,10 @@
 package com.m4isper.tictactoe
 
-import com.m4isper.tictactoe.api.ClientMessage
-import com.m4isper.tictactoe.api.ServerEvent
-import com.m4isper.tictactoe.api.protocolJson
 import com.m4isper.tictactoe.domain.PlayerSymbol
-import com.m4isper.tictactoe.models.GameState
+import com.m4isper.tictactoe.game.GameState
+import com.m4isper.tictactoe.protocol.ClientMessage
+import com.m4isper.tictactoe.protocol.ServerEvent
+import com.m4isper.tictactoe.protocol.protocolJson
 import io.ktor.client.plugins.websocket.*
 import io.ktor.server.testing.*
 import io.ktor.websocket.*

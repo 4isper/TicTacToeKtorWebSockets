@@ -1,6 +1,7 @@
 package com.m4isper.tictactoe
 
-import com.m4isper.tictactoe.models.TicTacToeGame
+import com.m4isper.tictactoe.api.GameLobby
+import com.m4isper.tictactoe.game.TicTacToeGame
 import com.m4isper.tictactoe.plugins.configureMonitoring
 import com.m4isper.tictactoe.plugins.configureRouting
 import com.m4isper.tictactoe.plugins.configureSerialization

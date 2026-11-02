@@ -1,7 +1,7 @@
-package com.m4isper.tictactoe.api
+package com.m4isper.tictactoe.protocol
 
 import com.m4isper.tictactoe.domain.PlayerSymbol
-import com.m4isper.tictactoe.models.GameState
+import com.m4isper.tictactoe.game.GameState
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json

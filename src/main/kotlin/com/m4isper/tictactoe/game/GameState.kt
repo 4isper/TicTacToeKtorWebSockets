@@ -1,4 +1,4 @@
-package com.m4isper.tictactoe.models
+package com.m4isper.tictactoe.game
 
 import com.m4isper.tictactoe.domain.GameRules
 import com.m4isper.tictactoe.domain.PlayerSymbol

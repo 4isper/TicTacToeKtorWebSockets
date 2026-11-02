@@ -1,9 +1,9 @@
-package com.m4isper.tictactoe.models
+package com.m4isper.tictactoe.game
 
-import com.m4isper.tictactoe.api.ServerEvent
-import com.m4isper.tictactoe.api.protocolJson
 import com.m4isper.tictactoe.domain.GameRules
 import com.m4isper.tictactoe.domain.PlayerSymbol
+import com.m4isper.tictactoe.protocol.ServerEvent
+import com.m4isper.tictactoe.protocol.protocolJson
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel

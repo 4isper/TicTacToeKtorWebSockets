@@ -1,8 +1,8 @@
-package com.m4isper.tictactoe
+package com.m4isper.tictactoe.api
 
-import com.m4isper.tictactoe.api.ClientMessage
-import com.m4isper.tictactoe.api.ServerEvent
-import com.m4isper.tictactoe.api.protocolJson
+import com.m4isper.tictactoe.protocol.ClientMessage
+import com.m4isper.tictactoe.protocol.ServerEvent
+import com.m4isper.tictactoe.protocol.protocolJson
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
