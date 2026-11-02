@@ -242,13 +242,11 @@ private suspend fun WebSocketSession.skipBroadcast() {
     receiveEvent()
 }
 
-private suspend fun WebSocketSession.receiveEvent(): ServerEvent =
-    withTimeout(5_000) {
-        protocolJson.decodeFromString<ServerEvent>((incoming.receive() as Frame.Text).readText())
-    }
+private suspend fun WebSocketSession.receiveEvent(): ServerEvent = withTimeout(5_000) {
+    protocolJson.decodeFromString<ServerEvent>((incoming.receive() as Frame.Text).readText())
+}
 
-private suspend fun WebSocketSession.receiveState(): GameState =
-    (receiveEvent() as ServerEvent.StateChanged).state
+private suspend fun WebSocketSession.receiveState(): GameState = (receiveEvent() as ServerEvent.StateChanged).state
 
 private suspend fun WebSocketSession.sendMakeTurn(x: Int, y: Int) {
     send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.MakeTurn(x, y))))
