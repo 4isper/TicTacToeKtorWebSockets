@@ -37,6 +37,14 @@ class GameRulesTest {
     }
 
     @Test
+    fun `four by four diagonal wins`() {
+        val field = GameRules.emptyField(size = 4).mapIndexed { row, cells ->
+            cells.mapIndexed { col, _ -> if (row == col) PlayerSymbol.X else null }
+        }
+        assertEquals(PlayerSymbol.X, GameRules.winningPlayer(field))
+    }
+
+    @Test
     fun `draw has no winner but the board is full`() {
         val field = listOf(
             listOf(PlayerSymbol.X, PlayerSymbol.O, PlayerSymbol.X),

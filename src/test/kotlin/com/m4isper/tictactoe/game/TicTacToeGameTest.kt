@@ -74,4 +74,26 @@ class TicTacToeGameTest {
         assertEquals(mapOf(PlayerSymbol.X to 2, PlayerSymbol.O to 0), game.currentState().score)
         game.shutdown()
     }
+
+    @Test
+    fun `four by four board accepts moves up to its bounds and detects the win`() = runBlocking {
+        val game = TicTacToeGame(boardSize = 4)
+        game.connectPlayer(FakeSession())
+        game.connectPlayer(FakeSession())
+
+        assertEquals("cell out of bounds", game.finishTurn(PlayerSymbol.X, 4, 0))
+
+        game.finishTurn(PlayerSymbol.X, 0, 0)
+        game.finishTurn(PlayerSymbol.O, 1, 0)
+        game.finishTurn(PlayerSymbol.X, 0, 1)
+        game.finishTurn(PlayerSymbol.O, 1, 1)
+        game.finishTurn(PlayerSymbol.X, 0, 2)
+        game.finishTurn(PlayerSymbol.O, 1, 2)
+        assertNull(game.finishTurn(PlayerSymbol.X, 0, 3))
+
+        val won = game.currentState()
+        assertEquals(PlayerSymbol.X, won.winningPlayer)
+        assertEquals(4, won.field.size)
+        game.shutdown()
+    }
 }

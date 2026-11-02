@@ -12,10 +12,13 @@ import kotlinx.serialization.encodeToString
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 
-class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
+class TicTacToeGame(
+    private val roundRestartDelayMs: Long = 5_000L,
+    private val boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
+) {
     private val logger = LoggerFactory.getLogger(TicTacToeGame::class.java)
 
-    private val state = MutableStateFlow(GameState())
+    private val state = MutableStateFlow(GameState(field = GameRules.emptyField(boardSize)))
     private val stateChanges = Channel<GameState>(Channel.UNLIMITED)
     private val lock = Any()
 
@@ -116,12 +119,15 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
 
     fun currentState(): GameState = state.value
 
-    private fun rejectionReason(player: PlayerSymbol, x: Int, y: Int, current: GameState): String? = when {
-        x !in 0 until GameRules.BOARD_SIZE || y !in 0 until GameRules.BOARD_SIZE -> "cell out of bounds"
-        current.playerAtTurn != player -> "not your turn"
-        current.winningPlayer != null -> "round is over"
-        current.field[y][x] != null -> "cell occupied"
-        else -> null
+    private fun rejectionReason(player: PlayerSymbol, x: Int, y: Int, current: GameState): String? {
+        val size = current.field.size
+        return when {
+            x !in 0 until size || y !in 0 until size -> "cell out of bounds"
+            current.playerAtTurn != player -> "not your turn"
+            current.winningPlayer != null -> "round is over"
+            current.field[y][x] != null -> "cell occupied"
+            else -> null
+        }
     }
 
     private fun scheduleRoundRestart() {
@@ -132,7 +138,7 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
                 publish(
                     state.value.copy(
                         playerAtTurn = PlayerSymbol.X,
-                        field = GameState.emptyField(),
+                        field = GameRules.emptyField(boardSize),
                         winningPlayer = null,
                         isBoardFull = false,
                     ),
