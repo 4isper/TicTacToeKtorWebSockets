@@ -5,8 +5,10 @@ A minimal tic-tac-toe game server: two players connect over WebSocket, every sta
 ## Run
 
 ```bash
-./gradlew run          # listens on :8080, override with the PORT env var
+./gradlew jvmRun       # builds the JS client, listens on :8080, PORT env overrides
 ```
+
+Then open http://localhost:8080/ to play in the browser (the page is rendered with the Ktor HTML DSL, the client is a Kotlin/JS bundle). Invite friends with a room link: http://localhost:8080/?room=alpha.
 
 ## Protocol
 
@@ -35,10 +37,12 @@ A minimal tic-tac-toe game server: two players connect over WebSocket, every sta
 
 ## Development
 
+The build is multiplatform: `commonMain` holds the domain rules and the wire protocol shared by both sides, `jvmMain` the server, `jsMain` the browser client.
+
 ```bash
-./gradlew test             # integration (websocket flow) + domain unit tests
+./gradlew jvmTest          # integration (websocket flow) + engine tests
 ./gradlew spotlessApply    # format with ktlint
-./gradlew build            # test + spotlessCheck + detekt (fails on violations)
+./gradlew build            # tests + spotlessCheck + detekt (fails on violations)
 ```
 
 CI runs `./gradlew build` on every push and pull request (GitHub Actions).

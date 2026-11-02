@@ -1,6 +1,7 @@
 package com.m4isper.tictactoe
 
 import com.m4isper.tictactoe.api.GameLobby
+import com.m4isper.tictactoe.api.webUi
 import com.m4isper.tictactoe.game.TicTacToeGame
 import com.m4isper.tictactoe.plugins.configureMonitoring
 import com.m4isper.tictactoe.plugins.configureRouting
@@ -23,4 +24,5 @@ fun Application.module(newGame: () -> TicTacToeGame = ::TicTacToeGame, reconnect
     configureSerialization()
     configureMonitoring()
     configureRouting(lobby)
+    webUi()
 }

@@ -40,6 +40,7 @@ kotlin {
             implementation(libs.ktor.server.call.logging)
             implementation(libs.ktor.server.netty)
             implementation(libs.ktor.server.html.builder)
+            implementation(libs.kotlin.css)
             implementation(libs.logback.classic)
         }
         jsMain.dependencies {
