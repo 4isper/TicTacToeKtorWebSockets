@@ -14,7 +14,6 @@ import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
-
 class TicTacToeGameTest {
 
     @Suppress("EmptyFunctionBlock")
@@ -27,6 +26,20 @@ class TicTacToeGameTest {
         override val extensions: List<WebSocketExtension<*>> = emptyList()
         override suspend fun flush() {}
         override fun terminate() {}
+    }
+
+    @Test
+    fun `illegal moves are rejected with a reason`() = runBlocking {
+        val game = TicTacToeGame()
+        game.connectPlayer(FakeSession())
+        game.connectPlayer(FakeSession())
+
+        assertEquals("cell out of bounds", game.finishTurn(PlayerSymbol.X, 3, 0))
+        assertEquals("not your turn", game.finishTurn(PlayerSymbol.O, 0, 0))
+        assertNull(game.finishTurn(PlayerSymbol.X, 0, 0))
+        assertEquals("cell occupied", game.finishTurn(PlayerSymbol.O, 0, 0))
+
+        game.shutdown()
     }
 
     @Test

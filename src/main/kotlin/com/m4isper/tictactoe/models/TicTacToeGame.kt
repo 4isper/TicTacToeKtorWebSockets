@@ -1,5 +1,7 @@
 package com.m4isper.tictactoe.models
 
+import com.m4isper.tictactoe.api.ServerEvent
+import com.m4isper.tictactoe.api.protocolJson
 import com.m4isper.tictactoe.domain.GameRules
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import io.ktor.websocket.*
@@ -7,7 +9,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 
@@ -50,7 +51,7 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
         playerSockets.values.forEach { socket ->
             try {
                 socket.send(
-                    Json.encodeToString(state),
+                    protocolJson.encodeToString<ServerEvent>(ServerEvent.StateChanged(state)),
                 )
             } catch (e: Exception) {
                 logger.warn("Failed to broadcast game state to a socket", e)
@@ -58,11 +59,12 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
         }
     }
 
-    fun finishTurn(player: PlayerSymbol, x: Int, y: Int) {
+    fun finishTurn(player: PlayerSymbol, x: Int, y: Int): String? {
         synchronized(lock) {
-            if (!isLegalMove(player, x, y)) return
-
             val current = state.value
+            val rejection = rejectionReason(player, x, y, current)
+            if (rejection != null) return rejection
+
             val newField = current.field.mapIndexed { row, cells ->
                 cells.mapIndexed { col, cell -> if (row == y && col == x) player else cell }
             }
@@ -84,6 +86,7 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
                 ),
             )
             if (winningPlayer != null || isBoardFull) scheduleRoundRestart()
+            return null
         }
     }
 
@@ -97,13 +100,12 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
 
     fun currentState(): GameState = state.value
 
-    private fun isLegalMove(player: PlayerSymbol, x: Int, y: Int): Boolean {
-        val size = GameRules.BOARD_SIZE
-        val current = state.value
-        return x in 0 until size && y in 0 until size &&
-            current.field[y][x] == null &&
-            current.winningPlayer == null &&
-            current.playerAtTurn == player
+    private fun rejectionReason(player: PlayerSymbol, x: Int, y: Int, current: GameState): String? = when {
+        x !in 0 until GameRules.BOARD_SIZE || y !in 0 until GameRules.BOARD_SIZE -> "cell out of bounds"
+        current.playerAtTurn != player -> "not your turn"
+        current.winningPlayer != null -> "round is over"
+        current.field[y][x] != null -> "cell occupied"
+        else -> null
     }
 
     private fun scheduleRoundRestart() {

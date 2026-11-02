@@ -1,8 +1,10 @@
 package com.m4isper.tictactoe
 
+import com.m4isper.tictactoe.api.ClientMessage
+import com.m4isper.tictactoe.api.ServerEvent
+import com.m4isper.tictactoe.api.protocolJson
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.models.GameState
-import com.m4isper.tictactoe.models.TicTacToeGame
 import io.ktor.client.plugins.websocket.*
 import io.ktor.server.testing.*
 import io.ktor.websocket.*
@@ -11,24 +13,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
 import kotlin.test.*
-
-private suspend fun WebSocketSession.skipBroadcast() {
-    incoming.receive()
-}
-
-private suspend fun WebSocketSession.receiveGameState(): GameState = Json.decodeFromString<GameState>((incoming.receive() as Frame.Text).readText())
-
-private suspend fun WebSocketSession.playTopRowMoves() {
-    send(Frame.Text("make_turn#{\"x\":0,\"y\":0}"))
-    skipBroadcast()
-    skipBroadcast()
-    send(Frame.Text("make_turn#{\"x\":0,\"y\":1}"))
-    skipBroadcast()
-    skipBroadcast()
-    send(Frame.Text("make_turn#{\"x\":0,\"y\":2}"))
-}
 
 class ApplicationTest {
 
@@ -42,16 +28,14 @@ class ApplicationTest {
         }
 
         client.webSocket("/play") {
-            val frame = withTimeout(5_000) { incoming.receive() }
-            val text = (frame as? Frame.Text)?.readText()
-            val state = text?.let { Json.decodeFromString<GameState>(it) }
-            assertEquals(PlayerSymbol.X, state?.playerAtTurn)
-            assertEquals(listOf(PlayerSymbol.X), state?.connectionPlayers)
+            val state = receiveState()
+            assertEquals(PlayerSymbol.X, state.playerAtTurn)
+            assertEquals(listOf(PlayerSymbol.X), state.connectionPlayers)
         }
     }
 
     @Test
-    fun `non-turn message does not drop the connection`() = testApplication {
+    fun `malformed message is rejected without dropping the connection`() = testApplication {
         application {
             module()
         }
@@ -60,13 +44,16 @@ class ApplicationTest {
         }
 
         client.webSocket("/play") {
-            withTimeout(5_000) { incoming.receive() }
+            skipBroadcast()
 
-            send(Frame.Text("unknown_type#{}"))
+            send(Frame.Text("not json at all"))
+            assertTrue(receiveEvent() is ServerEvent.MoveRejected)
 
-            send(Frame.Text("make_turn#{\"x\":0,\"y\":0}"))
-            val frame = withTimeout(5_000) { incoming.receive() }
-            val state = Json.decodeFromString<GameState>((frame as Frame.Text).readText())
+            send(Frame.Text("""{"type":"something_else"}"""))
+            assertTrue(receiveEvent() is ServerEvent.MoveRejected)
+
+            sendMakeTurn(0, 0)
+            val state = receiveState()
             assertEquals(PlayerSymbol.X, state.field[0][0])
         }
     }
@@ -76,34 +63,42 @@ class ApplicationTest {
         application {
             module()
         }
-        val client = createClient {
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
             install(WebSockets)
         }
 
-        client.webSocket("/play") {
-            withTimeout(5_000) { incoming.receive() }
+        xClient.webSocket("/play") {
+            skipBroadcast()
 
-            send(Frame.Text("make_turn#{\"x\":2,\"y\":0}"))
-            withTimeout(5_000) { incoming.receive() }
+            sendMakeTurn(2, 0)
+            skipBroadcast()
 
-            val done = CompletableDeferred<Unit>()
+            val oReady = CompletableDeferred<Unit>()
             val scope = CoroutineScope(coroutineContext)
             val second = scope.launch {
-                client.webSocket("/play") {
-                    withTimeout(5_000) { incoming.receive() }
-
-                    send(Frame.Text("make_turn#{\"x\":2,\"y\":0}"))
-                    send(Frame.Text("make_turn#{\"x\":0,\"y\":0}"))
-
-                    val frame = withTimeout(5_000) { incoming.receive() }
-                    val state = Json.decodeFromString<GameState>((frame as Frame.Text).readText())
+                oClient.webSocket("/play") {
+                    receiveState()
+                    oReady.complete(Unit)
+                    sendMakeTurn(2, 0)
+                    assertTrue(receiveEvent() is ServerEvent.MoveRejected)
+                    sendMakeTurn(0, 0)
+                    val state = receiveState()
                     assertEquals(PlayerSymbol.X, state.field[0][2])
                     assertEquals(PlayerSymbol.O, state.field[0][0])
-                    done.complete(Unit)
                     awaitCancellation()
                 }
             }
-            done.await()
+            oReady.await()
+
+            skipBroadcast()
+
+            val state = receiveState()
+            assertEquals(PlayerSymbol.O, state.field[0][0])
+            assertEquals(PlayerSymbol.X, state.field[0][2])
+
             second.cancel()
         }
     }
@@ -113,42 +108,45 @@ class ApplicationTest {
         application {
             module()
         }
-        val client = createClient {
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
             install(WebSockets)
         }
 
-        client.webSocket("/play") {
-            withTimeout(5_000) { incoming.receive() }
+        xClient.webSocket("/play") {
+            skipBroadcast()
 
             val oReady = CompletableDeferred<Unit>()
             val scope = CoroutineScope(coroutineContext)
             val second = scope.launch {
-                client.webSocket("/play") {
-                    withTimeout(5_000) { incoming.receive() }
+                oClient.webSocket("/play") {
+                    receiveState()
                     oReady.complete(Unit)
-                    withTimeout(5_000) { incoming.receive() }
-                    send(Frame.Text("make_turn#{\"x\":1,\"y\":0}"))
-                    withTimeout(5_000) { incoming.receive() }
-                    withTimeout(5_000) { incoming.receive() }
-                    send(Frame.Text("make_turn#{\"x\":1,\"y\":1}"))
-                    withTimeout(5_000) { incoming.receive() }
+                    receiveState()
+                    sendMakeTurn(1, 0)
+                    receiveState()
+                    receiveState()
+                    sendMakeTurn(1, 1)
+                    receiveState()
+                    receiveState()
                     awaitCancellation()
                 }
             }
             oReady.await()
 
-            withTimeout(5_000) { incoming.receive() } // broadcast of O's connect
+            skipBroadcast()
 
-            send(Frame.Text("make_turn#{\"x\":0,\"y\":0}"))
-            withTimeout(5_000) { incoming.receive() }
-            withTimeout(5_000) { incoming.receive() }
-            send(Frame.Text("make_turn#{\"x\":0,\"y\":1}"))
-            withTimeout(5_000) { incoming.receive() }
-            withTimeout(5_000) { incoming.receive() }
-            send(Frame.Text("make_turn#{\"x\":0,\"y\":2}"))
+            sendMakeTurn(0, 0)
+            skipBroadcast()
+            skipBroadcast()
+            sendMakeTurn(0, 1)
+            skipBroadcast()
+            skipBroadcast()
+            sendMakeTurn(0, 2)
 
-            val frame = withTimeout(5_000) { incoming.receive() }
-            val state = Json.decodeFromString<GameState>((frame as Frame.Text).readText())
+            val state = receiveState()
             assertEquals(PlayerSymbol.X, state.winningPlayer)
 
             second.cancel()
@@ -165,13 +163,13 @@ class ApplicationTest {
         }
 
         client.webSocket("/play") {
-            withTimeout(5_000) { incoming.receive() }
+            skipBroadcast()
 
             val oReady = CompletableDeferred<Unit>()
             val scope = CoroutineScope(coroutineContext)
             val second = scope.launch {
                 client.webSocket("/play") {
-                    withTimeout(5_000) { incoming.receive() }
+                    skipBroadcast()
                     oReady.complete(Unit)
                     awaitCancellation()
                 }
@@ -179,8 +177,7 @@ class ApplicationTest {
             oReady.await()
 
             client.webSocket("/play") {
-                val frame = withTimeout(5_000) { incoming.receive() }
-                val state = Json.decodeFromString<GameState>((frame as Frame.Text).readText())
+                val state = receiveState()
                 assertEquals(listOf(PlayerSymbol.X), state.connectionPlayers)
                 assertNull(state.field[0][0])
             }
@@ -208,15 +205,15 @@ class ApplicationTest {
             val scope = CoroutineScope(coroutineContext)
             val second = scope.launch {
                 oClient.webSocket("/play") {
-                    skipBroadcast()
+                    receiveState()
                     oReady.complete(Unit)
-                    skipBroadcast()
-                    send(Frame.Text("make_turn#{\"x\":1,\"y\":0}"))
-                    skipBroadcast()
-                    skipBroadcast()
-                    send(Frame.Text("make_turn#{\"x\":1,\"y\":1}"))
-                    skipBroadcast()
-                    skipBroadcast()
+                    receiveState()
+                    sendMakeTurn(1, 0)
+                    receiveState()
+                    receiveState()
+                    sendMakeTurn(1, 1)
+                    receiveState()
+                    receiveState()
                     awaitCancellation()
                 }
             }
@@ -224,13 +221,35 @@ class ApplicationTest {
 
             skipBroadcast()
 
-            playTopRowMoves()
+            sendMakeTurn(0, 0)
+            skipBroadcast()
+            skipBroadcast()
+            sendMakeTurn(0, 1)
+            skipBroadcast()
+            skipBroadcast()
+            sendMakeTurn(0, 2)
 
-            val s1 = receiveGameState()
-            assertEquals(PlayerSymbol.X, s1.winningPlayer)
-            assertEquals(mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), s1.score)
+            val state = receiveState()
+            assertEquals(PlayerSymbol.X, state.winningPlayer)
+            assertEquals(mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), state.score)
 
             second.cancel()
         }
     }
+}
+
+private suspend fun WebSocketSession.skipBroadcast() {
+    receiveEvent()
+}
+
+private suspend fun WebSocketSession.receiveEvent(): ServerEvent =
+    withTimeout(5_000) {
+        protocolJson.decodeFromString<ServerEvent>((incoming.receive() as Frame.Text).readText())
+    }
+
+private suspend fun WebSocketSession.receiveState(): GameState =
+    (receiveEvent() as ServerEvent.StateChanged).state
+
+private suspend fun WebSocketSession.sendMakeTurn(x: Int, y: Int) {
+    send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.MakeTurn(x, y))))
 }
