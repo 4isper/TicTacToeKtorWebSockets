@@ -26,8 +26,9 @@ A minimal tic-tac-toe game server: two players connect over WebSocket, every sta
   {"type":"error","reason":"cell occupied"}
   ```
 
-  A `state` event is broadcast to both players on every accepted move, connection change and round restart. An `error` event (`reason`: `cell occupied`, `not your turn`, `round is over`, `cell out of bounds`, `malformed message`) is sent only to the player whose action caused it, and a rejected move does not close the session.
+  A `state` event is broadcast to both players on every accepted move, connection change and round restart. An `error` event (`reason`: `cell occupied`, `not your turn`, `round is over`, `cell out of bounds`, `malformed message`, `unknown token`) is sent only to the player whose action caused it, and a rejected move does not close the session.
   Note: inside `state`, fields equal to their default value are omitted (`encodeDefaults = false` in kotlinx.serialization) — in practice `playerAtTurn` is absent while it is `"X"`, `winningPlayer` while the round is not decided, and `isBoardFull` while the board is not full; treat missing fields as defaults.
+- Reconnect: right after connecting every player receives `{"type":"joined","token":"<uuid>","symbol":"X"}`. If the connection drops, the player's slot is held for 10 seconds (`reconnectGraceMs`); reconnecting with `{"type":"reconnect","token":"<uuid>"}` rebinds the session to the same game and symbol and answers with the current `state`. After the grace expires the slot is freed (the next joiner takes the symbol) and the token stops working. A client that reconnects with an unknown token stays in the game it was handed on connect.
 - A won or full round resets the board automatically 5 seconds later; the `score` object (`{"X":<wins>,"O":<wins>}`) accumulates across rounds for as long as the same two players stay connected.
 
 ## Development
@@ -42,6 +43,5 @@ CI runs `./gradlew build` on every push and pull request (GitHub Actions).
 
 ## Roadmap
 
-- Reconnect handling (a dropped socket frees the slot; the next joiner inherits the ongoing game)
 - Configurable board size
 - Named rooms / invite links (pairing is currently automatic)

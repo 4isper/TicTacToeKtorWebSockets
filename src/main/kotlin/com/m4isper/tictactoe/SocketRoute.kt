@@ -3,8 +3,6 @@ package com.m4isper.tictactoe
 import com.m4isper.tictactoe.api.ClientMessage
 import com.m4isper.tictactoe.api.ServerEvent
 import com.m4isper.tictactoe.api.protocolJson
-import com.m4isper.tictactoe.domain.PlayerSymbol
-import com.m4isper.tictactoe.models.TicTacToeGame
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
@@ -17,31 +15,39 @@ private val logger = LoggerFactory.getLogger("com.m4isper.tictactoe.SocketRoute"
 fun Route.socket(lobby: GameLobby) {
     route("/play") {
         webSocket {
-            val (game, player) = lobby.join(this)
-
+            var joined = lobby.join(this)
             try {
+                send(protocolJson.encodeToString<ServerEvent>(ServerEvent.Joined(joined.token, joined.symbol)))
+
                 incoming.consumeEach { frame ->
-                    if (frame is Frame.Text) {
-                        handleClientMessage(game, player, frame.readText())?.let { event ->
-                            send(protocolJson.encodeToString<ServerEvent>(event))
+                    if (frame !is Frame.Text) return@consumeEach
+                    val message = runCatching { protocolJson.decodeFromString<ClientMessage>(frame.readText()) }
+                        .getOrNull()
+
+                    val event: ServerEvent? = when (message) {
+                        is ClientMessage.MakeTurn -> joined.game.finishTurn(joined.symbol, message.x, message.y)
+                            ?.let(ServerEvent::Error)
+
+                        is ClientMessage.Reconnect -> {
+                            val rebound = lobby.reconnect(message.token, this)
+                            if (rebound == null) {
+                                ServerEvent.Error("unknown token")
+                            } else {
+                                lobby.abandonJoin(joined.token)
+                                joined = rebound
+                                ServerEvent.StateChanged(rebound.game.currentState())
+                            }
                         }
+
+                        null -> ServerEvent.Error("malformed message")
                     }
+                    if (event != null) send(protocolJson.encodeToString<ServerEvent>(event))
                 }
             } catch (e: Exception) {
-                logger.error("WebSocket session failed for player {}", player, e)
+                logger.error("WebSocket session failed for player {}", joined.symbol, e)
             } finally {
-                lobby.leave(game, player)
+                lobby.sessionClosed(joined.token, this)
             }
         }
-    }
-}
-
-private fun handleClientMessage(game: TicTacToeGame, player: PlayerSymbol, text: String): ServerEvent? {
-    val message = runCatching { protocolJson.decodeFromString<ClientMessage>(text) }.getOrNull()
-    return when (message) {
-        is ClientMessage.MakeTurn -> game.finishTurn(player, message.x, message.y)
-            ?.let(ServerEvent::MoveRejected)
-
-        null -> ServerEvent.MoveRejected("malformed message")
     }
 }

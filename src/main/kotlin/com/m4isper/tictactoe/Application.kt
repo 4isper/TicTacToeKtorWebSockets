@@ -15,8 +15,8 @@ fun Application.module() {
     module(::TicTacToeGame)
 }
 
-fun Application.module(newGame: () -> TicTacToeGame) {
-    val lobby = GameLobby(newGame)
+fun Application.module(newGame: () -> TicTacToeGame = ::TicTacToeGame, reconnectGraceMs: Long = 10_000L) {
+    val lobby = GameLobby(newGame, reconnectGraceMs)
     monitor.subscribe(ApplicationStopped) { lobby.shutdownAll() }
     configureSockets()
     configureSerialization()

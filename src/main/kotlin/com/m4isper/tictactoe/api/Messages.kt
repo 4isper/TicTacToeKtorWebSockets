@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe.api
 
+import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.models.GameState
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -12,15 +13,23 @@ sealed interface ClientMessage {
     @Serializable
     @SerialName("make_turn")
     data class MakeTurn(val x: Int, val y: Int) : ClientMessage
+
+    @Serializable
+    @SerialName("reconnect")
+    data class Reconnect(val token: String) : ClientMessage
 }
 
 @Serializable
 sealed interface ServerEvent {
+    @Serializable
+    @SerialName("joined")
+    data class Joined(val token: String, val symbol: PlayerSymbol) : ServerEvent
+
     @Serializable
     @SerialName("state")
     data class StateChanged(val state: GameState) : ServerEvent
 
     @Serializable
     @SerialName("error")
-    data class MoveRejected(val reason: String) : ServerEvent
+    data class Error(val reason: String) : ServerEvent
 }

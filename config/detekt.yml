@@ -6,6 +6,10 @@ style:
   MaxLineLength:
     active: false
 
+complexity:
+  TooManyFunctions:
+    allowedFunctionsPerClass: 15
+
 exceptions:
   TooGenericExceptionCaught:
     active: false

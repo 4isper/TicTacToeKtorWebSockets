@@ -10,7 +10,10 @@ import io.ktor.server.testing.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.encodeToString
@@ -28,7 +31,8 @@ class ApplicationTest {
         }
 
         client.webSocket("/play") {
-            val state = receiveState()
+            val (joined, state) = receiveHandshake()
+            assertEquals(PlayerSymbol.X, joined.symbol)
             assertEquals(PlayerSymbol.X, state.playerAtTurn)
             assertEquals(listOf(PlayerSymbol.X), state.connectionPlayers)
         }
@@ -44,13 +48,13 @@ class ApplicationTest {
         }
 
         client.webSocket("/play") {
-            skipBroadcast()
+            receiveHandshake()
 
             send(Frame.Text("not json at all"))
-            assertTrue(receiveEvent() is ServerEvent.MoveRejected)
+            assertTrue(receiveEvent() is ServerEvent.Error)
 
             send(Frame.Text("""{"type":"something_else"}"""))
-            assertTrue(receiveEvent() is ServerEvent.MoveRejected)
+            assertTrue(receiveEvent() is ServerEvent.Error)
 
             sendMakeTurn(0, 0)
             val state = receiveState()
@@ -71,7 +75,7 @@ class ApplicationTest {
         }
 
         xClient.webSocket("/play") {
-            skipBroadcast()
+            receiveHandshake()
 
             sendMakeTurn(2, 0)
             skipBroadcast()
@@ -80,10 +84,10 @@ class ApplicationTest {
             val scope = CoroutineScope(coroutineContext)
             val second = scope.launch {
                 oClient.webSocket("/play") {
-                    receiveState()
+                    receiveHandshake()
                     oReady.complete(Unit)
                     sendMakeTurn(2, 0)
-                    assertTrue(receiveEvent() is ServerEvent.MoveRejected)
+                    assertTrue(receiveEvent() is ServerEvent.Error)
                     sendMakeTurn(0, 0)
                     val state = receiveState()
                     assertEquals(PlayerSymbol.X, state.field[0][2])
@@ -116,13 +120,13 @@ class ApplicationTest {
         }
 
         xClient.webSocket("/play") {
-            skipBroadcast()
+            receiveHandshake()
 
             val oReady = CompletableDeferred<Unit>()
             val scope = CoroutineScope(coroutineContext)
             val second = scope.launch {
                 oClient.webSocket("/play") {
-                    receiveState()
+                    receiveHandshake()
                     oReady.complete(Unit)
                     receiveState()
                     sendMakeTurn(1, 0)
@@ -163,13 +167,13 @@ class ApplicationTest {
         }
 
         client.webSocket("/play") {
-            skipBroadcast()
+            receiveHandshake()
 
             val oReady = CompletableDeferred<Unit>()
             val scope = CoroutineScope(coroutineContext)
             val second = scope.launch {
                 client.webSocket("/play") {
-                    skipBroadcast()
+                    receiveHandshake()
                     oReady.complete(Unit)
                     awaitCancellation()
                 }
@@ -177,7 +181,8 @@ class ApplicationTest {
             oReady.await()
 
             client.webSocket("/play") {
-                val state = receiveState()
+                val (joined, state) = receiveHandshake()
+                assertEquals(PlayerSymbol.X, joined.symbol)
                 assertEquals(listOf(PlayerSymbol.X), state.connectionPlayers)
                 assertNull(state.field[0][0])
             }
@@ -199,13 +204,13 @@ class ApplicationTest {
         }
 
         xClient.webSocket("/play") {
-            skipBroadcast()
+            receiveHandshake()
 
             val oReady = CompletableDeferred<Unit>()
             val scope = CoroutineScope(coroutineContext)
             val second = scope.launch {
                 oClient.webSocket("/play") {
-                    receiveState()
+                    receiveHandshake()
                     oReady.complete(Unit)
                     receiveState()
                     sendMakeTurn(1, 0)
@@ -236,6 +241,104 @@ class ApplicationTest {
             second.cancel()
         }
     }
+
+    @Test
+    fun `player reconnects with a token and keeps the symbol`() = testApplication {
+        application {
+            module(reconnectGraceMs = 500)
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+        var token: String? = null
+
+        xClient.webSocket("/play") {
+            val (joined, _) = receiveHandshake()
+            token = joined.token
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play") {
+                    receiveHandshake()
+                    oReady.complete(Unit)
+                    skipBroadcast()
+                    sendMakeTurn(1, 0)
+                    skipBroadcast()
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            skipBroadcast()
+            sendMakeTurn(0, 0)
+            skipBroadcast()
+            skipBroadcast()
+        }
+
+        xClient.webSocket("/play") {
+            receiveHandshake()
+            sendReconnect(token!!)
+            val state = receiveState()
+            assertEquals(PlayerSymbol.X, state.playerAtTurn)
+            assertEquals(listOf(PlayerSymbol.X, PlayerSymbol.O), state.connectionPlayers)
+            assertEquals(PlayerSymbol.X, state.field[0][0])
+            assertEquals(PlayerSymbol.O, state.field[0][1])
+
+            sendMakeTurn(0, 1)
+            skipBroadcast()
+        }
+    }
+
+    @Test
+    fun `slot is freed when the grace expires and the old token dies`() = testApplication {
+        application {
+            module(reconnectGraceMs = 500)
+        }
+        val firstClient = createClient {
+            install(WebSockets)
+        }
+        val secondClient = createClient {
+            install(WebSockets)
+        }
+        val thirdClient = createClient {
+            install(WebSockets)
+        }
+        var firstToken: String? = null
+        val secondJoined = CompletableDeferred<Unit>()
+        val releaseSecond = CompletableDeferred<Unit>()
+
+        firstClient.webSocket("/play") {
+            val (joined, _) = receiveHandshake()
+            firstToken = joined.token
+        }
+
+        val holder = CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            secondClient.webSocket("/play") {
+                receiveHandshake()
+                secondJoined.complete(Unit)
+                releaseSecond.await()
+            }
+        }
+        secondJoined.await()
+
+        delay(700)
+
+        thirdClient.webSocket("/play") {
+            val (joined, state) = receiveHandshake()
+            assertEquals(PlayerSymbol.X, joined.symbol)
+            assertEquals(listOf(PlayerSymbol.O, PlayerSymbol.X), state.connectionPlayers)
+
+            sendReconnect(firstToken!!)
+            assertTrue(receiveEvent() is ServerEvent.Error)
+        }
+
+        releaseSecond.complete(Unit)
+        holder.join()
+    }
 }
 
 private suspend fun WebSocketSession.skipBroadcast() {
@@ -247,6 +350,17 @@ private suspend fun WebSocketSession.receiveEvent(): ServerEvent = withTimeout(5
 }
 
 private suspend fun WebSocketSession.receiveState(): GameState = (receiveEvent() as ServerEvent.StateChanged).state
+
+private suspend fun WebSocketSession.receiveHandshake(): Pair<ServerEvent.Joined, GameState> {
+    val events = listOf(receiveEvent(), receiveEvent())
+    val joined = events.filterIsInstance<ServerEvent.Joined>().single()
+    val state = events.filterIsInstance<ServerEvent.StateChanged>().single().state
+    return joined to state
+}
+
+private suspend fun WebSocketSession.sendReconnect(token: String) {
+    send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.Reconnect(token))))
+}
 
 private suspend fun WebSocketSession.sendMakeTurn(x: Int, y: Int) {
     send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.MakeTurn(x, y))))

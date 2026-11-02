@@ -42,6 +42,22 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
         }
     }
 
+    fun detachSession(player: PlayerSymbol, session: WebSocketSession): Boolean = synchronized(lock) {
+        if (playerSockets[player] === session) {
+            playerSockets.remove(player)
+            true
+        } else {
+            false
+        }
+    }
+
+    fun reattachSession(player: PlayerSymbol, session: WebSocketSession): Unit = synchronized(lock) {
+        playerSockets[player] = session
+        if (player !in state.value.connectionPlayers) {
+            publish(state.value.copy(connectionPlayers = state.value.connectionPlayers + player))
+        }
+    }
+
     fun disconnectPlayer(player: PlayerSymbol): Unit = synchronized(lock) {
         playerSockets.remove(player)
         publish(state.value.copy(connectionPlayers = state.value.connectionPlayers - player))
