@@ -2,6 +2,7 @@ package com.m4isper.tictactoe
 
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.models.GameState
+import com.m4isper.tictactoe.models.TicTacToeGame
 import io.ktor.client.plugins.websocket.*
 import io.ktor.server.testing.*
 import io.ktor.websocket.*
@@ -12,6 +13,22 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlin.test.*
+
+private suspend fun WebSocketSession.skipBroadcast() {
+    incoming.receive()
+}
+
+private suspend fun WebSocketSession.receiveGameState(): GameState = Json.decodeFromString<GameState>((incoming.receive() as Frame.Text).readText())
+
+private suspend fun WebSocketSession.playTopRowMoves() {
+    send(Frame.Text("make_turn#{\"x\":0,\"y\":0}"))
+    skipBroadcast()
+    skipBroadcast()
+    send(Frame.Text("make_turn#{\"x\":0,\"y\":1}"))
+    skipBroadcast()
+    skipBroadcast()
+    send(Frame.Text("make_turn#{\"x\":0,\"y\":2}"))
+}
 
 class ApplicationTest {
 
@@ -167,6 +184,51 @@ class ApplicationTest {
                 assertEquals(listOf(PlayerSymbol.X), state.connectionPlayers)
                 assertNull(state.field[0][0])
             }
+
+            second.cancel()
+        }
+    }
+
+    @Test
+    fun `score is reported when a round is won`() = testApplication {
+        application {
+            module()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play") {
+            skipBroadcast()
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play") {
+                    skipBroadcast()
+                    oReady.complete(Unit)
+                    skipBroadcast()
+                    send(Frame.Text("make_turn#{\"x\":1,\"y\":0}"))
+                    skipBroadcast()
+                    skipBroadcast()
+                    send(Frame.Text("make_turn#{\"x\":1,\"y\":1}"))
+                    skipBroadcast()
+                    skipBroadcast()
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            skipBroadcast()
+
+            playTopRowMoves()
+
+            val s1 = receiveGameState()
+            assertEquals(PlayerSymbol.X, s1.winningPlayer)
+            assertEquals(mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), s1.score)
 
             second.cancel()
         }

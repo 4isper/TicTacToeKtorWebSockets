@@ -4,9 +4,8 @@ import com.m4isper.tictactoe.domain.GameRules
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
@@ -16,6 +15,7 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
     private val logger = LoggerFactory.getLogger(TicTacToeGame::class.java)
 
     private val state = MutableStateFlow(GameState())
+    private val stateChanges = Channel<GameState>(Channel.UNLIMITED)
     private val lock = Any()
 
     private val playerSockets = ConcurrentHashMap<PlayerSymbol, WebSocketSession>()
@@ -24,7 +24,9 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
     private var roundRestartJob: Job? = null
 
     init {
-        state.onEach(::broadcast).launchIn(gameScope)
+        gameScope.launch {
+            for (change in stateChanges) broadcast(change)
+        }
     }
 
     fun connectPlayer(session: WebSocketSession): PlayerSymbol? = synchronized(lock) {
@@ -34,14 +36,14 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
             null
         } else {
             playerSockets[player] = session
-            state.value = current.copy(connectionPlayers = current.connectionPlayers + player)
+            publish(current.copy(connectionPlayers = current.connectionPlayers + player))
             player
         }
     }
 
     fun disconnectPlayer(player: PlayerSymbol): Unit = synchronized(lock) {
         playerSockets.remove(player)
-        state.value = state.value.copy(connectionPlayers = state.value.connectionPlayers - player)
+        publish(state.value.copy(connectionPlayers = state.value.connectionPlayers - player))
     }
 
     suspend fun broadcast(state: GameState) {
@@ -66,24 +68,23 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
             }
             val isBoardFull = GameRules.isBoardFull(newField)
             val winningPlayer = GameRules.winningPlayer(newField)
+            val newScore = if (winningPlayer != null) {
+                current.score + (winningPlayer to (current.score[winningPlayer] ?: 0) + 1)
+            } else {
+                current.score
+            }
 
-            state.value = current.copy(
-                playerAtTurn = player.other,
-                field = newField,
-                isBoardFull = isBoardFull,
-                winningPlayer = winningPlayer,
+            publish(
+                current.copy(
+                    playerAtTurn = player.other,
+                    field = newField,
+                    isBoardFull = isBoardFull,
+                    winningPlayer = winningPlayer,
+                    score = newScore,
+                ),
             )
             if (winningPlayer != null || isBoardFull) scheduleRoundRestart()
         }
-    }
-
-    private fun isLegalMove(player: PlayerSymbol, x: Int, y: Int): Boolean {
-        val size = GameRules.BOARD_SIZE
-        val current = state.value
-        return x in 0 until size && y in 0 until size &&
-            current.field[y][x] == null &&
-            current.winningPlayer == null &&
-            current.playerAtTurn == player
     }
 
     fun shutdown() {
@@ -94,18 +95,36 @@ class TicTacToeGame(private val roundRestartDelayMs: Long = 5_000L) {
 
     fun isEmpty(): Boolean = state.value.connectionPlayers.isEmpty()
 
+    fun currentState(): GameState = state.value
+
+    private fun isLegalMove(player: PlayerSymbol, x: Int, y: Int): Boolean {
+        val size = GameRules.BOARD_SIZE
+        val current = state.value
+        return x in 0 until size && y in 0 until size &&
+            current.field[y][x] == null &&
+            current.winningPlayer == null &&
+            current.playerAtTurn == player
+    }
+
     private fun scheduleRoundRestart() {
         roundRestartJob?.cancel()
         roundRestartJob = gameScope.launch {
             delay(roundRestartDelayMs)
             synchronized(lock) {
-                state.value = state.value.copy(
-                    playerAtTurn = PlayerSymbol.X,
-                    field = GameState.emptyField(),
-                    winningPlayer = null,
-                    isBoardFull = false,
+                publish(
+                    state.value.copy(
+                        playerAtTurn = PlayerSymbol.X,
+                        field = GameState.emptyField(),
+                        winningPlayer = null,
+                        isBoardFull = false,
+                    ),
                 )
             }
         }
+    }
+
+    private fun publish(next: GameState) {
+        state.value = next
+        stateChanges.trySend(next)
     }
 }

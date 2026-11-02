@@ -4,12 +4,12 @@ import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.models.TicTacToeGame
 import io.ktor.websocket.*
 
-class GameLobby {
+class GameLobby(private val newGame: () -> TicTacToeGame = ::TicTacToeGame) {
     private val lock = Any()
     private val games = mutableListOf<TicTacToeGame>()
 
     fun join(session: WebSocketSession): Pair<TicTacToeGame, PlayerSymbol> = synchronized(lock) {
-        val game = games.firstOrNull { !it.isFull() } ?: TicTacToeGame().also { games.add(it) }
+        val game = games.firstOrNull { !it.isFull() } ?: newGame().also { games.add(it) }
         val player = game.connectPlayer(session)
         requireNotNull(player) { "game had a free slot but rejected the connection" }
         game to player

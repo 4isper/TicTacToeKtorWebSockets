@@ -20,7 +20,7 @@ A minimal tic-tac-toe game server: two players connect over WebSocket, every sta
   ```
 
   Note: fields equal to their default value are omitted from the JSON (`encodeDefaults = false` in kotlinx.serialization). In practice `playerAtTurn` is absent while it is `"X"`, `winningPlayer` while the round is not decided, and `isBoardFull` while the board is not full — treat missing fields as defaults.
-- A won or full round resets the board automatically 5 seconds later.
+- A won or full round resets the board automatically 5 seconds later; the `score` object (`{"X":<wins>,"O":<wins>}`) accumulates across rounds for as long as the same two players stay connected.
 - A `make_turn` frame with malformed JSON closes the session.
 
 ## Development
@@ -36,6 +36,5 @@ CI runs `./gradlew build` on every push and pull request (GitHub Actions).
 ## Roadmap
 
 - Reconnect handling (a dropped socket frees the slot; the next joiner inherits the ongoing game)
-- Score across rounds
 - Configurable board size
 - Named rooms / invite links (pairing is currently automatic)

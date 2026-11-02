@@ -11,6 +11,7 @@ data class GameState(
     val winningPlayer: PlayerSymbol? = null,
     val isBoardFull: Boolean = false,
     val connectionPlayers: List<PlayerSymbol> = emptyList(),
+    val score: Map<PlayerSymbol, Int> = mapOf(PlayerSymbol.X to 0, PlayerSymbol.O to 0),
 ) {
     companion object {
         fun emptyField(): List<List<PlayerSymbol?>> = GameRules.emptyField()
