@@ -39,6 +39,25 @@ class ApplicationTest {
     }
 
     @Test
+    fun `state events carry every field explicitly`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play") {
+            val texts = (1..2).map { (incoming.receive() as Frame.Text).readText() }
+            val state = texts.single { it.contains("\"type\":\"state\"") }
+            assertTrue(state.contains("\"playerAtTurn\":\"X\""), state)
+            assertTrue(state.contains("\"winningPlayer\":null"), state)
+            assertTrue(state.contains("\"isBoardFull\":false"), state)
+            assertTrue(state.contains("\"score\":{\"X\":0,\"O\":0}"), state)
+        }
+    }
+
+    @Test
     fun `malformed message is rejected without dropping the connection`() = testApplication {
         application {
             module()

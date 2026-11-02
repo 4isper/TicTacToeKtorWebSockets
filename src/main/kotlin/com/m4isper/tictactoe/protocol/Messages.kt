@@ -6,7 +6,10 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-val protocolJson: Json = Json { ignoreUnknownKeys = true }
+val protocolJson: Json = Json {
+    ignoreUnknownKeys = true
+    encodeDefaults = true
+}
 
 @Serializable
 sealed interface ClientMessage {
