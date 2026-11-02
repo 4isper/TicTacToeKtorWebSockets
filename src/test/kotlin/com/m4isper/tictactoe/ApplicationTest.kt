@@ -339,6 +339,86 @@ class ApplicationTest {
         releaseSecond.complete(Unit)
         holder.join()
     }
+
+    @Test
+    fun `named room pairs two players and rejects the third`() = testApplication {
+        application {
+            module()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+        val thirdClient = createClient {
+            install(WebSockets)
+        }
+        val betaClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=alpha") {
+            val (joined, state) = receiveHandshake()
+            assertEquals(PlayerSymbol.X, joined.symbol)
+            assertEquals(listOf(PlayerSymbol.X), state.connectionPlayers)
+        }
+
+        oClient.webSocket("/play?room=alpha") {
+            val (joined, state) = receiveHandshake()
+            assertEquals(PlayerSymbol.O, joined.symbol)
+            assertEquals(listOf(PlayerSymbol.X, PlayerSymbol.O), state.connectionPlayers)
+        }
+
+        thirdClient.webSocket("/play?room=alpha") {
+            assertTrue(receiveEvent() is ServerEvent.Error)
+        }
+
+        betaClient.webSocket("/play?room=beta") {
+            val (joined, _) = receiveHandshake()
+            assertEquals(PlayerSymbol.X, joined.symbol)
+        }
+    }
+
+    @Test
+    fun `room is freed after everyone leaves`() = testApplication {
+        application {
+            module(reconnectGraceMs = 500)
+        }
+        val firstClient = createClient {
+            install(WebSockets)
+        }
+        val secondClient = createClient {
+            install(WebSockets)
+        }
+        val nextClient = createClient {
+            install(WebSockets)
+        }
+        var firstToken: String? = null
+
+        firstClient.webSocket("/play?room=alpha") {
+            val (joined, _) = receiveHandshake()
+            firstToken = joined.token
+            sendMakeTurn(0, 0)
+            skipBroadcast()
+        }
+
+        secondClient.webSocket("/play?room=alpha") {
+            receiveHandshake()
+        }
+
+        delay(700)
+
+        nextClient.webSocket("/play?room=alpha") {
+            val (joined, state) = receiveHandshake()
+            assertEquals(PlayerSymbol.X, joined.symbol)
+            assertEquals(listOf(PlayerSymbol.X), state.connectionPlayers)
+            assertNull(state.field[0][0])
+
+            sendReconnect(firstToken!!)
+            assertTrue(receiveEvent() is ServerEvent.Error)
+        }
+    }
 }
 
 private suspend fun WebSocketSession.skipBroadcast() {

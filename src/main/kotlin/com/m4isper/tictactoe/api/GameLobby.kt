@@ -5,7 +5,6 @@ import com.m4isper.tictactoe.game.TicTacToeGame
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 class GameLobby(
     private val newGame: () -> TicTacToeGame = ::TicTacToeGame,
@@ -17,14 +16,18 @@ class GameLobby(
 
     private val lock = Any()
     private val games = mutableListOf<TicTacToeGame>()
+    private val rooms = mutableMapOf<String, TicTacToeGame>()
     private val tokens = mutableMapOf<String, TokenBinding>()
     private val graceJobs = mutableMapOf<String, Job>()
     private val lobbyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    fun join(session: WebSocketSession): Joined = synchronized(lock) {
-        val game = games.firstOrNull { !it.isFull() } ?: newGame().also { games.add(it) }
-        val symbol = game.connectPlayer(session)
-        requireNotNull(symbol) { "game had a free slot but rejected the connection" }
+    fun join(session: WebSocketSession, room: String? = null): Joined? = synchronized(lock) {
+        val game = if (room == null) {
+            games.firstOrNull { !it.isFull() } ?: newGame().also { games.add(it) }
+        } else {
+            rooms.getOrPut(room) { newGame() }
+        }
+        val symbol = game.connectPlayer(session) ?: return null
         val token = UUID.randomUUID().toString()
         tokens[token] = TokenBinding(game, symbol)
         Joined(game, symbol, token)
@@ -38,11 +41,7 @@ class GameLobby(
             synchronized(lock) {
                 val pending = tokens.remove(token) ?: return@launch
                 pending.game.disconnectPlayer(pending.symbol)
-                if (pending.game.isEmpty()) {
-                    games.remove(pending.game)
-                    tokens.entries.removeIf { it.value.game === pending.game }
-                    pending.game.shutdown()
-                }
+                if (pending.game.isEmpty()) retire(pending.game)
             }
         }
     }
@@ -58,18 +57,22 @@ class GameLobby(
         val binding = tokens.remove(token) ?: return
         graceJobs.remove(token)?.cancel()
         binding.game.disconnectPlayer(binding.symbol)
-        if (binding.game.isEmpty()) {
-            games.remove(binding.game)
-            binding.game.shutdown()
-        }
+        if (binding.game.isEmpty()) retire(binding.game)
     }
 
     fun shutdownAll(): Unit = synchronized(lock) {
         graceJobs.values.forEach { it.cancel() }
         graceJobs.clear()
-        games.forEach { it.shutdown() }
+        (games + rooms.values).forEach { it.shutdown() }
         games.clear()
+        rooms.clear()
         tokens.clear()
         lobbyScope.cancel()
+    }
+
+    private fun retire(game: TicTacToeGame): Unit = synchronized(lock) {
+        games.remove(game)
+        rooms.values.remove(game)
+        game.shutdown()
     }
 }

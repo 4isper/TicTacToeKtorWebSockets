@@ -10,14 +10,26 @@ import kotlinx.coroutines.channels.consumeEach
 import kotlinx.serialization.encodeToString
 import org.slf4j.LoggerFactory
 
-private val logger = LoggerFactory.getLogger("com.m4isper.tictactoe.SocketRoute")
+private val logger = LoggerFactory.getLogger("com.m4isper.tictactoe.api.SocketRoute")
+
+private val roomNamePattern = Regex("[A-Za-z0-9_-]{1,32}")
 
 fun Route.socket(lobby: GameLobby) {
     route("/play") {
         webSocket {
-            var joined = lobby.join(this)
+            val roomParam = call.request.queryParameters["room"]
+            val room = roomParam?.takeIf { roomNamePattern.matches(it) }
+            if (roomParam != null && room == null) {
+                sendError("invalid room name")
+                return@webSocket
+            }
+
+            var binding = lobby.join(this, room) ?: run {
+                sendError("room is full")
+                return@webSocket
+            }
             try {
-                send(protocolJson.encodeToString<ServerEvent>(ServerEvent.Joined(joined.token, joined.symbol)))
+                send(protocolJson.encodeToString<ServerEvent>(ServerEvent.Joined(binding.token, binding.symbol)))
 
                 incoming.consumeEach { frame ->
                     if (frame !is Frame.Text) return@consumeEach
@@ -25,7 +37,7 @@ fun Route.socket(lobby: GameLobby) {
                         .getOrNull()
 
                     val event: ServerEvent? = when (message) {
-                        is ClientMessage.MakeTurn -> joined.game.finishTurn(joined.symbol, message.x, message.y)
+                        is ClientMessage.MakeTurn -> binding.game.finishTurn(binding.symbol, message.x, message.y)
                             ?.let(ServerEvent::Error)
 
                         is ClientMessage.Reconnect -> {
@@ -33,8 +45,8 @@ fun Route.socket(lobby: GameLobby) {
                             if (rebound == null) {
                                 ServerEvent.Error("unknown token")
                             } else {
-                                lobby.abandonJoin(joined.token)
-                                joined = rebound
+                                lobby.abandonJoin(binding.token)
+                                binding = rebound
                                 ServerEvent.StateChanged(rebound.game.currentState())
                             }
                         }
@@ -44,10 +56,14 @@ fun Route.socket(lobby: GameLobby) {
                     if (event != null) send(protocolJson.encodeToString<ServerEvent>(event))
                 }
             } catch (e: Exception) {
-                logger.error("WebSocket session failed for player {}", joined.symbol, e)
+                logger.error("WebSocket session failed for player {}", binding.symbol, e)
             } finally {
-                lobby.sessionClosed(joined.token, this)
+                lobby.sessionClosed(binding.token, this)
             }
         }
     }
+}
+
+private suspend fun DefaultWebSocketServerSession.sendError(reason: String) {
+    send(protocolJson.encodeToString<ServerEvent>(ServerEvent.Error(reason)))
 }

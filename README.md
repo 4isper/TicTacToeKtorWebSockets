@@ -11,6 +11,7 @@ A minimal tic-tac-toe game server: two players connect over WebSocket, every sta
 ## Protocol
 
 - Endpoint: `ws://localhost:8080/play`
+- **Rooms / invite links:** connect to `ws://localhost:8080/play?room=<name>` to play with a specific opponent — the first two connections to a room play each other, a third gets `{"type":"error","reason":"room is full"}`. Room names are 1–32 characters of letters, digits, `-` and `_` (anything else answers `invalid room name`). A room ceases to exist once both players have left (after the reconnect grace), so the name can be reused. Connections without a `room` parameter are matched automatically, as before.
 - Players are matched pairwise: the first two connections play one game, the next two get their own game, and so on. In each game the first connection plays `X`, the second `O`. An emptied game (both players left) is retired.
 - Client → server: a text frame holding one JSON message with a `type` discriminator. Currently only:
 
@@ -44,5 +45,4 @@ CI runs `./gradlew build` on every push and pull request (GitHub Actions).
 
 ## Roadmap
 
-- Configurable board size
-- Named rooms / invite links (pairing is currently automatic)
+- Letting the room creator pick the board size (the game already supports configurable square boards)
