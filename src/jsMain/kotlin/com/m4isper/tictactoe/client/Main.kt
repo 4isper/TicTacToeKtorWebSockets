@@ -1,9 +1,11 @@
 package com.m4isper.tictactoe.client
 
+import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.protocol.ClientMessage
 import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
+import com.m4isper.tictactoe.ui.errorText
 import com.m4isper.tictactoe.ui.scoreText
 import com.m4isper.tictactoe.ui.statusText
 import kotlinx.browser.document
@@ -86,8 +88,8 @@ fun main() {
 
             is ServerEvent.Error -> {
                 pendingReconnectToken = null
-                if (event.reason == "unknown token") localStorage.removeItem(tokenKey)
-                showError(event.reason)
+                if (event.reason == ErrorReason.UNKNOWN_TOKEN) localStorage.removeItem(tokenKey)
+                showError(errorText(event.reason))
             }
         }
     }

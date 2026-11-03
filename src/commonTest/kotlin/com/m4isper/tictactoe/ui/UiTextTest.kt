@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe.ui
 
+import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.game.GameState
 import kotlin.test.*
@@ -48,5 +49,13 @@ class UiTextTest {
     @Test
     fun `missing score entries count as zero`() {
         assertEquals("Счёт — X 0 : 0 O", scoreText(GameState(score = emptyMap())))
+    }
+
+    @Test
+    fun `errors are phrased for the player`() {
+        assertEquals("Клетка занята", errorText(ErrorReason.CELL_OCCUPIED))
+        assertEquals("Сейчас не ваш ход", errorText(ErrorReason.NOT_YOUR_TURN))
+        assertEquals("Сессия не найдена", errorText(ErrorReason.UNKNOWN_TOKEN))
+        assertEquals("Эта вкладка больше не в игре", errorText(ErrorReason.STALE_SESSION))
     }
 }

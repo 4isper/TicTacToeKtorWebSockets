@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe.game
 
+import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketExtension
@@ -36,10 +37,10 @@ class TicTacToeGameTest {
         game.connectPlayer(xSession)
         game.connectPlayer(oSession)
 
-        assertEquals("cell out of bounds", game.finishTurn(PlayerSymbol.X, xSession, 3, 0))
-        assertEquals("not your turn", game.finishTurn(PlayerSymbol.O, oSession, 0, 0))
+        assertEquals(ErrorReason.CELL_OUT_OF_BOUNDS, game.finishTurn(PlayerSymbol.X, xSession, 3, 0))
+        assertEquals(ErrorReason.NOT_YOUR_TURN, game.finishTurn(PlayerSymbol.O, oSession, 0, 0))
         assertNull(game.finishTurn(PlayerSymbol.X, xSession, 0, 0))
-        assertEquals("cell occupied", game.finishTurn(PlayerSymbol.O, oSession, 0, 0))
+        assertEquals(ErrorReason.CELL_OCCUPIED, game.finishTurn(PlayerSymbol.O, oSession, 0, 0))
 
         game.shutdown()
     }
@@ -55,7 +56,7 @@ class TicTacToeGameTest {
         val replacementSession = FakeSession()
         game.reattachSession(PlayerSymbol.X, replacementSession)
 
-        assertEquals("stale session", game.finishTurn(PlayerSymbol.X, originalSession, 0, 0))
+        assertEquals(ErrorReason.STALE_SESSION, game.finishTurn(PlayerSymbol.X, originalSession, 0, 0))
         assertNull(game.finishTurn(PlayerSymbol.X, replacementSession, 0, 0))
 
         game.shutdown()
@@ -104,7 +105,7 @@ class TicTacToeGameTest {
         game.connectPlayer(xSession)
         game.connectPlayer(oSession)
 
-        assertEquals("cell out of bounds", game.finishTurn(PlayerSymbol.X, xSession, 4, 0))
+        assertEquals(ErrorReason.CELL_OUT_OF_BOUNDS, game.finishTurn(PlayerSymbol.X, xSession, 4, 0))
 
         game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
         game.finishTurn(PlayerSymbol.O, oSession, 1, 0)

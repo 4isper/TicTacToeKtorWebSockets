@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe.api
 
+import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.protocol.ClientMessage
 import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
@@ -20,12 +21,12 @@ fun Route.socket(lobby: GameLobby) {
             val roomParam = call.request.queryParameters["room"]
             val room = roomParam?.takeIf { roomNamePattern.matches(it) }
             if (roomParam != null && room == null) {
-                sendError("invalid room name")
+                sendError(ErrorReason.INVALID_ROOM_NAME)
                 return@webSocket
             }
 
             var binding = lobby.join(this, room) ?: run {
-                sendError("room is full")
+                sendError(ErrorReason.ROOM_IS_FULL)
                 return@webSocket
             }
             try {
@@ -43,7 +44,7 @@ fun Route.socket(lobby: GameLobby) {
                         is ClientMessage.Reconnect -> {
                             val rebound = lobby.reconnect(message.token, this)
                             if (rebound == null) {
-                                ServerEvent.Error("unknown token")
+                                ServerEvent.Error(ErrorReason.UNKNOWN_TOKEN)
                             } else {
                                 lobby.abandonJoin(binding.token)
                                 binding = rebound
@@ -51,7 +52,7 @@ fun Route.socket(lobby: GameLobby) {
                             }
                         }
 
-                        null -> ServerEvent.Error("malformed message")
+                        null -> ServerEvent.Error(ErrorReason.MALFORMED_MESSAGE)
                     }
                     if (event != null) send(protocolJson.encodeToString<ServerEvent>(event))
                 }
@@ -64,6 +65,6 @@ fun Route.socket(lobby: GameLobby) {
     }
 }
 
-private suspend fun DefaultWebSocketServerSession.sendError(reason: String) {
+private suspend fun DefaultWebSocketServerSession.sendError(reason: ErrorReason) {
     send(protocolJson.encodeToString<ServerEvent>(ServerEvent.Error(reason)))
 }

@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe.protocol
 
+import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.game.GameState
 import kotlinx.serialization.SerialName
@@ -34,5 +35,5 @@ sealed interface ServerEvent {
 
     @Serializable
     @SerialName("error")
-    data class Error(val reason: String) : ServerEvent
+    data class Error(val reason: ErrorReason) : ServerEvent
 }

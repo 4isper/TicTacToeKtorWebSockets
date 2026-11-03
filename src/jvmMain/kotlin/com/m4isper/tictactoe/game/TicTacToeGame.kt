@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe.game
 
+import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.GameRules
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.protocol.ServerEvent
@@ -83,7 +84,7 @@ class TicTacToeGame(
         session: WebSocketSession,
         x: Int,
         y: Int,
-    ): String? {
+    ): ErrorReason? {
         synchronized(lock) {
             val current = state.value
             val rejection = rejectionReason(player, session, x, y, current)
@@ -130,14 +131,14 @@ class TicTacToeGame(
         x: Int,
         y: Int,
         current: GameState,
-    ): String? {
+    ): ErrorReason? {
         val size = current.field.size
         return when {
-            playerSockets[player] !== session -> "stale session"
-            x !in 0 until size || y !in 0 until size -> "cell out of bounds"
-            current.playerAtTurn != player -> "not your turn"
-            current.winningPlayer != null -> "round is over"
-            current.field[y][x] != null -> "cell occupied"
+            playerSockets[player] !== session -> ErrorReason.STALE_SESSION
+            x !in 0 until size || y !in 0 until size -> ErrorReason.CELL_OUT_OF_BOUNDS
+            current.playerAtTurn != player -> ErrorReason.NOT_YOUR_TURN
+            current.winningPlayer != null -> ErrorReason.ROUND_IS_OVER
+            current.field[y][x] != null -> ErrorReason.CELL_OCCUPIED
             else -> null
         }
     }
