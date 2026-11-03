@@ -16,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
 class TicTacToeGame(
     private val roundRestartDelayMs: Long = 5_000L,
     private val boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
+    private val winLength: Int = boardSize,
 ) {
     private val logger = LoggerFactory.getLogger(TicTacToeGame::class.java)
 
@@ -94,9 +95,9 @@ class TicTacToeGame(
                 cells.mapIndexed { col, cell -> if (row == y && col == x) player else cell }
             }
             val isBoardFull = GameRules.isBoardFull(newField)
-            val winningPlayer = GameRules.winningPlayer(newField)
-            val newScore = if (winningPlayer != null) {
-                current.score + (winningPlayer to (current.score[winningPlayer] ?: 0) + 1)
+            val win = GameRules.win(newField, winLength)
+            val newScore = if (win != null) {
+                current.score + (win.player to (current.score[win.player] ?: 0) + 1)
             } else {
                 current.score
             }
@@ -106,11 +107,12 @@ class TicTacToeGame(
                     playerAtTurn = player.other,
                     field = newField,
                     isBoardFull = isBoardFull,
-                    winningPlayer = winningPlayer,
+                    winningPlayer = win?.player,
+                    winningCells = win?.cells ?: emptyList(),
                     score = newScore,
                 ),
             )
-            if (winningPlayer != null || isBoardFull) scheduleRoundRestart()
+            if (win != null || isBoardFull) scheduleRoundRestart()
             return null
         }
     }
@@ -153,6 +155,7 @@ class TicTacToeGame(
                         playerAtTurn = PlayerSymbol.X,
                         field = GameRules.emptyField(boardSize),
                         winningPlayer = null,
+                        winningCells = emptyList(),
                         isBoardFull = false,
                     ),
                 )

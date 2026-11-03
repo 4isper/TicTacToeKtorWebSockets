@@ -4,20 +4,34 @@ object GameRules {
     const val DEFAULT_BOARD_SIZE = 3
     const val MIN_BOARD_SIZE = 3
     const val MAX_BOARD_SIZE = 10
+    const val MIN_WIN_LENGTH = 3
 
     fun emptyField(size: Int = DEFAULT_BOARD_SIZE): List<List<PlayerSymbol?>> = List(size) { List(size) { null } }
 
     fun isBoardFull(field: List<List<PlayerSymbol?>>): Boolean = field.all { row -> row.all { it != null } }
 
-    fun winningPlayer(field: List<List<PlayerSymbol?>>): PlayerSymbol? {
+    fun win(
+        field: List<List<PlayerSymbol?>>,
+        winLength: Int = DEFAULT_BOARD_SIZE,
+    ): Win? {
+        if (winLength < 1) return null
         val size = field.size
-        val lines =
-            field +
-                (0 until size).map { col -> field.map { it[col] } } +
+        val lines: List<List<Pair<Cell, PlayerSymbol?>>> =
+            field.mapIndexed { y, row -> row.mapIndexed { x, symbol -> Cell(x, y) to symbol } } +
+                (0 until size).map { x -> field.mapIndexed { y, row -> Cell(x, y) to row[x] } } +
                 listOf(
-                    (0 until size).map { field[it][it] },
-                    (0 until size).map { field[it][size - 1 - it] },
+                    (0 until size).map { d -> Cell(d, d) to field[d][d] },
+                    (0 until size).map { d -> Cell(size - 1 - d, d) to field[d][size - 1 - d] },
                 )
-        return lines.firstOrNull { line -> line[0] != null && line.all { it == line[0] } }?.first()
+        for (line in lines) {
+            for (start in 0..line.size - winLength) {
+                val window = line.subList(start, start + winLength)
+                val player = window.first().second ?: continue
+                if (window.all { it.second == player }) {
+                    return Win(player = player, cells = window.map { it.first })
+                }
+            }
+        }
+        return null
     }
 }
