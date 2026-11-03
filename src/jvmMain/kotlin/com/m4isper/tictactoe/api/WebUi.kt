@@ -1,7 +1,10 @@
 package com.m4isper.tictactoe.api
 
+import com.m4isper.tictactoe.stats.LeaderboardResponse
+import com.m4isper.tictactoe.stats.Scoreboard
 import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.copyLinkText
+import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.namePlaceholder
 import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.rematchButtonText
@@ -18,6 +21,7 @@ import kotlinx.html.body
 import kotlinx.html.button
 import kotlinx.html.div
 import kotlinx.html.h1
+import kotlinx.html.h2
 import kotlinx.html.head
 import kotlinx.html.id
 import kotlinx.html.input
@@ -27,6 +31,8 @@ import kotlinx.html.meta
 import kotlinx.html.p
 import kotlinx.html.script
 import kotlinx.html.title
+import kotlinx.html.ul
+import kotlinx.serialization.json.Json
 import java.io.File
 
 private const val CLIENT_DIST = "build/dist/js/productionExecutable"
@@ -35,9 +41,18 @@ private suspend fun ApplicationCall.respondCss(builder: CssBuilder.() -> Unit) {
     respondText(CssBuilder().apply(builder).toString(), ContentType.Text.CSS)
 }
 
-fun Application.webUi() {
+private val leaderboardJson = Json { encodeDefaults = true }
+
+fun Application.webUi(scoreboard: Scoreboard) {
     routing {
         staticFiles("/static", File(CLIENT_DIST))
+
+        get("/leaderboard") {
+            call.respondText(
+                leaderboardJson.encodeToString(LeaderboardResponse(scoreboard.top(limit = 10))),
+                ContentType.Application.Json,
+            )
+        }
 
         get("/styles.css") {
             call.respondCss {
@@ -212,6 +227,11 @@ fun Application.webUi() {
                     }
                     div { id = "board" }
                     div { id = "error" }
+                    div {
+                        id = "leaderboard"
+                        h2 { +leaderboardTitle(pageLang) }
+                        ul { id = "leaderboard-rows" }
+                    }
                     script(src = "/static/app.js") {}
                 }
             }

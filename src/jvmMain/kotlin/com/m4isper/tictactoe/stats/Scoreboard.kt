@@ -13,10 +13,14 @@ data class PlayerStats(
     val draws: Int = 0,
 )
 
+@Serializable
 data class LeaderboardEntry(
     val name: String,
     val stats: PlayerStats,
 )
+
+@Serializable
+data class LeaderboardResponse(val entries: List<LeaderboardEntry> = emptyList())
 
 @Serializable
 private data class StoredScores(val players: Map<String, PlayerStats> = emptyMap())
@@ -30,7 +34,10 @@ interface ScoreStore {
 
 /** JSON-file store with an atomic write (temp file + rename) so a crash mid-write keeps the old data. */
 class JsonScoreStore(private val file: File) : ScoreStore {
-    private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
+    private val json = Json {
+        prettyPrint = true
+        ignoreUnknownKeys = true
+    }
     private val lock = Any()
     private val players: MutableMap<String, PlayerStats>
 
@@ -84,10 +91,9 @@ class Scoreboard(private val store: ScoreStore) {
         playerNames[winner.other]?.let { store.addResult(it, RoundResult.LOSS) }
     }
 
-    fun top(limit: Int = 10): List<LeaderboardEntry> =
-        store.loadAll()
-            .entries
-            .sortedWith(compareByDescending<Map.Entry<String, PlayerStats>> { it.value.wins }.thenBy { it.key })
-            .take(limit)
-            .map { LeaderboardEntry(it.key, it.value) }
+    fun top(limit: Int = 10): List<LeaderboardEntry> = store.loadAll()
+        .entries
+        .sortedWith(compareByDescending<Map.Entry<String, PlayerStats>> { it.value.wins }.thenBy { it.key })
+        .take(limit)
+        .map { LeaderboardEntry(it.key, it.value) }
 }

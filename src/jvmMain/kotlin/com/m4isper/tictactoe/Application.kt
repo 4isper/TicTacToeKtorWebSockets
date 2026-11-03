@@ -7,21 +7,30 @@ import com.m4isper.tictactoe.plugins.configureMonitoring
 import com.m4isper.tictactoe.plugins.configureRouting
 import com.m4isper.tictactoe.plugins.configureSerialization
 import com.m4isper.tictactoe.plugins.configureSockets
+import com.m4isper.tictactoe.stats.JsonScoreStore
+import com.m4isper.tictactoe.stats.Scoreboard
 import io.ktor.server.application.*
+import java.io.File
 
 fun main(args: Array<String>) {
     io.ktor.server.netty.EngineMain.main(args)
 }
 
+private fun defaultScoreboard(): Scoreboard = Scoreboard(JsonScoreStore(File(System.getenv("SCOREBOARD_FILE") ?: "data/scoreboard.json")))
+
 fun Application.module() {
-    module(newGame = { boardSize, winLength, botEnabled ->
-        TicTacToeGame(boardSize = boardSize, winLength = winLength, botEnabled = botEnabled)
-    })
+    module(scoreboard = defaultScoreboard())
 }
 
 fun Application.module(
+    scoreboard: Scoreboard = defaultScoreboard(),
     newGame: (boardSize: Int, winLength: Int, botEnabled: Boolean) -> TicTacToeGame = { boardSize, winLength, botEnabled ->
-        TicTacToeGame(boardSize = boardSize, winLength = winLength, botEnabled = botEnabled)
+        TicTacToeGame(
+            boardSize = boardSize,
+            winLength = winLength,
+            botEnabled = botEnabled,
+            onRoundOver = scoreboard::recordRound,
+        )
     },
     reconnectGraceMs: Long = 10_000L,
 ) {
@@ -31,5 +40,5 @@ fun Application.module(
     configureSerialization()
     configureMonitoring()
     configureRouting(lobby)
-    webUi()
+    webUi(scoreboard)
 }

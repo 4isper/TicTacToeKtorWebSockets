@@ -262,6 +262,60 @@ class TicTacToeGameTest {
     }
 
     @Test
+    fun `round end reports the names and the winner`() = runBlocking {
+        val reported = mutableListOf<Pair<Map<PlayerSymbol, String>, PlayerSymbol?>>()
+        val game = TicTacToeGame(onRoundOver = { names, winner -> reported.add(names to winner) })
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+        game.setName(PlayerSymbol.X, "Аня")
+        game.setName(PlayerSymbol.O, "Боря")
+
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 1)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
+
+        assertEquals(1, reported.size)
+        assertEquals(
+            mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря") to PlayerSymbol.X,
+            reported.single(),
+        )
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `a draw reports a null winner`() = runBlocking {
+        val reported = mutableListOf<Pair<Map<PlayerSymbol, String>, PlayerSymbol?>>()
+        val game = TicTacToeGame(onRoundOver = { names, winner -> reported.add(names to winner) })
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+        game.setName(PlayerSymbol.X, "Аня")
+
+        // the classic draw
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
+        game.finishTurn(PlayerSymbol.X, xSession, 2, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 1)
+        game.finishTurn(PlayerSymbol.O, oSession, 2, 1)
+        game.finishTurn(PlayerSymbol.X, xSession, 2, 2)
+        game.finishTurn(PlayerSymbol.O, oSession, 0, 2)
+        game.finishTurn(PlayerSymbol.X, xSession, 1, 2)
+
+        assertEquals(1, reported.size)
+        assertEquals(null, reported.single().second)
+        assertEquals("Аня", reported.single().first[PlayerSymbol.X])
+
+        game.shutdown()
+    }
+
+    @Test
     fun `four by four board accepts moves up to its bounds and detects the win`() = runBlocking {
         val game = TicTacToeGame(boardSize = 4)
         val xSession = FakeSession()

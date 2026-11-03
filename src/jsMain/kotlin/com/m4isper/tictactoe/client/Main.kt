@@ -10,6 +10,7 @@ import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.copiedText
 import com.m4isper.tictactoe.ui.copyLinkText
 import com.m4isper.tictactoe.ui.errorText
+import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.restartText
@@ -73,6 +74,27 @@ fun main() {
 
     fun showStatus(text: String) {
         status.textContent = text
+    }
+
+    fun roundIsOver(s: GameState): Boolean = s.winningPlayer != null || s.isBoardFull
+
+    fun refreshLeaderboard() {
+        try {
+            window.asDynamic().fetch("/leaderboard").then { response: dynamic ->
+                response.json().then { data: dynamic ->
+                    val rows = document.getElementById("leaderboard-rows") as HTMLElement
+                    rows.innerHTML = ""
+                    val entries = data.entries as Array<dynamic>
+                    entries.forEachIndexed { index, entry ->
+                        val li = document.createElement("li")
+                        li.textContent = "${index + 1}. ${entry.name} — ${entry.stats.wins} : ${entry.stats.losses} : ${entry.stats.draws}"
+                        rows.appendChild(li)
+                    }
+                }
+            }.catch { /* the leaderboard is decorative */ }
+        } catch (t: Throwable) {
+            // decorative as well
+        }
     }
 
     // -- sound: tiny synthesized cues, never a game breaker --
@@ -166,6 +188,7 @@ fun main() {
         showStatus(statusText(state, mySymbol, lang))
         scoreDiv.textContent = scoreText(state, lang)
         playStateSounds(previous, state)
+        if ((previous == null || !roundIsOver(previous)) && roundIsOver(state)) refreshLeaderboard()
 
         board.innerHTML = ""
         val cellPx = (minOf(window.innerWidth, window.innerHeight) * 0.8 / state.field.size)
@@ -271,5 +294,6 @@ fun main() {
         }
     }
 
+    refreshLeaderboard()
     connect()
 }

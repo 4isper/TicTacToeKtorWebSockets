@@ -52,6 +52,54 @@ class ApplicationTest {
     }
 
     @Test
+    fun `named wins reach the leaderboard endpoint`() = testApplication {
+        application {
+            module()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=lb") {
+            receiveHandshake()
+            sendSetName("Аня")
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=lb") {
+                    receiveHandshake()
+                    sendSetName("Боря")
+                    oReady.complete(Unit)
+                    awaitStateWhere { it.playerAtTurn == PlayerSymbol.O } // X's opening
+                    sendMakeTurn(1, 0)
+                    awaitStateWhere { it.playerAtTurn == PlayerSymbol.O } // X's second move
+                    sendMakeTurn(1, 1)
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            awaitStateWhere { it.playerNames[PlayerSymbol.O] == "Боря" }
+            sendMakeTurn(0, 0)
+            awaitStateWhere { it.playerAtTurn == PlayerSymbol.X }
+            sendMakeTurn(0, 1)
+            awaitStateWhere { it.playerAtTurn == PlayerSymbol.X }
+            sendMakeTurn(0, 2)
+            awaitStateWhere { it.winningPlayer == PlayerSymbol.X }
+
+            second.cancel()
+        }
+
+        val board = client.get("/leaderboard").bodyAsText()
+        assertTrue("Аня" in board, "leaderboard should contain Аня: $board")
+        assertTrue("Боря" in board, "leaderboard should contain Боря: $board")
+    }
+
+    @Test
     fun `first player receives game state after connect`() = testApplication {
         application {
             module()
@@ -905,10 +953,18 @@ private suspend fun WebSocketSession.awaitStateWhere(
 }
 
 private suspend fun WebSocketSession.receiveHandshake(): Pair<ServerEvent.Joined, GameState> {
-    val events = listOf(receiveEvent(), receiveEvent())
-    val joined = events.filterIsInstance<ServerEvent.Joined>().single()
-    val state = events.filterIsInstance<ServerEvent.StateChanged>().single().state
-    return joined to state
+    var joined: ServerEvent.Joined? = null
+    var state: GameState? = null
+    withTimeout(5_000) {
+        while (joined == null || state == null) {
+            when (val event = receiveEvent()) {
+                is ServerEvent.Joined -> joined = event
+                is ServerEvent.StateChanged -> state = event.state
+                else -> {}
+            }
+        }
+    }
+    return joined!! to state!!
 }
 
 private suspend fun WebSocketSession.sendReconnect(token: String) {

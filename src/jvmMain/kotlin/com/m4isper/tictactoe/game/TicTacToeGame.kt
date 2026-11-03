@@ -21,6 +21,7 @@ class TicTacToeGame(
     private val winLength: Int = boardSize,
     private val botEnabled: Boolean = false,
     private val turnTimeoutMs: Long = 30_000L,
+    private val onRoundOver: (playerNames: Map<PlayerSymbol, String>, winner: PlayerSymbol?) -> Unit = { _, _ -> },
 ) {
     private val logger = LoggerFactory.getLogger(TicTacToeGame::class.java)
 
@@ -251,6 +252,7 @@ class TicTacToeGame(
     }
 
     private fun publish(next: GameState) {
+        val previous = state.value
         val withCountdown = if (roundRestartDeadline > 0) {
             next.copy(roundRestartInMs = (roundRestartDeadline - System.currentTimeMillis()).coerceAtLeast(0))
         } else {
@@ -263,9 +265,15 @@ class TicTacToeGame(
         }
         state.value = withTurnTimer
         stateChanges.trySend(withTurnTimer)
+        if (roundJustEnded(previous, withTurnTimer)) {
+            onRoundOver(withTurnTimer.playerNames, withTurnTimer.winningPlayer)
+        }
         scheduleBotMoveIfNeeded(withTurnTimer)
         armTurnTimerLocked(withTurnTimer)
     }
+
+    private fun roundJustEnded(previous: GameState, next: GameState): Boolean = !(previous.winningPlayer != null || previous.isBoardFull) &&
+        (next.winningPlayer != null || next.isBoardFull)
 
     /** Forfeits the round to the opponent when the current player stalls past the deadline. */
     private fun armTurnTimerLocked(current: GameState) {

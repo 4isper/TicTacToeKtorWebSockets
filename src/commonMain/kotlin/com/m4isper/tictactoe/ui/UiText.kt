@@ -117,3 +117,8 @@ fun namePlaceholder(lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> "Ваше имя"
     Lang.EN -> "Your name"
 }
+
+fun leaderboardTitle(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Зал славы"
+    Lang.EN -> "Leaderboard"
+}
