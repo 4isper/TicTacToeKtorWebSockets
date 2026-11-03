@@ -86,6 +86,7 @@ fun main() {
 
             is ServerEvent.Error -> {
                 pendingReconnectToken = null
+                if (event.reason == "unknown token") localStorage.removeItem(tokenKey)
                 showError(event.reason)
             }
         }
