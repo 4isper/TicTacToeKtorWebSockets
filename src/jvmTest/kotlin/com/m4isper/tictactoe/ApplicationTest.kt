@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe
 
+import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.game.GameState
 import com.m4isper.tictactoe.protocol.ClientMessage
@@ -431,6 +432,55 @@ class ApplicationTest {
         betaClient.webSocket("/play?room=beta") {
             val (joined, _) = receiveHandshake()
             assertEquals(PlayerSymbol.X, joined.symbol)
+        }
+    }
+
+    @Test
+    fun `room creator picks the board size and latecomers inherit it`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=big&size=5") {
+            val (joined, state) = receiveHandshake()
+            assertEquals(PlayerSymbol.X, joined.symbol)
+            assertEquals(5, state.field.size)
+
+            sendMakeTurn(4, 4)
+            skipBroadcast()
+        }
+
+        client.webSocket("/play?room=big") {
+            val (joined, state) = receiveHandshake()
+            assertEquals(PlayerSymbol.O, joined.symbol)
+            assertEquals(5, state.field.size)
+            assertEquals(PlayerSymbol.X, state.field[4][4])
+        }
+    }
+
+    @Test
+    fun `an out of range size is refused before joining`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=tiny&size=2") {
+            assertEquals(ErrorReason.INVALID_BOARD_SIZE, (receiveEvent() as ServerEvent.Error).reason)
+        }
+
+        client.webSocket("/play?room=tiny&size=abc") {
+            assertEquals(ErrorReason.INVALID_BOARD_SIZE, (receiveEvent() as ServerEvent.Error).reason)
+        }
+
+        client.webSocket("/play?room=tiny") {
+            val (_, state) = receiveHandshake()
+            assertEquals(3, state.field.size)
         }
     }
 

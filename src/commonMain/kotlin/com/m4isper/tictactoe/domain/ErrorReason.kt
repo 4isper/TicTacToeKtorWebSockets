@@ -31,4 +31,7 @@ enum class ErrorReason {
 
     @SerialName("stale session")
     STALE_SESSION,
+
+    @SerialName("invalid board size")
+    INVALID_BOARD_SIZE,
 }

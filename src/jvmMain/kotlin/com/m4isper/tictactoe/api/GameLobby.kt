@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe.api
 
+import com.m4isper.tictactoe.domain.GameRules
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.game.TicTacToeGame
 import io.ktor.websocket.*
@@ -7,7 +8,7 @@ import kotlinx.coroutines.*
 import java.util.UUID
 
 class GameLobby(
-    private val newGame: () -> TicTacToeGame = ::TicTacToeGame,
+    private val newGame: (boardSize: Int) -> TicTacToeGame = { TicTacToeGame(boardSize = it) },
     private val reconnectGraceMs: Long = 10_000L,
 ) {
     data class Joined(val game: TicTacToeGame, val symbol: PlayerSymbol, val token: String)
@@ -21,11 +22,15 @@ class GameLobby(
     private val graceJobs = mutableMapOf<String, Job>()
     private val lobbyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    fun join(session: WebSocketSession, room: String? = null): Joined? = synchronized(lock) {
+    fun join(
+        session: WebSocketSession,
+        room: String? = null,
+        boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
+    ): Joined? = synchronized(lock) {
         val game = if (room == null) {
-            games.firstOrNull { !it.isFull() } ?: newGame().also { games.add(it) }
+            games.firstOrNull { !it.isFull() } ?: newGame(boardSize).also { games.add(it) }
         } else {
-            rooms.getOrPut(room) { newGame() }
+            rooms.getOrPut(room) { newGame(boardSize) }
         }
         val symbol = game.connectPlayer(session) ?: return null
         val token = UUID.randomUUID().toString()

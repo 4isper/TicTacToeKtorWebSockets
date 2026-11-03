@@ -1,6 +1,7 @@
 package com.m4isper.tictactoe.api
 
 import com.m4isper.tictactoe.domain.ErrorReason
+import com.m4isper.tictactoe.domain.GameRules
 import com.m4isper.tictactoe.protocol.ClientMessage
 import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
@@ -25,7 +26,14 @@ fun Route.socket(lobby: GameLobby) {
                 return@webSocket
             }
 
-            var binding = lobby.join(this, room) ?: run {
+            val sizeParam = call.request.queryParameters["size"]
+            val boardSize = sizeParam?.toIntOrNull()
+            if (sizeParam != null && boardSize !in GameRules.MIN_BOARD_SIZE..GameRules.MAX_BOARD_SIZE) {
+                sendError(ErrorReason.INVALID_BOARD_SIZE)
+                return@webSocket
+            }
+
+            var binding = lobby.join(this, room, boardSize ?: GameRules.DEFAULT_BOARD_SIZE) ?: run {
                 sendError(ErrorReason.ROOM_IS_FULL)
                 return@webSocket
             }

@@ -69,9 +69,6 @@ fun Application.webUi() {
                     gap = 4.px
                 }
                 rule(".cell") {
-                    width = 76.px
-                    height = 76.px
-                    fontSize = 38.px
                     backgroundColor = Color("#1f1f33")
                     color = Color.white
                     borderRadius = 8.px

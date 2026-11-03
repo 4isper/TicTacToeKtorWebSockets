@@ -24,9 +24,15 @@ fun main() {
     val scoreDiv = document.getElementById("score") as HTMLElement
     val copyLink = document.getElementById("copy-link") as? HTMLButtonElement
 
-    val room = URLSearchParams(window.location.search).get("room")
+    val params = URLSearchParams(window.location.search)
+    val room = params.get("room")
+    val size = params.get("size")
     val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
-    val wsUrl = "$wsProtocol://${window.location.host}/play" + (room?.let { "?room=$it" } ?: "")
+    val query = listOfNotNull(
+        room?.let { "room=$it" },
+        size?.let { "size=$it" },
+    ).joinToString("&")
+    val wsUrl = "$wsProtocol://${window.location.host}/play" + (query.takeIf { it.isNotEmpty() }?.let { "?$it" } ?: "")
     val tokenKey = "tictactoe-token" + (room?.let { ":$it" } ?: "")
 
     var socket: WebSocket? = null
@@ -52,12 +58,18 @@ fun main() {
         scoreDiv.textContent = scoreText(state)
 
         board.innerHTML = ""
+        val cellPx = (minOf(window.innerWidth, window.innerHeight) * 0.8 / state.field.size)
+            .toInt()
+            .coerceAtMost(76)
         state.field.forEachIndexed { y, row ->
             val rowDiv = document.createElement("div")
             rowDiv.className = "row"
             row.forEachIndexed { x, cell ->
                 val cellButton = document.createElement("button") as HTMLButtonElement
                 cellButton.className = "cell"
+                cellButton.style.width = "${cellPx}px"
+                cellButton.style.height = "${cellPx}px"
+                cellButton.style.fontSize = "${cellPx / 2}px"
                 cellButton.textContent = when (cell) {
                     PlayerSymbol.X -> "X"
                     PlayerSymbol.O -> "O"

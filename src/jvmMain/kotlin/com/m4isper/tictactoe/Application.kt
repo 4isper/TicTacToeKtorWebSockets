@@ -14,10 +14,13 @@ fun main(args: Array<String>) {
 }
 
 fun Application.module() {
-    module(::TicTacToeGame)
+    module(newGame = { TicTacToeGame(boardSize = it) })
 }
 
-fun Application.module(newGame: () -> TicTacToeGame = ::TicTacToeGame, reconnectGraceMs: Long = 10_000L) {
+fun Application.module(
+    newGame: (boardSize: Int) -> TicTacToeGame = { TicTacToeGame(boardSize = it) },
+    reconnectGraceMs: Long = 10_000L,
+) {
     val lobby = GameLobby(newGame, reconnectGraceMs)
     monitor.subscribe(ApplicationStopped) { lobby.shutdownAll() }
     configureSockets()

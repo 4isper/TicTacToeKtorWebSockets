@@ -57,5 +57,6 @@ class UiTextTest {
         assertEquals("Сейчас не ваш ход", errorText(ErrorReason.NOT_YOUR_TURN))
         assertEquals("Сессия не найдена", errorText(ErrorReason.UNKNOWN_TOKEN))
         assertEquals("Эта вкладка больше не в игре", errorText(ErrorReason.STALE_SESSION))
+        assertEquals("Неверный размер доски", errorText(ErrorReason.INVALID_BOARD_SIZE))
     }
 }

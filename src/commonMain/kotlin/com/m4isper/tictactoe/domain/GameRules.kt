@@ -2,6 +2,8 @@ package com.m4isper.tictactoe.domain
 
 object GameRules {
     const val DEFAULT_BOARD_SIZE = 3
+    const val MIN_BOARD_SIZE = 3
+    const val MAX_BOARD_SIZE = 10
 
     fun emptyField(size: Int = DEFAULT_BOARD_SIZE): List<List<PlayerSymbol?>> = List(size) { List(size) { null } }
 
