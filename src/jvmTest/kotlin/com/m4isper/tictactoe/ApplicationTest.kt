@@ -335,6 +335,8 @@ class ApplicationTest {
                 xClient.webSocket("/play") {
                     receiveHandshake()
                     sendReconnect(joined.token)
+                    // wait for the server to confirm the rebind before unblocking the zombie
+                    assertTrue(receiveEvent() is ServerEvent.StateChanged)
                     reconnected.complete(Unit)
                     awaitCancellation()
                 }
