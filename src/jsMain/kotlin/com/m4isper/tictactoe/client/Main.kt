@@ -68,6 +68,54 @@ fun main() {
         status.textContent = text
     }
 
+    // -- sound: tiny synthesized cues, never a game breaker --
+    var audioCtx: dynamic = null
+
+    fun ensureAudio() {
+        if (audioCtx != null) return
+        try {
+            audioCtx = js("new (window.AudioContext || window.webkitAudioContext)()")
+        } catch (t: Throwable) {
+            audioCtx = null
+        }
+    }
+
+    fun beep(freq: Double, durationMs: Int, type: String = "sine") {
+        try {
+            ensureAudio()
+            val ctx = audioCtx ?: return
+            val osc = ctx.createOscillator()
+            val gain = ctx.createGain()
+            osc.type = type
+            osc.frequency.value = freq
+            gain.gain.value = 0.04
+            osc.connect(gain)
+            gain.connect(ctx.destination)
+            osc.start()
+            osc.stop(ctx.currentTime + durationMs / 1000.0)
+        } catch (t: Throwable) {
+            // sound is decorative; never break the game over it
+        }
+    }
+
+    fun playStateSounds(previous: GameState?, state: GameState) {
+        if (previous == null) return
+        val movesBefore = previous.field.sumOf { row -> row.count { it != null } }
+        val movesNow = state.field.sumOf { row -> row.count { it != null } }
+        when {
+            state.winningPlayer != null && previous.winningPlayer == null -> {
+                beep(523.0, 120)
+                window.setTimeout({ beep(659.0, 120) }, 120)
+                window.setTimeout({ beep(784.0, 220) }, 240)
+            }
+
+            state.isBoardFull && state.winningPlayer == null && !previous.isBoardFull ->
+                beep(220.0, 250, "triangle")
+
+            movesNow > movesBefore -> beep(660.0, 60)
+        }
+    }
+
     fun showState(event: ServerEvent.StateChanged) {
         val state = event.state
         val previous = lastState
@@ -110,6 +158,7 @@ fun main() {
 
         showStatus(statusText(state, mySymbol))
         scoreDiv.textContent = scoreText(state)
+        playStateSounds(previous, state)
 
         board.innerHTML = ""
         val cellPx = (minOf(window.innerWidth, window.innerHeight) * 0.8 / state.field.size)
@@ -121,7 +170,12 @@ fun main() {
             rowDiv.className = "row"
             row.forEachIndexed { x, cell ->
                 val cellButton = document.createElement("button") as HTMLButtonElement
-                cellButton.className = if ("$x,$y" in winningCells) "cell winning" else "cell"
+                val isNewMove = previous != null && previous.field[y][x] == null && cell != null
+                cellButton.className = buildString {
+                    append("cell")
+                    if ("$x,$y" in winningCells) append(" winning")
+                    if (isNewMove) append(" pop")
+                }
                 cellButton.style.width = "${cellPx}px"
                 cellButton.style.height = "${cellPx}px"
                 cellButton.style.fontSize = "${cellPx / 2}px"
@@ -132,7 +186,10 @@ fun main() {
                 }
                 cellButton.disabled =
                     cell != null || mySymbol == null || state.connectionPlayers.size < 2 || state.playerAtTurn != mySymbol
-                cellButton.onclick = { send(ClientMessage.MakeTurn(x = x, y = y)) }
+                cellButton.onclick = {
+                    ensureAudio()
+                    send(ClientMessage.MakeTurn(x = x, y = y))
+                }
                 rowDiv.appendChild(cellButton)
             }
             board.appendChild(rowDiv)

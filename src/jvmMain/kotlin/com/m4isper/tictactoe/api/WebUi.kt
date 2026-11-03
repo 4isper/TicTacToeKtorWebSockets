@@ -7,6 +7,7 @@ import io.ktor.server.http.content.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.css.*
+import kotlinx.css.properties.*
 import kotlinx.html.InputType
 import kotlinx.html.body
 import kotlinx.html.button
@@ -121,8 +122,30 @@ fun Application.webUi() {
                     cursor = Cursor.default
                     opacity = 0.85
                 }
+                rule(".cell.pop") {
+                    animation += Animation("cell-pop", 180.ms, Timing.easeOut)
+                }
                 rule(".cell.winning") {
                     backgroundColor = Color("#2e7d4f")
+                    animation += Animation("win-pulse", 1200.ms, Timing.easeInOut, iterationCount = IterationCount.infinite)
+                }
+                rule("@keyframes cell-pop") {
+                    rule("from") {
+                        opacity = 0
+                        transform { scale(0.4) }
+                    }
+                    rule("to") {
+                        opacity = 1
+                        transform { scale(1) }
+                    }
+                }
+                rule("@keyframes win-pulse") {
+                    rule("from") {
+                        opacity = 1
+                    }
+                    rule("to") {
+                        opacity = 0.65
+                    }
                 }
             }
         }
