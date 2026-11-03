@@ -171,33 +171,55 @@ fun Application.webUi(
 
         get("/styles.css") {
             call.respondCss {
+                rule(":root") {
+                    put("--bg", "#14141f")
+                    put("--panel", "#1f1f33")
+                    put("--text", "#e8e8f0")
+                    put("--muted", "#9a9ab8")
+                    put("--accent", "#7aa2f7")
+                    put("--win", "#2e7d4f")
+                    put("--danger", "#ff7b7b")
+                    put("--placeholder", "#6a6a85")
+                }
+                rule("@media (prefers-color-scheme: light)") {
+                    rule(":root") {
+                        put("--bg", "#f4f4f8")
+                        put("--panel", "#ffffff")
+                        put("--text", "#1a1a24")
+                        put("--muted", "#6a6a85")
+                        put("--accent", "#4a6fd4")
+                        put("--win", "#2e7d4f")
+                        put("--danger", "#c0392b")
+                        put("--placeholder", "#9a9ab8")
+                    }
+                }
                 rule("body") {
                     fontFamily = "system-ui, sans-serif"
                     display = Display.flex
                     flexDirection = FlexDirection.column
                     alignItems = Align.center
-                    backgroundColor = Color("#14141f")
-                    color = Color("#e8e8f0")
+                    backgroundColor = Color("var(--bg)")
+                    color = Color("var(--text)")
                 }
                 rule("#status") {
                     fontSize = 22.px
                     minHeight = 30.px
                 }
                 rule("#error") {
-                    color = Color("#ff7b7b")
+                    color = Color("var(--danger)")
                     minHeight = 24.px
                 }
                 rule("#score") {
                     fontSize = 18.px
                     minHeight = 24.px
-                    color = Color("#9a9ab8")
+                    color = Color("var(--muted)")
                 }
                 rule("#copy-link") {
                     margin = Margin(vertical = 8.px)
                     padding = Padding(horizontal = 14.px, vertical = 8.px)
                     fontSize = 15.px
-                    backgroundColor = Color("#1f1f33")
-                    color = Color("#e8e8f0")
+                    backgroundColor = Color("var(--panel)")
+                    color = Color("var(--text)")
                     borderWidth = 0.px
                     borderRadius = 8.px
                     cursor = Cursor.pointer
@@ -207,8 +229,8 @@ fun Application.webUi(
                     margin = Margin(vertical = 4.px)
                     padding = Padding(horizontal = 14.px, vertical = 8.px)
                     fontSize = 15.px
-                    backgroundColor = Color("#1f1f33")
-                    color = Color("#e8e8f0")
+                    backgroundColor = Color("var(--panel)")
+                    color = Color("var(--text)")
                     borderWidth = 0.px
                     borderRadius = 8.px
                     cursor = Cursor.pointer
@@ -223,21 +245,21 @@ fun Application.webUi(
                     margin = Margin(vertical = 4.px)
                 }
                 rule("#name") {
-                    backgroundColor = Color("#1f1f33")
-                    color = Color("#e8e8f0")
+                    backgroundColor = Color("var(--panel)")
+                    color = Color("var(--text)")
                     borderWidth = 0.px
                     borderRadius = 8.px
                     padding = Padding(horizontal = 10.px, vertical = 8.px)
                     fontSize = 15.px
                 }
                 rule("#name::placeholder") {
-                    color = Color("#6a6a85")
+                    color = Color("var(--placeholder)")
                 }
                 rule("#set-name") {
                     padding = Padding(horizontal = 14.px, vertical = 8.px)
                     fontSize = 15.px
-                    backgroundColor = Color("#1f1f33")
-                    color = Color("#e8e8f0")
+                    backgroundColor = Color("var(--panel)")
+                    color = Color("var(--text)")
                     borderWidth = 0.px
                     borderRadius = 8.px
                     cursor = Cursor.pointer
@@ -245,7 +267,7 @@ fun Application.webUi(
                 rule("#turn-bar") {
                     display = Display.none
                     height = 6.px
-                    backgroundColor = Color("#1f1f33")
+                    backgroundColor = Color("var(--panel)")
                     borderRadius = 3.px
                     margin = Margin(vertical = 6.px)
                     overflow = Overflow.hidden
@@ -253,7 +275,7 @@ fun Application.webUi(
                 rule("#turn-bar-fill") {
                     width = 100.pct
                     height = 100.pct
-                    backgroundColor = Color("#7aa2f7")
+                    backgroundColor = Color("var(--accent)")
                     transition += Transition("width", 250.ms, Timing.linear)
                 }
                 rule(".row") {
@@ -261,8 +283,8 @@ fun Application.webUi(
                     gap = 4.px
                 }
                 rule(".cell") {
-                    backgroundColor = Color("#1f1f33")
-                    color = Color.white
+                    backgroundColor = Color("var(--panel)")
+                    color = Color("var(--text)")
                     borderRadius = 8.px
                     borderWidth = 0.px
                     cursor = Cursor.pointer
@@ -278,10 +300,10 @@ fun Application.webUi(
                     boxSizing = BoxSizing.borderBox
                     borderWidth = 2.px
                     borderStyle = BorderStyle.solid
-                    borderColor = Color("#7aa2f7")
+                    borderColor = Color("var(--accent)")
                 }
                 rule(".cell.winning") {
-                    backgroundColor = Color("#2e7d4f")
+                    backgroundColor = Color("var(--win)")
                     animation += Animation("win-pulse", 1200.ms, Timing.easeInOut, iterationCount = IterationCount.infinite)
                 }
                 rule(".replay-controls") {
@@ -293,8 +315,8 @@ fun Application.webUi(
                 rule(".mini-cell") {
                     width = 26.px
                     height = 26.px
-                    backgroundColor = Color("#1f1f33")
-                    color = Color.white
+                    backgroundColor = Color("var(--panel)")
+                    color = Color("var(--text)")
                     fontSize = 13.px
                     lineHeight = LineHeight("26px")
                     textAlign = TextAlign.center
@@ -308,7 +330,7 @@ fun Application.webUi(
                     margin = Margin(vertical = 6.px)
                 }
                 rule(".reaction") {
-                    backgroundColor = Color("#1f1f33")
+                    backgroundColor = Color("var(--panel)")
                     borderWidth = 0.px
                     borderRadius = 8.px
                     padding = Padding(horizontal = 10.px, vertical = 4.px)
@@ -364,6 +386,9 @@ fun Application.webUi(
                 head {
                     meta { charset = "utf-8" }
                     meta(name = "viewport", content = "width=device-width, initial-scale=1")
+                    meta(name = "theme-color", content = "#f4f4f8") {
+                        attributes["media"] = "(prefers-color-scheme: light)"
+                    }
                     meta(name = "theme-color", content = "#14141f")
                     link(rel = "manifest", href = "/manifest.webmanifest")
                     link(rel = "icon", href = "/icon.svg")

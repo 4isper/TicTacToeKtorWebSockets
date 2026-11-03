@@ -1085,6 +1085,21 @@ class ApplicationTest {
     }
 
     @Test
+    fun `the page adapts to the light scheme`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient { }
+
+        val css = client.get("/styles.css").bodyAsText()
+        assertTrue("--panel" in css, css.take(400))
+        assertTrue("prefers-color-scheme: light" in css, css.take(600))
+
+        val page = client.get("/").bodyAsText()
+        assertTrue("(prefers-color-scheme: light)" in page, "expected a light theme-color meta: ${page.take(500)}")
+    }
+
+    @Test
     fun `bot fills the second slot and answers with a move`() = testApplication {
         application {
             module()
