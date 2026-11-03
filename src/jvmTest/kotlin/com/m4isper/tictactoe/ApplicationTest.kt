@@ -8,6 +8,8 @@ import com.m4isper.tictactoe.protocol.ClientMessage
 import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
 import io.ktor.client.plugins.websocket.*
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import io.ktor.server.testing.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.CompletableDeferred
@@ -22,6 +24,15 @@ import kotlinx.serialization.encodeToString
 import kotlin.test.*
 
 class ApplicationTest {
+
+    @Test
+    fun `health endpoint answers ok`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient { }
+        assertEquals("ok", client.get("/health").bodyAsText())
+    }
 
     @Test
     fun `first player receives game state after connect`() = testApplication {
