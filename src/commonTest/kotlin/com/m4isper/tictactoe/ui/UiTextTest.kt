@@ -87,4 +87,10 @@ class UiTextTest {
         assertEquals("Новый раунд через 5…", restartText(4_500))
         assertEquals("Новый раунд через 1…", restartText(999))
     }
+
+    @Test
+    fun `turn timer suffix rounds up`() {
+        assertEquals(" · 30 с", timerSuffix(29_500))
+        assertEquals(" · 1 с", timerSuffix(50))
+    }
 }

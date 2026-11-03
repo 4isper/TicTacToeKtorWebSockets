@@ -41,3 +41,5 @@ fun errorText(reason: ErrorReason): String = when (reason) {
 }
 
 fun restartText(msLeft: Long): String = "Новый раунд через ${ceil(msLeft / 1000.0).toInt()}…"
+
+fun timerSuffix(msLeft: Long): String = " · ${ceil(msLeft / 1000.0).toInt()} с"

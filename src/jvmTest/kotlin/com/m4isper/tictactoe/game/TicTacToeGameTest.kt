@@ -205,6 +205,63 @@ class TicTacToeGameTest {
     }
 
     @Test
+    fun `an expired turn forfeits the round to the opponent`() = runBlocking {
+        val game = TicTacToeGame(turnTimeoutMs = 100, roundRestartDelayMs = 60_000)
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
+        val armed = game.currentState()
+        assertTrue(armed.turnRemainingMs != null && armed.turnRemainingMs in 1..100, "turn timer was ${armed.turnRemainingMs}")
+
+        withTimeout(2_000) {
+            while (game.currentState().winningPlayer == null) delay(10)
+        }
+        val forfeited = game.currentState()
+        assertEquals(PlayerSymbol.X, forfeited.winningPlayer) // O stalled, X profits
+        assertEquals(emptyList(), forfeited.winningCells)
+        assertEquals(mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), forfeited.score)
+        assertTrue(forfeited.roundRestartInMs != null)
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `the turn timer is not armed while waiting for the opponent`() = runBlocking {
+        val game = TicTacToeGame(turnTimeoutMs = 100)
+        val xSession = FakeSession()
+        game.connectPlayer(xSession)
+
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
+        delay(300)
+
+        assertNull(game.currentState().winningPlayer)
+        assertNull(game.currentState().turnRemainingMs)
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `a move in time cancels the forfeit`() = runBlocking {
+        val game = TicTacToeGame(turnTimeoutMs = 1_000)
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
+        delay(300)
+
+        assertNull(game.currentState().winningPlayer)
+        assertEquals(PlayerSymbol.X, game.currentState().playerAtTurn)
+
+        game.shutdown()
+    }
+
+    @Test
     fun `four by four board accepts moves up to its bounds and detects the win`() = runBlocking {
         val game = TicTacToeGame(boardSize = 4)
         val xSession = FakeSession()

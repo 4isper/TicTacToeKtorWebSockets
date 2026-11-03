@@ -17,6 +17,7 @@ data class GameState(
     val roundRestartInMs: Long? = null,
     val rematchPlayers: List<PlayerSymbol> = emptyList(),
     val playerNames: Map<PlayerSymbol, String> = emptyMap(),
+    val turnRemainingMs: Long? = null,
 ) {
     companion object {
         fun emptyField(size: Int = GameRules.DEFAULT_BOARD_SIZE): List<List<PlayerSymbol?>> = GameRules.emptyField(size)

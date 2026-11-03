@@ -10,6 +10,7 @@ import com.m4isper.tictactoe.ui.errorText
 import com.m4isper.tictactoe.ui.restartText
 import com.m4isper.tictactoe.ui.scoreText
 import com.m4isper.tictactoe.ui.statusText
+import com.m4isper.tictactoe.ui.timerSuffix
 import kotlinx.browser.document
 import kotlinx.browser.localStorage
 import kotlinx.browser.window
@@ -52,6 +53,7 @@ fun main() {
     var retry = 0
     var lastState: GameState? = null
     var roundDeadline = 0.0
+    var turnDeadline = 0.0
     var countdownTimer: Int? = null
 
     fun send(message: ClientMessage) {
@@ -85,6 +87,20 @@ fun main() {
             }, 250)
         } else {
             roundDeadline = 0.0
+        }
+        if (state.roundRestartInMs == null && state.turnRemainingMs != null) {
+            if (previous == null || previous.playerAtTurn != state.playerAtTurn || previous.turnRemainingMs == null) {
+                turnDeadline = Date.now() + state.turnRemainingMs
+            }
+            countdownTimer = window.setInterval({
+                val current = lastState ?: return@setInterval
+                if (current.roundRestartInMs != null) return@setInterval
+                val msLeft = turnDeadline - Date.now()
+                if (msLeft <= 0) return@setInterval
+                showStatus(statusText(current, mySymbol) + timerSuffix(msLeft.toLong()))
+            }, 250)
+        } else {
+            turnDeadline = 0.0
         }
 
         rematchButton.style.display = if (state.roundRestartInMs != null && mySymbol != null) "block" else "none"

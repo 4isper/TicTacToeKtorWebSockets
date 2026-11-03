@@ -20,6 +20,7 @@ class TicTacToeGame(
     private val boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
     private val winLength: Int = boardSize,
     private val botEnabled: Boolean = false,
+    private val turnTimeoutMs: Long = 30_000L,
 ) {
     private val logger = LoggerFactory.getLogger(TicTacToeGame::class.java)
 
@@ -35,6 +36,9 @@ class TicTacToeGame(
     private var roundRestartDeadline = 0L
     private var bot: PlayerSymbol? = null
     private var botMoveJob: Job? = null
+    private var turnTimeoutJob: Job? = null
+    private var turnDeadline = 0L
+    private var armedTurnFor: PlayerSymbol? = null
 
     private companion object {
         const val BOT_THINK_MS = 400L
@@ -252,9 +256,52 @@ class TicTacToeGame(
         } else {
             next
         }
-        state.value = withCountdown
-        stateChanges.trySend(withCountdown)
-        scheduleBotMoveIfNeeded(withCountdown)
+        val withTurnTimer = if (turnDeadline > 0) {
+            withCountdown.copy(turnRemainingMs = (turnDeadline - System.currentTimeMillis()).coerceAtLeast(0))
+        } else {
+            withCountdown.copy(turnRemainingMs = null)
+        }
+        state.value = withTurnTimer
+        stateChanges.trySend(withTurnTimer)
+        scheduleBotMoveIfNeeded(withTurnTimer)
+        armTurnTimerLocked(withTurnTimer)
+    }
+
+    /** Forfeits the round to the opponent when the current player stalls past the deadline. */
+    private fun armTurnTimerLocked(current: GameState) {
+        if (current.winningPlayer != null || current.isBoardFull || current.connectionPlayers.size < 2) {
+            turnTimeoutJob?.cancel()
+            turnTimeoutJob = null
+            turnDeadline = 0
+            armedTurnFor = null
+            return
+        }
+        if (current.playerAtTurn == armedTurnFor && turnDeadline > 0) return // same turn: keep the original deadline
+        armedTurnFor = current.playerAtTurn
+        turnDeadline = System.currentTimeMillis() + turnTimeoutMs
+        turnTimeoutJob?.cancel()
+        turnTimeoutJob = gameScope.launch {
+            delay(turnTimeoutMs)
+            synchronized(lock) {
+                val snapshot = state.value
+                if (snapshot.winningPlayer != null || snapshot.isBoardFull) return@launch
+                val loser = snapshot.playerAtTurn ?: return@launch
+                if (snapshot.connectionPlayers.size < 2) return@launch
+                if (System.currentTimeMillis() < turnDeadline) return@launch // a newer turn re-armed
+
+                val winner = loser.other
+                roundRestartDeadline = System.currentTimeMillis() + roundRestartDelayMs
+                scheduleRoundRestart()
+                publish(
+                    snapshot.copy(
+                        winningPlayer = winner,
+                        winningCells = emptyList(),
+                        score = snapshot.score + (winner to (snapshot.score[winner] ?: 0) + 1),
+                        rematchPlayers = emptyList(),
+                    ),
+                )
+            }
+        }
     }
 
     private fun scheduleBotMoveIfNeeded(current: GameState) {

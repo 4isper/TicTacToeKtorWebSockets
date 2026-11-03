@@ -70,6 +70,7 @@ class ApplicationTest {
             assertTrue(state.contains("\"roundRestartInMs\":null"), state)
             assertTrue(state.contains("\"rematchPlayers\":[]"), state)
             assertTrue(state.contains("\"playerNames\":{}"), state)
+            assertTrue(state.contains("\"turnRemainingMs\":null"), state)
             assertTrue(state.contains("\"score\":{\"X\":0,\"O\":0}"), state)
         }
     }
