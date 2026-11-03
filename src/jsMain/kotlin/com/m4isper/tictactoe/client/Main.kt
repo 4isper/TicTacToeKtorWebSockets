@@ -50,6 +50,8 @@ fun main() {
     val copyLink = document.getElementById("copy-link") as? HTMLButtonElement
     val rematchButton = document.getElementById("rematch") as HTMLButtonElement
     val drawButton = document.getElementById("draw") as HTMLButtonElement
+    val turnBar = document.getElementById("turn-bar") as HTMLElement
+    val turnBarFill = document.getElementById("turn-bar-fill") as HTMLElement
     val nameInput = document.getElementById("name") as? HTMLInputElement
     val setNameButton = document.getElementById("set-name") as? HTMLButtonElement
 
@@ -89,6 +91,7 @@ fun main() {
     var lastState: GameState? = null
     var roundDeadline = 0.0
     var turnDeadline = 0.0
+    var turnTotalMs = 0.0
     var countdownTimer: Int? = null
     var muted = localStorage.getItem("tictactoe-muted") == "1"
 
@@ -330,16 +333,21 @@ fun main() {
         if (state.roundRestartInMs == null && state.turnRemainingMs != null) {
             if (isTurnTransition(previous, state) || turnDeadline == 0.0) {
                 turnDeadline = Date.now() + state.turnRemainingMs
+                turnTotalMs = state.turnRemainingMs.toDouble()
             }
+            turnBar.style.display = "block"
+            turnBarFill.style.width = "100%"
             countdownTimer = window.setInterval({
                 val current = lastState ?: return@setInterval
                 if (current.roundRestartInMs != null) return@setInterval
                 val msLeft = turnDeadline - Date.now()
                 if (msLeft <= 0) return@setInterval
+                turnBarFill.style.width = "${(msLeft / turnTotalMs * 100).coerceIn(0.0, 100.0)}%"
                 showStatus(statusText(current, mySymbol, lang) + timerSuffix(msLeft.toLong(), lang))
             }, 250)
         } else {
             turnDeadline = 0.0
+            turnBar.style.display = "none"
         }
 
         rematchButton.style.display = if (state.roundRestartInMs != null && mySymbol != null) "block" else "none"
@@ -362,6 +370,7 @@ fun main() {
         val cellPx = (minOf(window.innerWidth, window.innerHeight) * 0.8 / state.field.size)
             .toInt()
             .coerceAtMost(76)
+        turnBar.style.width = "${state.field.size * cellPx + (state.field.size - 1) * 4}px" // match the board width
         val winningCells = state.winningCells.map { "${it.x},${it.y}" }.toSet()
         val newMoves = newMoveCells(previous, state)
         state.field.forEachIndexed { y, row ->

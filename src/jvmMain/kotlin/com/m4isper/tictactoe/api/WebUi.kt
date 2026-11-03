@@ -150,6 +150,20 @@ fun Application.webUi(
                     borderRadius = 8.px
                     cursor = Cursor.pointer
                 }
+                rule("#turn-bar") {
+                    display = Display.none
+                    height = 6.px
+                    backgroundColor = Color("#1f1f33")
+                    borderRadius = 3.px
+                    margin = Margin(vertical = 6.px)
+                    overflow = Overflow.hidden
+                }
+                rule("#turn-bar-fill") {
+                    width = 100.pct
+                    height = 100.pct
+                    backgroundColor = Color("#7aa2f7")
+                    transition += Transition("width", 250.ms, Timing.linear)
+                }
                 rule(".row") {
                     display = Display.flex
                     gap = 4.px
@@ -271,6 +285,10 @@ fun Application.webUi(
                     button(classes = "secondary") {
                         id = "draw"
                         +drawButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
+                    }
+                    div {
+                        id = "turn-bar"
+                        div { id = "turn-bar-fill" }
                     }
                     div { id = "board" }
                     div { id = "error" }
