@@ -169,6 +169,11 @@ fun turnSecondsText(seconds: Int, lang: Lang = Lang.RU): String = when (lang) {
     Lang.EN -> "${seconds}s"
 }
 
+fun replayHintText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Показать партию"
+    Lang.EN -> "Replay this match"
+}
+
 fun soundIcon(muted: Boolean): String = if (muted) "🔇" else "🔊"
 
 fun soundTitle(muted: Boolean, lang: Lang = Lang.RU): String = when (lang) {

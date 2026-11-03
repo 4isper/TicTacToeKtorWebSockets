@@ -103,6 +103,11 @@ class ApplicationTest {
         assertEquals(HttpStatusCode.OK, profile.status)
         assertTrue("Боря" in profile.bodyAsText(), "history should name the opponent: ${profile.bodyAsText()}")
         assertTrue("WIN" in profile.bodyAsText())
+        assertTrue(
+            "\"moves\":[{\"x\":0,\"y\":0},{\"x\":1,\"y\":0},{\"x\":0,\"y\":1},{\"x\":1,\"y\":1},{\"x\":0,\"y\":2}]" in profile.bodyAsText(),
+            "the record should carry the replay: ${profile.bodyAsText()}",
+        )
+        assertTrue("\"boardSize\":3" in profile.bodyAsText())
 
         assertEquals(HttpStatusCode.NotFound, client.get("/player?name=Кто-то").status)
     }

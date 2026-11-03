@@ -22,6 +22,7 @@ import com.m4isper.tictactoe.ui.newMoveCells
 import com.m4isper.tictactoe.ui.noRoomsText
 import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.rematchButtonText
+import com.m4isper.tictactoe.ui.replayHintText
 import com.m4isper.tictactoe.ui.restartText
 import com.m4isper.tictactoe.ui.scoreText
 import com.m4isper.tictactoe.ui.soundCue
@@ -109,6 +110,58 @@ fun main() {
         else -> "="
     }
 
+    fun showReplay(record: dynamic, container: HTMLElement) {
+        container.innerHTML = ""
+        val boardSize = ((record.boardSize ?: js("3")) as Double).toInt()
+        val moves = (record.moves ?: js("[]")) as Array<dynamic>
+        var index = moves.size // start at the final position
+
+        val controls = document.createElement("div") as HTMLElement
+        val prev = document.createElement("button") as HTMLButtonElement
+        val next = document.createElement("button") as HTMLButtonElement
+        val label = document.createElement("span")
+        prev.textContent = "‹"
+        next.textContent = "›"
+        controls.className = "replay-controls"
+        controls.appendChild(prev)
+        controls.appendChild(label)
+        controls.appendChild(next)
+
+        val boardDiv = document.createElement("div") as HTMLElement
+        boardDiv.style.display = "grid"
+        boardDiv.style.setProperty("grid-template-columns", "repeat($boardSize, 26px)")
+
+        fun render() {
+            boardDiv.innerHTML = ""
+            val cells = arrayOfNulls<String>(boardSize * boardSize)
+            for (i in 0 until index) {
+                val m = moves[i]
+                cells[((m.y as Double).toInt() * boardSize) + (m.x as Double).toInt()] = if (i % 2 == 0) "X" else "O"
+            }
+            cells.forEach { symbol ->
+                val cellDiv = document.createElement("div") as HTMLElement
+                cellDiv.className = "mini-cell"
+                cellDiv.textContent = symbol ?: ""
+                boardDiv.appendChild(cellDiv)
+            }
+            label.textContent = " $index/${moves.size} "
+            prev.disabled = index == 0
+            next.disabled = index == moves.size
+        }
+        prev.onclick = {
+            if (index > 0) index--
+            render()
+        }
+        next.onclick = {
+            if (index < moves.size) index++
+            render()
+        }
+
+        container.appendChild(controls)
+        container.appendChild(boardDiv)
+        render()
+    }
+
     fun showProfile(name: String) {
         try {
             val encoded = js("encodeURIComponent(name)")
@@ -123,18 +176,23 @@ fun main() {
                     val title = document.createElement("h3")
                     title.textContent = data.name as String
                     val ul = document.createElement("ul") as HTMLElement
+                    val replayDiv = document.createElement("div") as HTMLElement
                     val history = (data.stats.history ?: js("[]")) as Array<dynamic>
                     history.forEach { rec ->
-                        val li = document.createElement("li")
+                        val li = document.createElement("li") as HTMLElement
                         val opponent = rec.opponent as? String
                         val d = Date(rec.epochMs as Double)
                         val stamp = "${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')} " +
                             "${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}"
                         li.textContent = "${resultMark(rec.result as String)} ${if (opponent != null) "vs $opponent · " else ""}$stamp"
+                        li.style.cursor = "pointer"
+                        li.title = replayHintText(lang)
+                        li.onclick = { showReplay(rec, replayDiv) }
                         ul.appendChild(li)
                     }
                     profileDiv.appendChild(title)
                     profileDiv.appendChild(ul)
+                    profileDiv.appendChild(replayDiv)
                 }
             }.catch { /* the profile is decorative */ }
         } catch (t: Throwable) {

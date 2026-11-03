@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe.stats
 
+import com.m4isper.tictactoe.domain.Cell
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import java.nio.file.Files
 import kotlin.test.Test
@@ -94,6 +95,23 @@ class ScoreboardTest {
         assertEquals(null, board.profile(null))
         assertEquals(null, board.profile("  "))
         assertEquals("Аня", board.profile("Аня")!!.name)
+    }
+
+    @Test
+    fun `a round records its moves and board size for the replay`() {
+        val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
+
+        board.recordRound(
+            mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"),
+            winner = PlayerSymbol.X,
+            moves = listOf(Cell(0, 0), Cell(1, 0), Cell(0, 1)),
+            boardSize = 5,
+        )
+
+        val record = board.profile("Аня")!!.stats.history.single()
+        assertEquals(listOf(Cell(0, 0), Cell(1, 0), Cell(0, 1)), record.moves)
+        assertEquals(5, record.boardSize)
+        assertEquals(Cell(0, 0), board.profile("Боря")!!.stats.history.single().moves.first()) // the loser keeps it too
     }
 
     @Test

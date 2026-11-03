@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe.stats
 
+import com.m4isper.tictactoe.domain.Cell
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -11,6 +12,8 @@ data class MatchRecord(
     val epochMs: Long,
     val opponent: String? = null,
     val result: RoundResult,
+    val moves: List<Cell> = emptyList(),
+    val boardSize: Int = 3,
 )
 
 @Serializable
@@ -47,6 +50,8 @@ interface ScoreStore {
         result: RoundResult,
         opponent: String? = null,
         atMs: Long = System.currentTimeMillis(),
+        moves: List<Cell> = emptyList(),
+        boardSize: Int = 3,
     )
 
     fun loadAll(): Map<String, PlayerStats>
@@ -78,6 +83,8 @@ class JsonScoreStore(private val file: File) : ScoreStore {
         result: RoundResult,
         opponent: String?,
         atMs: Long,
+        moves: List<Cell>,
+        boardSize: Int,
     ): Unit = synchronized(lock) {
         val current = players[name] ?: PlayerStats()
         val stats = when (result) {
@@ -85,7 +92,8 @@ class JsonScoreStore(private val file: File) : ScoreStore {
             RoundResult.LOSS -> current.copy(losses = current.losses + 1)
             RoundResult.DRAW -> current.copy(draws = current.draws + 1)
         }
-        players[name] = stats.copy(history = (listOf(MatchRecord(atMs, opponent, result)) + stats.history).take(HISTORY_LIMIT))
+        val record = MatchRecord(epochMs = atMs, opponent = opponent, result = result, moves = moves, boardSize = boardSize)
+        players[name] = stats.copy(history = (listOf(record) + stats.history).take(HISTORY_LIMIT))
         persistLocked()
     }
 
@@ -112,18 +120,26 @@ class Scoreboard(private val store: ScoreStore) {
     fun recordRound(
         playerNames: Map<PlayerSymbol, String>,
         winner: PlayerSymbol?,
+        moves: List<Cell> = emptyList(),
+        boardSize: Int = 3,
     ) {
         if (winner == null) {
             val named = playerNames.values.toList()
             named.forEach { name ->
-                store.addResult(name, RoundResult.DRAW, opponent = named.filter { it != name }.firstOrNull())
+                store.addResult(
+                    name,
+                    RoundResult.DRAW,
+                    opponent = named.filter { it != name }.firstOrNull(),
+                    moves = moves,
+                    boardSize = boardSize,
+                )
             }
             return
         }
         val winnerName = playerNames[winner]
         val loserName = playerNames[winner.other]
-        winnerName?.let { store.addResult(it, RoundResult.WIN, loserName) }
-        loserName?.let { store.addResult(it, RoundResult.LOSS, winnerName) }
+        winnerName?.let { store.addResult(it, RoundResult.WIN, loserName, moves = moves, boardSize = boardSize) }
+        loserName?.let { store.addResult(it, RoundResult.LOSS, winnerName, moves = moves, boardSize = boardSize) }
     }
 
     fun profile(name: String?): PlayerProfile? {

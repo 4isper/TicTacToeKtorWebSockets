@@ -172,6 +172,21 @@ fun Application.webUi(
                     backgroundColor = Color("#2e7d4f")
                     animation += Animation("win-pulse", 1200.ms, Timing.easeInOut, iterationCount = IterationCount.infinite)
                 }
+                rule(".replay-controls") {
+                    display = Display.flex
+                    alignItems = Align.center
+                    gap = 4.px
+                    margin = Margin(vertical = 4.px)
+                }
+                rule(".mini-cell") {
+                    width = 26.px
+                    height = 26.px
+                    backgroundColor = Color("#1f1f33")
+                    color = Color.white
+                    fontSize = 13.px
+                    lineHeight = LineHeight("26px")
+                    textAlign = TextAlign.center
+                }
                 rule("@keyframes cell-pop") {
                     rule("from") {
                         opacity = 0

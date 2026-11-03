@@ -22,7 +22,7 @@ class TicTacToeGame(
     val winLength: Int = boardSize,
     val botLevel: BotLevel? = null,
     val turnTimeoutMs: Long = 30_000L,
-    private val onRoundOver: (playerNames: Map<PlayerSymbol, String>, winner: PlayerSymbol?) -> Unit = { _, _ -> },
+    private val onRoundOver: (playerNames: Map<PlayerSymbol, String>, winner: PlayerSymbol?, moves: List<Cell>, boardSize: Int) -> Unit = { _, _, _, _ -> },
 ) {
     private val logger = LoggerFactory.getLogger(TicTacToeGame::class.java)
 
@@ -41,6 +41,7 @@ class TicTacToeGame(
     private var turnTimeoutJob: Job? = null
     private var turnDeadline = 0L
     private var armedTurnFor: PlayerSymbol? = null
+    private val roundMoves = mutableListOf<Cell>()
 
     private companion object {
         const val BOT_THINK_MS = 400L
@@ -149,6 +150,7 @@ class TicTacToeGame(
             val current = state.value
             val rejection = rejectionReason(player, session, x, y, current)
             if (rejection != null) return rejection
+            roundMoves.add(Cell(x, y))
 
             val newField = current.field.mapIndexed { row, cells ->
                 cells.mapIndexed { col, cell -> if (row == y && col == x) player else cell }
@@ -194,6 +196,7 @@ class TicTacToeGame(
                 roundRestartJob?.cancel()
                 roundRestartJob = null
                 roundRestartDeadline = 0
+                roundMoves.clear()
                 publish(
                     current.copy(
                         playerAtTurn = PlayerSymbol.X,
@@ -281,6 +284,7 @@ class TicTacToeGame(
             synchronized(lock) {
                 roundRestartJob = null
                 roundRestartDeadline = 0
+                roundMoves.clear()
                 publish(
                     state.value.copy(
                         playerAtTurn = PlayerSymbol.X,
@@ -315,7 +319,7 @@ class TicTacToeGame(
         state.value = withTurn
         stateChanges.trySend(withTurn)
         if (roundJustEnded(previous, withTurn)) {
-            onRoundOver(withTurn.playerNames, withTurn.winningPlayer)
+            onRoundOver(withTurn.playerNames, withTurn.winningPlayer, roundMoves.toList(), boardSize)
         }
         scheduleBotMoveIfNeeded(withTurn)
     }
