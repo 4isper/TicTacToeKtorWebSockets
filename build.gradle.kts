@@ -42,6 +42,7 @@ kotlin {
             implementation(libs.ktor.server.html.builder)
             implementation(libs.kotlin.css)
             implementation(libs.logback.classic)
+            implementation(libs.sqlite.jdbc)
         }
         jsMain.dependencies {
             implementation(libs.kotlinx.browser)

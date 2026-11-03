@@ -66,6 +66,8 @@ fun errorText(
         ErrorReason.INVALID_TURN_TIME -> "Неверное время хода"
         ErrorReason.INVALID_BOT_LEVEL -> "Неверный уровень бота"
         ErrorReason.INVALID_REACTION -> "Неизвестная реакция"
+        ErrorReason.NOTHING_TO_UNDO -> "Отменять нечего"
+        ErrorReason.INVALID_CLOCK -> "Неверное время на партию"
     }
 
     Lang.EN -> when (reason) {
@@ -86,6 +88,8 @@ fun errorText(
         ErrorReason.INVALID_TURN_TIME -> "Invalid turn time"
         ErrorReason.INVALID_BOT_LEVEL -> "Invalid bot level"
         ErrorReason.INVALID_REACTION -> "Unknown reaction"
+        ErrorReason.NOTHING_TO_UNDO -> "Nothing to undo"
+        ErrorReason.INVALID_CLOCK -> "Invalid game clock"
     }
 }
 
@@ -128,6 +132,24 @@ fun drawButtonText(
         opponentOffered -> "Accept draw"
         iOffered -> "Offer sent…"
         else -> "Offer a draw"
+    }
+}
+
+fun undoButtonText(
+    iOffered: Boolean,
+    opponentOffered: Boolean,
+    lang: Lang = Lang.RU,
+): String = when (lang) {
+    Lang.RU -> when {
+        opponentOffered -> "Разрешить отмену"
+        iOffered -> "Ожидание согласия…"
+        else -> "Отменить ход"
+    }
+
+    Lang.EN -> when {
+        opponentOffered -> "Allow the takeback"
+        iOffered -> "Waiting for approval…"
+        else -> "Undo my move"
     }
 }
 

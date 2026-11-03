@@ -34,6 +34,10 @@ sealed interface ClientMessage {
     data object RequestDraw : ClientMessage
 
     @Serializable
+    @SerialName("request_undo")
+    data object RequestUndo : ClientMessage
+
+    @Serializable
     @SerialName("react")
     data class React(val emoji: String) : ClientMessage
 

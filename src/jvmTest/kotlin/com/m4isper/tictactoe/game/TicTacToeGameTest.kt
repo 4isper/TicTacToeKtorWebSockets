@@ -447,6 +447,128 @@ class TicTacToeGameTest {
     }
 
     @Test
+    fun `a takeback needs the last mover to ask and the opponent to approve`() = runBlocking {
+        val game = TicTacToeGame()
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        assertNull(game.finishTurn(PlayerSymbol.X, xSession, 0, 0))
+        // O is on turn: it cannot take back a move it did not make
+        assertEquals(ErrorReason.NOT_YOUR_TURN, game.requestUndo(PlayerSymbol.O, oSession))
+
+        assertNull(game.requestUndo(PlayerSymbol.X, xSession))
+        assertEquals(PlayerSymbol.X, game.currentState().undoOfferBy)
+
+        assertNull(game.requestUndo(PlayerSymbol.X, xSession)) // asking again withdraws
+        assertNull(game.currentState().undoOfferBy)
+
+        assertNull(game.requestUndo(PlayerSymbol.X, xSession))
+        assertNull(game.requestUndo(PlayerSymbol.O, oSession)) // the approval executes it
+
+        val reverted = game.currentState()
+        assertNull(reverted.field[0][0])
+        assertEquals(PlayerSymbol.X, reverted.playerAtTurn) // the move returns to its maker
+        assertNull(reverted.undoOfferBy)
+        assertEquals(emptyList(), reverted.rematchPlayers)
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `a takeback dies when the position moves on and is refused when the round is over`() = runBlocking {
+        val game = TicTacToeGame()
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        // X is on turn at the start; O asks to take back — but there is nothing to undo yet
+        assertEquals(ErrorReason.NOTHING_TO_UNDO, game.requestUndo(PlayerSymbol.O, oSession))
+
+        assertNull(game.finishTurn(PlayerSymbol.X, xSession, 0, 0))
+        assertNull(game.requestUndo(PlayerSymbol.X, xSession))
+        assertNull(game.finishTurn(PlayerSymbol.O, oSession, 1, 0))
+        assertEquals(null, game.currentState().undoOfferBy) // the offer died with the new move
+
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 1)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
+        assertEquals(ErrorReason.ROUND_IS_OVER, game.requestUndo(PlayerSymbol.O, oSession))
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `two bots play an exhibition and a joiner only watches`() = runBlocking {
+        val game = TicTacToeGame(botLevel = BotLevel.NORMAL, secondBotLevel = BotLevel.NORMAL)
+
+        assertNull(game.connectPlayer(FakeSession())) // no human slot exists
+        assertNull(game.connectPlayer(FakeSession()))
+        assertEquals(listOf(PlayerSymbol.X, PlayerSymbol.O), game.currentState().connectionPlayers)
+
+        withTimeout(5_000) {
+            while (game.currentState().field.sumOf { row -> row.count { it != null } } < 2) delay(10)
+        }
+        // one round ends, the exhibition resets and keeps going
+        withTimeout(30_000) {
+            while (game.currentState().field.sumOf { row -> row.count { it != null } } > 0) delay(50)
+        }
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `the clock ticks the mover down and resets with the round`() = runBlocking {
+        val game = TicTacToeGame(clockBudgetMs = 60_000, roundRestartDelayMs = 100)
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        delay(150) // X spends a little thinking time
+        assertNull(game.finishTurn(PlayerSymbol.X, xSession, 0, 0))
+
+        val afterX = game.currentState()
+        assertTrue(afterX.clocks[PlayerSymbol.X]!! in 55_000..60_000, "X clock was ${afterX.clocks[PlayerSymbol.X]}")
+        assertEquals(60_000, afterX.clocks[PlayerSymbol.O]) // O has not thought yet
+
+        // the round ends, the clocks come back full
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 1)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
+        withTimeout(2_000) {
+            while (game.currentState().field[0][0] != null) delay(10)
+        }
+        val restarted = game.currentState()
+        assertEquals(60_000, restarted.clocks[PlayerSymbol.X])
+        assertEquals(60_000, restarted.clocks[PlayerSymbol.O])
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `an exhausted clock forfeits the round`() = runBlocking {
+        val game = TicTacToeGame(clockBudgetMs = 150, roundRestartDelayMs = 60_000)
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        withTimeout(2_000) {
+            while (game.currentState().winningPlayer == null) delay(10)
+        }
+        val forfeited = game.currentState()
+        assertEquals(PlayerSymbol.O, forfeited.winningPlayer) // X let the clock run out
+        assertEquals(mapOf(PlayerSymbol.X to 0, PlayerSymbol.O to 1), forfeited.score)
+        assertTrue(forfeited.roundRestartInMs != null)
+
+        game.shutdown()
+    }
+
+    @Test
     fun `four by four board accepts moves up to its bounds and detects the win`() = runBlocking {
         val game = TicTacToeGame(boardSize = 4)
         val xSession = FakeSession()

@@ -40,8 +40,8 @@ class ScoreboardTest {
         val top = board.top(limit = 10).associateBy { it.name }
         val anya = top["Аня"]!!.stats
         val boris = top["Боря"]!!.stats
-        assertEquals(PlayerStats(wins = 1, losses = 0, draws = 1, history = anya.history), anya)
-        assertEquals(PlayerStats(wins = 0, losses = 1, draws = 1, history = boris.history), boris)
+        assertEquals(PlayerStats(wins = 1, losses = 0, draws = 1, rating = anya.rating, history = anya.history), anya)
+        assertEquals(PlayerStats(wins = 0, losses = 1, draws = 1, rating = boris.rating, history = boris.history), boris)
         assertEquals(RoundResult.DRAW, anya.history[0].result) // newest first
         assertEquals(RoundResult.WIN, anya.history[1].result)
         assertEquals("Боря", anya.history[0].opponent)
@@ -60,27 +60,38 @@ class ScoreboardTest {
     }
 
     @Test
-    fun `top sorts by the win margin and respects the limit`() {
+    fun `the rating follows the elo math`() {
         val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
-        repeat(3) { board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), PlayerSymbol.X) }
-        repeat(2) { board.recordRound(mapOf(PlayerSymbol.X to "Вера", PlayerSymbol.O to "Аня"), PlayerSymbol.X) }
-        // Аня sits at +1 (3 wins, 2 losses), Вера at +2 (2 wins, 0 losses)
 
-        val top = board.top(limit = 2)
+        board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), winner = PlayerSymbol.X)
+        assertEquals(1016, board.profile("Аня")!!.stats.rating)
+        assertEquals(984, board.profile("Боря")!!.stats.rating)
+        assertEquals(1016, board.profile("Аня")!!.stats.history.single().ratingAfter)
 
-        assertEquals(listOf("Вера", "Аня"), top.map { it.name })
-        assertEquals(2, top[0].stats.wins)
-        assertEquals(3, top[1].stats.wins)
+        board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), winner = null)
+        // Аня (1016) drew the weaker Боря (984): a small loss each
+        assertTrue(board.profile("Аня")!!.stats.rating < 1016)
+        assertTrue(board.profile("Боря")!!.stats.rating > 984)
     }
 
     @Test
-    fun `equal margins are broken by wins then by name`() {
+    fun `an unnamed opponent is treated as a default rated player`() {
+        val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
+
+        board.recordRound(mapOf(PlayerSymbol.X to "Аня"), winner = PlayerSymbol.X)
+
+        assertEquals(1016, board.profile("Аня")!!.stats.rating) // the unnamed side counts as 1000
+    }
+
+    @Test
+    fun `top sorts by rating and falls back to the name`() {
         val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
         board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), PlayerSymbol.X)
-        board.recordRound(mapOf(PlayerSymbol.X to "Боря", PlayerSymbol.O to "Аня"), PlayerSymbol.X) // Аня and Боря both 1W 1L
-        board.recordRound(mapOf(PlayerSymbol.X to "Гоша", PlayerSymbol.O to "Вера"), PlayerSymbol.X) // Гоша 1W 0L
+        board.recordRound(mapOf(PlayerSymbol.X to "Вера", PlayerSymbol.O to "Гоша"), PlayerSymbol.X)
+        // two symmetric pairs: Аня=Вера 1016, Боря=Гоша 984 — the name breaks the ties
 
-        assertEquals(listOf("Гоша", "Аня", "Боря", "Вера"), board.top(limit = 4).map { it.name })
+        assertEquals(listOf("Аня", "Вера", "Боря", "Гоша"), board.top(limit = 4).map { it.name })
+        assertTrue(board.top(limit = 4)[0].stats.rating > board.top(limit = 4)[2].stats.rating)
     }
 
     @Test

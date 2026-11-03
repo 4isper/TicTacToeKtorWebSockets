@@ -1,15 +1,19 @@
 package com.m4isper.tictactoe.client
 
+import com.m4isper.tictactoe.domain.Cell
 import com.m4isper.tictactoe.domain.ErrorReason
+import com.m4isper.tictactoe.domain.GameRules
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.game.GameState
 import com.m4isper.tictactoe.protocol.ClientMessage
 import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
 import com.m4isper.tictactoe.ui.Lang
+import com.m4isper.tictactoe.ui.SharedReplay
 import com.m4isper.tictactoe.ui.SoundCue
 import com.m4isper.tictactoe.ui.botLabel
 import com.m4isper.tictactoe.ui.cellAriaText
+import com.m4isper.tictactoe.ui.clockText
 import com.m4isper.tictactoe.ui.connectionErrorText
 import com.m4isper.tictactoe.ui.connectionLostText
 import com.m4isper.tictactoe.ui.copiedText
@@ -23,7 +27,9 @@ import com.m4isper.tictactoe.ui.newMoveCells
 import com.m4isper.tictactoe.ui.noRoomsText
 import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.rematchButtonText
+import com.m4isper.tictactoe.ui.replayFromFragment
 import com.m4isper.tictactoe.ui.replayHintText
+import com.m4isper.tictactoe.ui.replayToFragment
 import com.m4isper.tictactoe.ui.restartText
 import com.m4isper.tictactoe.ui.scoreText
 import com.m4isper.tictactoe.ui.soundCue
@@ -32,6 +38,7 @@ import com.m4isper.tictactoe.ui.soundTitle
 import com.m4isper.tictactoe.ui.statusText
 import com.m4isper.tictactoe.ui.timerSuffix
 import com.m4isper.tictactoe.ui.turnSecondsText
+import com.m4isper.tictactoe.ui.undoButtonText
 import kotlinx.browser.document
 import kotlinx.browser.localStorage
 import kotlinx.browser.window
@@ -54,9 +61,11 @@ fun main() {
     val board = document.getElementById("board") as HTMLElement
     val errorBox = document.getElementById("error") as HTMLElement
     val scoreDiv = document.getElementById("score") as HTMLElement
+    val clocksDiv = document.getElementById("clocks") as HTMLElement
     val copyLink = document.getElementById("copy-link") as? HTMLButtonElement
     val rematchButton = document.getElementById("rematch") as HTMLButtonElement
     val drawButton = document.getElementById("draw") as HTMLButtonElement
+    val undoButton = document.getElementById("undo") as HTMLButtonElement
     val turnBar = document.getElementById("turn-bar") as HTMLElement
     val turnBarFill = document.getElementById("turn-bar-fill") as HTMLElement
     val nameInput = document.getElementById("name") as? HTMLInputElement
@@ -68,6 +77,7 @@ fun main() {
     val win = params.get("win")
     val bot = params.get("bot")
     val turn = params.get("turn")
+    val clock = params.get("clock")
     val lang = parseLang(params.get("lang"))
     val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
     val query = listOfNotNull(
@@ -76,6 +86,7 @@ fun main() {
         win?.let { "win=$it" },
         bot?.let { "bot=$it" },
         turn?.let { "turn=$it" },
+        clock?.let { "clock=$it" },
         params.get("lang")?.let { "lang=$it" },
     ).joinToString("&")
     val wsUrl = "$wsProtocol://${window.location.host}/play" + (query.takeIf { it.isNotEmpty() }?.let { "?$it" } ?: "")
@@ -88,6 +99,7 @@ fun main() {
         ErrorReason.INVALID_WIN_LENGTH,
         ErrorReason.INVALID_TURN_TIME,
         ErrorReason.INVALID_BOT_LEVEL,
+        ErrorReason.INVALID_CLOCK,
     )
 
     var socket: WebSocket? = null
@@ -99,6 +111,8 @@ fun main() {
     var roundDeadline = 0.0
     var turnDeadline = 0.0
     var turnTotalMs = 0.0
+    var clocksSnapshot: Map<PlayerSymbol, Long> = emptyMap()
+    var clocksBase = 0.0
     var countdownTimer: Int? = null
     var muted = localStorage.getItem("tictactoe-muted") == "1"
 
@@ -120,22 +134,28 @@ fun main() {
         else -> "="
     }
 
-    fun showReplay(record: dynamic, container: HTMLElement) {
-        container.innerHTML = ""
-        val boardSize = ((record.boardSize ?: js("3")) as Double).toInt()
-        val moves = (record.moves ?: js("[]")) as Array<dynamic>
+    /** The stepper + mini board every replay view shares; a link button carries the whole game in the URL. */
+    fun mountReplay(
+        container: HTMLElement,
+        boardSize: Int,
+        moves: List<Cell>,
+    ) {
         var index = moves.size // start at the final position
 
         val controls = document.createElement("div") as HTMLElement
         val prev = document.createElement("button") as HTMLButtonElement
         val next = document.createElement("button") as HTMLButtonElement
+        val share = document.createElement("button") as HTMLButtonElement
         val label = document.createElement("span")
         prev.textContent = "‹"
         next.textContent = "›"
+        share.textContent = "🔗"
+        share.title = copyLinkText(lang)
         controls.className = "replay-controls"
         controls.appendChild(prev)
         controls.appendChild(label)
         controls.appendChild(next)
+        controls.appendChild(share)
 
         val boardDiv = document.createElement("div") as HTMLElement
         boardDiv.style.display = "grid"
@@ -146,7 +166,7 @@ fun main() {
             val cells = arrayOfNulls<String>(boardSize * boardSize)
             for (i in 0 until index) {
                 val m = moves[i]
-                cells[((m.y as Double).toInt() * boardSize) + (m.x as Double).toInt()] = if (i % 2 == 0) "X" else "O"
+                cells[m.y * boardSize + m.x] = if (i % 2 == 0) "X" else "O"
             }
             cells.forEach { symbol ->
                 val cellDiv = document.createElement("div") as HTMLElement
@@ -166,10 +186,69 @@ fun main() {
             if (index < moves.size) index++
             render()
         }
+        share.onclick = {
+            val fragment = replayToFragment(SharedReplay(boardSize, boardSize, moves))
+            window.navigator.clipboard?.writeText("${window.location.origin}${window.location.pathname}${window.location.search}#$fragment")
+            share.textContent = "✓"
+            window.setTimeout({ share.textContent = "🔗" }, 1_500)
+        }
 
         container.appendChild(controls)
         container.appendChild(boardDiv)
         render()
+    }
+
+    fun showReplay(record: dynamic, container: HTMLElement) {
+        val boardSize = ((record.boardSize ?: js("3")) as Double).toInt()
+        val moves = ((record.moves ?: js("[]")) as Array<dynamic>).map { m ->
+            Cell((m.x as Double).toInt(), (m.y as Double).toInt())
+        }
+        container.innerHTML = ""
+        mountReplay(container, boardSize, moves)
+    }
+
+    /** A shared link opens nothing but the replay: the board stays idle while the game plays out. */
+    fun showSharedReplay(replay: SharedReplay) {
+        val host = document.getElementById("shared-replay") as HTMLElement
+        host.innerHTML = ""
+        host.style.display = "block"
+        board.style.display = "none"
+        turnBar.style.display = "none"
+        (document.getElementById("reactions") as? HTMLElement)?.style?.display = "none"
+
+        // rebuild the final position so the header can announce the outcome
+        var field: List<List<PlayerSymbol?>> = GameRules.emptyField(replay.boardSize)
+        replay.moves.forEachIndexed { i, cell ->
+            field = field.mapIndexed { y, row ->
+                row.mapIndexed { x, s -> if (y == cell.y && x == cell.x) if (i % 2 == 0) PlayerSymbol.X else PlayerSymbol.O else s }
+            }
+        }
+        val win = GameRules.win(field, replay.winLength)
+        val final = GameState(
+            field = field,
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            winningPlayer = win?.player,
+            winningCells = win?.cells ?: emptyList(),
+            isBoardFull = GameRules.isBoardFull(field),
+            playerNames = buildMap {
+                replay.xName?.let { put(PlayerSymbol.X, it) }
+                replay.oName?.let { put(PlayerSymbol.O, it) }
+            },
+        )
+        val title = document.createElement("h2")
+        title.textContent = statusText(final, null, lang)
+        host.appendChild(title)
+        mountReplay(host, replay.boardSize, replay.moves)
+
+        val back = document.createElement("button") as HTMLButtonElement
+        back.textContent = when (lang) {
+            Lang.RU -> "← К игре"
+            Lang.EN -> "← Back to the game"
+        }
+        back.onclick = {
+            window.location.href = "${window.location.pathname}${window.location.search}"
+        }
+        host.appendChild(back)
     }
 
     fun showReaction(emoji: String) {
@@ -193,7 +272,7 @@ fun main() {
                 response.json().then { data: dynamic ->
                     profileDiv.innerHTML = ""
                     val title = document.createElement("h3")
-                    title.textContent = data.name as String
+                    title.textContent = "${data.name as String} · ${data.stats.rating as Int}"
                     val ul = document.createElement("ul") as HTMLElement
                     val replayDiv = document.createElement("div") as HTMLElement
                     val history = (data.stats.history ?: js("[]")) as Array<dynamic>
@@ -228,7 +307,7 @@ fun main() {
                     val entries = data.entries as Array<dynamic>
                     entries.forEachIndexed { index, entry ->
                         val li = document.createElement("li") as HTMLElement
-                        li.textContent = "${index + 1}. ${entry.name} — ${entry.stats.wins} : ${entry.stats.losses} : ${entry.stats.draws}"
+                        li.textContent = "${index + 1}. ${entry.name} — ${entry.stats.rating} · ${entry.stats.wins} : ${entry.stats.losses} : ${entry.stats.draws}"
                         li.style.cursor = "pointer"
                         li.title = entry.name as String
                         li.onclick = { showProfile(entry.name as String) }
@@ -311,7 +390,7 @@ fun main() {
     }
 
     fun playStateSounds(previous: GameState?, state: GameState) {
-        when (soundCue(previous, state)) {
+        when (soundCue(previous, state, mySymbol)) {
             SoundCue.WIN -> {
                 beep(523.0, 120)
                 window.setTimeout({ beep(659.0, 120) }, 120)
@@ -320,10 +399,27 @@ fun main() {
 
             SoundCue.DRAW -> beep(220.0, 250, "triangle")
 
-            SoundCue.MOVE -> beep(660.0, 60)
+            SoundCue.MOVE_MINE -> beep(660.0, 60)
+
+            // my stone: a brighter blip
+
+            SoundCue.MOVE_OPPONENT -> beep(440.0, 90, "triangle")
+
+            // the opponent's: a lower knock
 
             SoundCue.NONE -> Unit
         }
+    }
+
+    /** The chess clocks tick locally between server states; the player on turn is the one draining. */
+    fun renderClocks() {
+        val current = lastState ?: return
+        fun side(sym: PlayerSymbol): String {
+            var ms = clocksSnapshot[sym] ?: 0L
+            if (sym == current.playerAtTurn && clocksBase > 0) ms = (ms - (Date.now() - clocksBase)).toLong().coerceAtLeast(0)
+            return clockText(ms)
+        }
+        clocksDiv.textContent = "${side(PlayerSymbol.X)} : ${side(PlayerSymbol.O)}"
     }
 
     fun showState(event: ServerEvent.StateChanged) {
@@ -359,6 +455,7 @@ fun main() {
                 val msLeft = turnDeadline - Date.now()
                 if (msLeft <= 0) return@setInterval
                 turnBarFill.style.width = "${(msLeft / turnTotalMs * 100).coerceIn(0.0, 100.0)}%"
+                if (clocksSnapshot.isNotEmpty()) renderClocks()
                 showStatus(statusText(current, mySymbol, lang) + timerSuffix(msLeft.toLong(), lang))
             }, 250)
         } else {
@@ -377,8 +474,24 @@ fun main() {
         val opponentOffered = state.drawPlayers.any { it != mySymbol }
         drawButton.textContent = drawButtonText(iOffered, opponentOffered, lang)
 
+        val undoVisible = !roundOver && mySymbol != null && state.connectionPlayers.size >= 2 &&
+            (state.undoOfferBy != null || state.playerAtTurn != mySymbol)
+        undoButton.style.display = if (undoVisible) "block" else "none"
+        val iOfferedUndo = mySymbol != null && state.undoOfferBy == mySymbol
+        val opponentOfferedUndo = state.undoOfferBy != null && state.undoOfferBy != mySymbol
+        undoButton.textContent = undoButtonText(iOfferedUndo, opponentOfferedUndo, lang)
+
         showStatus(statusText(state, mySymbol, lang))
         scoreDiv.textContent = scoreText(state, lang)
+        if (state.clocks.isNotEmpty()) {
+            clocksSnapshot = state.clocks
+            clocksBase = Date.now()
+            clocksDiv.style.display = "block"
+            renderClocks()
+        } else {
+            clocksSnapshot = emptyMap()
+            clocksDiv.style.display = "none"
+        }
         playStateSounds(previous, state)
         if ((previous == null || !previous.isRoundOver) && state.isRoundOver) refreshLeaderboard()
 
@@ -498,6 +611,7 @@ fun main() {
 
     rematchButton.onclick = { send(ClientMessage.RequestRematch) }
     drawButton.onclick = { send(ClientMessage.RequestDraw) }
+    undoButton.onclick = { send(ClientMessage.RequestUndo) }
 
     document.querySelectorAll("#reactions button").asDynamic().forEach { node: dynamic ->
         (node as? HTMLButtonElement)?.let { button ->
@@ -521,5 +635,11 @@ fun main() {
     window.setInterval({ refreshLeaderboard() }, 30_000) // the table also moves while nobody finishes a round
     refreshRooms()
     window.setInterval({ refreshRooms() }, 5_000)
-    connect()
+
+    val sharedReplay = replayFromFragment(window.location.hash.removePrefix("#"))
+    if (sharedReplay != null) {
+        showSharedReplay(sharedReplay) // the link carries the whole game: no connection needed
+    } else {
+        connect()
+    }
 }

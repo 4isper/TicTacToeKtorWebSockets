@@ -55,4 +55,10 @@ enum class ErrorReason {
 
     @SerialName("invalid reaction")
     INVALID_REACTION,
+
+    @SerialName("nothing to undo")
+    NOTHING_TO_UNDO,
+
+    @SerialName("invalid clock")
+    INVALID_CLOCK,
 }

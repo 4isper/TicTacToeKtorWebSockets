@@ -27,6 +27,13 @@ class ProtocolTest {
     }
 
     @Test
+    fun `undo request round-trips`() {
+        val json = protocolJson.encodeToString<ClientMessage>(ClientMessage.RequestUndo)
+        assertEquals("""{"type":"request_undo"}""", json)
+        assertEquals(ClientMessage.RequestUndo, protocolJson.decodeFromString(json))
+    }
+
+    @Test
     fun `set name round-trips`() {
         val json = protocolJson.encodeToString<ClientMessage>(ClientMessage.SetName("Дима"))
         assertEquals("""{"type":"set_name","name":"Дима"}""", json)

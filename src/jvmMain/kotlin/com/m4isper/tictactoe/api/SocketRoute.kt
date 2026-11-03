@@ -17,6 +17,8 @@ private val logger = LoggerFactory.getLogger("com.m4isper.tictactoe.api.SocketRo
 
 private val roomNamePattern = Regex("[A-Za-z0-9_-]{1,32}")
 private const val MAX_NAME_LENGTH = 20
+private const val MESSAGE_WINDOW_MS = 1_000L
+private const val MESSAGES_PER_WINDOW = 20
 
 fun Route.socket(lobby: GameLobby) {
     route("/play") {
@@ -44,10 +46,29 @@ fun Route.socket(lobby: GameLobby) {
             }
 
             val botParam = call.request.queryParameters["bot"]
-            val botLevel = botParam?.let { parseBotLevel(it) }
-            if (botParam != null && botLevel == null) {
-                sendError(ErrorReason.INVALID_BOT_LEVEL)
-                return@webSocket
+            var botLevel: BotLevel? = null
+            var secondBotLevel: BotLevel? = null
+            when (botParam) {
+                null -> {}
+
+                "1" -> botLevel = BotLevel.NORMAL
+
+                // `bot=1` stays a synonym of `normal` for older links
+                "2" -> {
+                    botLevel = BotLevel.NORMAL // `bot=2`: an exhibition — both slots play
+                    secondBotLevel = BotLevel.NORMAL
+                }
+
+                "easy" -> botLevel = BotLevel.EASY
+
+                "normal" -> botLevel = BotLevel.NORMAL
+
+                "hard" -> botLevel = BotLevel.HARD
+
+                else -> {
+                    sendError(ErrorReason.INVALID_BOT_LEVEL)
+                    return@webSocket
+                }
             }
 
             val turnParam = call.request.queryParameters["turn"]
@@ -58,7 +79,15 @@ fun Route.socket(lobby: GameLobby) {
             }
             val turn = turnSeconds ?: GameRules.DEFAULT_TURN_SECONDS
 
-            var binding = lobby.join(this, room, size, winLength ?: size, botLevel, turn) ?: run {
+            val clockParam = call.request.queryParameters["clock"]
+            val clockSeconds = clockParam?.toIntOrNull()
+            if (clockParam != null && clockSeconds !in GameRules.MIN_CLOCK_SECONDS..GameRules.MAX_CLOCK_SECONDS) {
+                sendError(ErrorReason.INVALID_CLOCK)
+                return@webSocket
+            }
+            val clock = clockSeconds ?: 0
+
+            var binding = lobby.join(this, room, size, winLength ?: size, botLevel, secondBotLevel, turn, clock) ?: run {
                 sendError(ErrorReason.ROOM_IS_FULL)
                 return@webSocket
             }
@@ -69,8 +98,19 @@ fun Route.socket(lobby: GameLobby) {
                     send(protocolJson.encodeToString<ServerEvent>(ServerEvent.StateChanged(binding.game.currentState())))
                 }
 
+                var windowStart = System.currentTimeMillis()
+                var messagesInWindow = 0
                 incoming.consumeEach { frame ->
                     if (frame !is Frame.Text) return@consumeEach
+                    // flood control: excess frames within the window are dropped quietly
+                    val now = System.currentTimeMillis()
+                    if (now - windowStart >= MESSAGE_WINDOW_MS) {
+                        windowStart = now
+                        messagesInWindow = 0
+                    }
+                    messagesInWindow++
+                    if (messagesInWindow > MESSAGES_PER_WINDOW) return@consumeEach
+
                     val message = runCatching { protocolJson.decodeFromString<ClientMessage>(frame.readText()) }
                         .getOrNull()
 
@@ -90,6 +130,11 @@ fun Route.socket(lobby: GameLobby) {
                         is ClientMessage.RequestDraw -> when (val symbol = binding.symbol) {
                             null -> ServerEvent.Error(ErrorReason.NOT_YOUR_TURN)
                             else -> binding.game.requestDraw(symbol, this)?.let(ServerEvent::Error)
+                        }
+
+                        is ClientMessage.RequestUndo -> when (val symbol = binding.symbol) {
+                            null -> ServerEvent.Error(ErrorReason.NOT_YOUR_TURN)
+                            else -> binding.game.requestUndo(symbol, this)?.let(ServerEvent::Error)
                         }
 
                         is ClientMessage.React -> {
@@ -137,12 +182,4 @@ fun Route.socket(lobby: GameLobby) {
 
 private suspend fun DefaultWebSocketServerSession.sendError(reason: ErrorReason) {
     send(protocolJson.encodeToString<ServerEvent>(ServerEvent.Error(reason)))
-}
-
-/** `bot=1` stays a synonym of `normal` for older links. */
-private fun parseBotLevel(raw: String): BotLevel? = when (raw) {
-    "1", "normal" -> BotLevel.NORMAL
-    "easy" -> BotLevel.EASY
-    "hard" -> BotLevel.HARD
-    else -> null
 }

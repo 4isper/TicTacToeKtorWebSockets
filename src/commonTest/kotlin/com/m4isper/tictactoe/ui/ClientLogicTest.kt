@@ -68,7 +68,18 @@ class ClientLogicTest {
     fun `a new mark is a move cue`() {
         val previous = GameState()
         val state = previous.copy(field = Boards.fieldWith(listOf(Cell(1, 1) to PlayerSymbol.X)))
-        assertEquals(SoundCue.MOVE, soundCue(previous, state))
+        assertEquals(SoundCue.MOVE_OPPONENT, soundCue(previous, state)) // no symbol: a spectator's cue
+    }
+
+    @Test
+    fun `the mover hears their own move differently`() {
+        val previous = GameState(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O))
+        val state = previous.copy(
+            field = Boards.fieldWith(listOf(Cell(1, 1) to PlayerSymbol.X)),
+            playerAtTurn = PlayerSymbol.O, // X just moved
+        )
+        assertEquals(SoundCue.MOVE_MINE, soundCue(previous, state, mySymbol = PlayerSymbol.X))
+        assertEquals(SoundCue.MOVE_OPPONENT, soundCue(previous, state, mySymbol = PlayerSymbol.O))
     }
 
     @Test
@@ -76,6 +87,14 @@ class ClientLogicTest {
         val previous = GameState(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)))
         assertEquals(SoundCue.NONE, soundCue(previous, GameState())) // board reset
         assertEquals(SoundCue.NONE, soundCue(null, GameState())) // first render
+    }
+
+    @Test
+    fun `the clock reads as m ss and rounds up`() {
+        assertEquals("2:30", clockText(150_000))
+        assertEquals("0:10", clockText(9_500)) // ceil: never shows zero while time is left
+        assertEquals("0:00", clockText(0))
+        assertEquals("1:00", clockText(59_500))
     }
 
     @Test

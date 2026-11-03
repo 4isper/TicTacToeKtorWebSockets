@@ -1,7 +1,9 @@
 package com.m4isper.tictactoe.ui
 
 import com.m4isper.tictactoe.domain.Cell
+import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.game.GameState
+import kotlin.math.ceil
 
 /** Cells that turned from empty to occupied since the previous state — the ones to animate. */
 fun newMoveCells(previous: GameState?, state: GameState): List<Cell> {
@@ -17,11 +19,12 @@ fun newMoveCells(previous: GameState?, state: GameState): List<Cell> {
     }
 }
 
-enum class SoundCue { NONE, MOVE, WIN, DRAW }
+enum class SoundCue { NONE, MOVE_MINE, MOVE_OPPONENT, WIN, DRAW }
 
 fun soundCue(
     previous: GameState?,
     state: GameState,
+    mySymbol: PlayerSymbol? = null,
 ): SoundCue {
     if (previous == null) return SoundCue.NONE
     val movesBefore = previous.field.sumOf { row -> row.count { it != null } }
@@ -30,9 +33,15 @@ fun soundCue(
         state.winningPlayer != null && previous.winningPlayer == null -> SoundCue.WIN
         state.isDrawAgreed && !previous.isDrawAgreed -> SoundCue.DRAW
         state.isBoardFull && state.winningPlayer == null && !previous.isBoardFull -> SoundCue.DRAW
-        movesNow > movesBefore -> SoundCue.MOVE
+        movesNow > movesBefore -> if (mySymbol != null && state.playerAtTurn != mySymbol) SoundCue.MOVE_MINE else SoundCue.MOVE_OPPONENT
         else -> SoundCue.NONE
     }
+}
+
+/** A chess-clock readout: whole seconds rounded up, as m:ss. */
+fun clockText(msLeft: Long): String {
+    val seconds = ceil(msLeft / 1000.0).toInt()
+    return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
 }
 
 /** A round restart countdown just appeared and the deadline should be captured once. */

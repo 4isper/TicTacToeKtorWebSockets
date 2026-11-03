@@ -20,6 +20,8 @@ data class GameState(
     val turnRemainingMs: Long? = null,
     val drawPlayers: List<PlayerSymbol> = emptyList(),
     val isDrawAgreed: Boolean = false,
+    val undoOfferBy: PlayerSymbol? = null,
+    val clocks: Map<PlayerSymbol, Long> = emptyMap(),
 ) {
     /** Nothing left to play: won, drawn out, or given up by agreement. */
     val isRoundOver: Boolean

@@ -85,6 +85,7 @@ class UiTextTest {
         assertEquals("Неверное время хода", errorText(ErrorReason.INVALID_TURN_TIME))
         assertEquals("Неверный уровень бота", errorText(ErrorReason.INVALID_BOT_LEVEL))
         assertEquals("Неизвестная реакция", errorText(ErrorReason.INVALID_REACTION))
+        assertEquals("Неверное время на партию", errorText(ErrorReason.INVALID_CLOCK))
     }
 
     @Test
@@ -132,6 +133,15 @@ class UiTextTest {
     }
 
     @Test
+    fun `undo button follows the offers`() {
+        assertEquals("Отменить ход", undoButtonText(iOffered = false, opponentOffered = false))
+        assertEquals("Ожидание согласия…", undoButtonText(iOffered = true, opponentOffered = false))
+        assertEquals("Разрешить отмену", undoButtonText(iOffered = false, opponentOffered = true))
+        assertEquals("Undo my move", undoButtonText(iOffered = false, opponentOffered = false, Lang.EN))
+        assertEquals("Allow the takeback", undoButtonText(iOffered = false, opponentOffered = true, Lang.EN))
+    }
+
+    @Test
     fun `restart countdown rounds up so it never shows zero while waiting`() {
         assertEquals("Новый раунд через 5…", restartText(4_500))
         assertEquals("Новый раунд через 1…", restartText(999))
@@ -173,6 +183,7 @@ class UiTextTest {
         assertEquals("Invalid turn time", errorText(ErrorReason.INVALID_TURN_TIME, Lang.EN))
         assertEquals("Invalid bot level", errorText(ErrorReason.INVALID_BOT_LEVEL, Lang.EN))
         assertEquals("Unknown reaction", errorText(ErrorReason.INVALID_REACTION, Lang.EN))
+        assertEquals("Invalid game clock", errorText(ErrorReason.INVALID_CLOCK, Lang.EN))
         assertEquals("Play again", rematchButtonText(waiting = false, Lang.EN))
         assertEquals("Copy link", copyLinkText(Lang.EN))
     }

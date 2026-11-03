@@ -7,11 +7,14 @@ import com.m4isper.tictactoe.game.GameState
 import com.m4isper.tictactoe.protocol.ClientMessage
 import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
+import com.m4isper.tictactoe.stats.JsonScoreStore
+import com.m4isper.tictactoe.stats.Scoreboard
 import io.ktor.client.plugins.websocket.*
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.Application
 import io.ktor.server.testing.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.CompletableDeferred
@@ -23,14 +26,21 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.encodeToString
+import java.nio.file.Files
 import kotlin.test.*
+
+/** A module whose scoreboard lives in a temp file, so the tests never touch the real leaderboard. */
+private fun Application.testModule(reconnectGraceMs: Long = 10_000L) = module(
+    scoreboard = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard-test", ".json").toFile())),
+    reconnectGraceMs = reconnectGraceMs,
+)
 
 class ApplicationTest {
 
     @Test
     fun `health endpoint answers ok`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient { }
         assertEquals("ok", client.get("/health").bodyAsText())
@@ -39,7 +49,7 @@ class ApplicationTest {
     @Test
     fun `the page is rendered in the requested language`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient { }
 
@@ -56,7 +66,7 @@ class ApplicationTest {
     @Test
     fun `named wins reach the leaderboard endpoint`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val xClient = createClient {
             install(WebSockets)
@@ -104,6 +114,8 @@ class ApplicationTest {
         assertEquals(HttpStatusCode.OK, profile.status)
         assertTrue("Боря" in profile.bodyAsText(), "history should name the opponent: ${profile.bodyAsText()}")
         assertTrue("WIN" in profile.bodyAsText())
+        assertTrue("\"rating\":1016" in profile.bodyAsText(), "the win should pay elo: ${profile.bodyAsText()}")
+        assertTrue("\"ratingAfter\":1016" in profile.bodyAsText())
         assertTrue(
             "\"moves\":[{\"x\":0,\"y\":0},{\"x\":1,\"y\":0},{\"x\":0,\"y\":1},{\"x\":1,\"y\":1},{\"x\":0,\"y\":2}]" in profile.bodyAsText(),
             "the record should carry the replay: ${profile.bodyAsText()}",
@@ -116,7 +128,7 @@ class ApplicationTest {
     @Test
     fun `first player receives game state after connect`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient {
             install(WebSockets)
@@ -133,7 +145,7 @@ class ApplicationTest {
     @Test
     fun `state events carry every field explicitly`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient {
             install(WebSockets)
@@ -157,7 +169,7 @@ class ApplicationTest {
     @Test
     fun `malformed message is rejected without dropping the connection`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient {
             install(WebSockets)
@@ -181,7 +193,7 @@ class ApplicationTest {
     @Test
     fun `occupied cell is not overwritten by the opponent`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val xClient = createClient {
             install(WebSockets)
@@ -226,7 +238,7 @@ class ApplicationTest {
     @Test
     fun `winning move is detected immediately`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val xClient = createClient {
             install(WebSockets)
@@ -276,7 +288,7 @@ class ApplicationTest {
     @Test
     fun `each new pair of connections gets its own game`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient {
             install(WebSockets)
@@ -310,7 +322,7 @@ class ApplicationTest {
     @Test
     fun `score is reported when a round is won`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val xClient = createClient {
             install(WebSockets)
@@ -361,7 +373,7 @@ class ApplicationTest {
     @Test
     fun `player reconnects with a token and keeps the symbol`() = testApplication {
         application {
-            module(reconnectGraceMs = 500)
+            testModule(reconnectGraceMs = 500)
         }
         val xClient = createClient {
             install(WebSockets)
@@ -412,7 +424,7 @@ class ApplicationTest {
     @Test
     fun `a replaced session can no longer play for the player`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val xClient = createClient {
             install(WebSockets)
@@ -449,7 +461,7 @@ class ApplicationTest {
     @Test
     fun `slot is freed when the grace expires and the old token dies`() = testApplication {
         application {
-            module(reconnectGraceMs = 500)
+            testModule(reconnectGraceMs = 500)
         }
         val firstClient = createClient {
             install(WebSockets)
@@ -496,7 +508,7 @@ class ApplicationTest {
     @Test
     fun `named room pairs two players and rejects the third`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val xClient = createClient {
             install(WebSockets)
@@ -538,7 +550,7 @@ class ApplicationTest {
     @Test
     fun `room creator picks the board size and latecomers inherit it`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient {
             install(WebSockets)
@@ -564,7 +576,7 @@ class ApplicationTest {
     @Test
     fun `an out of range size is refused before joining`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient {
             install(WebSockets)
@@ -587,7 +599,7 @@ class ApplicationTest {
     @Test
     fun `four in a row wins on the requested board and reports the run`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val xClient = createClient {
             install(WebSockets)
@@ -647,7 +659,7 @@ class ApplicationTest {
     @Test
     fun `an out of range win length is refused before joining`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient {
             install(WebSockets)
@@ -674,7 +686,7 @@ class ApplicationTest {
     @Test
     fun `rematch resets the round when both players ask before the timer`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val xClient = createClient {
             install(WebSockets)
@@ -742,7 +754,7 @@ class ApplicationTest {
     @Test
     fun `a third connection to a named room watches as a spectator`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val xClient = createClient {
             install(WebSockets)
@@ -799,7 +811,7 @@ class ApplicationTest {
     @Test
     fun `players name themselves and invalid names are refused`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val xClient = createClient {
             install(WebSockets)
@@ -842,7 +854,7 @@ class ApplicationTest {
     @Test
     fun `an out of range turn time is refused before joining`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient {
             install(WebSockets)
@@ -869,7 +881,7 @@ class ApplicationTest {
     @Test
     fun `the turn timer honors the requested seconds`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val xClient = createClient {
             install(WebSockets)
@@ -908,7 +920,7 @@ class ApplicationTest {
     @Test
     fun `both players asking for a draw ends the round`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val xClient = createClient {
             install(WebSockets)
@@ -955,7 +967,7 @@ class ApplicationTest {
     @Test
     fun `the rooms endpoint lists open named rooms with their settings`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient {
             install(WebSockets)
@@ -976,7 +988,7 @@ class ApplicationTest {
     @Test
     fun `the page is installable`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient { }
 
@@ -1001,7 +1013,7 @@ class ApplicationTest {
     @Test
     fun `a reaction is broadcast to everyone and invalid ones are refused`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val xClient = createClient {
             install(WebSockets)
@@ -1044,7 +1056,7 @@ class ApplicationTest {
     @Test
     fun `a second reaction inside the cooldown is dropped quietly`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient {
             install(WebSockets)
@@ -1064,7 +1076,7 @@ class ApplicationTest {
     @Test
     fun `the manifest offers raster icons alongside the svg one`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient { }
 
@@ -1087,7 +1099,7 @@ class ApplicationTest {
     @Test
     fun `the page adapts to the light scheme`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient { }
 
@@ -1102,7 +1114,7 @@ class ApplicationTest {
     @Test
     fun `the service worker falls back to an offline page`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient { }
 
@@ -1116,9 +1128,144 @@ class ApplicationTest {
     }
 
     @Test
+    fun `a message flood is dropped quietly`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=flood") {
+            receiveHandshake()
+
+            repeat(25) { sendSetName("Спамер") } // 20 per second is the budget
+            repeat(20) { assertTrue(receiveEvent() is ServerEvent.StateChanged) }
+
+            delay(1_100) // the window resets
+            sendMakeTurn(0, 0)
+            val state = receiveState()
+            assertEquals(PlayerSymbol.X, state.field[0][0]) // the connection still plays
+        }
+    }
+
+    @Test
+    fun `an approved takeback reverts the last move`() = testApplication {
+        application {
+            testModule()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=undo") {
+            receiveHandshake()
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=undo") {
+                    receiveHandshake()
+                    oReady.complete(Unit)
+                    receiveState() // X's opening move
+                    val offered = receiveState() // X's takeback request
+                    assertEquals(PlayerSymbol.X, offered.undoOfferBy)
+                    sendRequestUndo()
+                    val reverted = receiveState()
+                    assertNull(reverted.field[0][0])
+                    assertEquals(PlayerSymbol.X, reverted.playerAtTurn)
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            skipBroadcast() // [X, O]
+
+            sendMakeTurn(0, 0)
+            skipBroadcast() // own broadcast
+            sendRequestUndo()
+            val offered = receiveState()
+            assertEquals(PlayerSymbol.X, offered.undoOfferBy)
+
+            val reverted = receiveState()
+            assertNull(reverted.field[0][0])
+            assertEquals(PlayerSymbol.X, reverted.playerAtTurn)
+
+            second.cancel()
+        }
+    }
+
+    @Test
+    fun `bot=2 turns the room into an exhibition where joiners watch`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=expo&bot=2") {
+            val (joined, _) = receiveHandshake()
+            assertNull(joined.symbol) // both slots belong to the bots
+
+            val secondMove = awaitStateWhere { it.field.sumOf { row -> row.count { it != null } } >= 2 } // both played
+            assertEquals(listOf(PlayerSymbol.X, PlayerSymbol.O), secondMove.connectionPlayers)
+        }
+    }
+
+    @Test
+    fun `an out of range clock is refused before joining`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=ck&clock=29") {
+            assertEquals(ErrorReason.INVALID_CLOCK, (receiveEvent() as ServerEvent.Error).reason)
+        }
+
+        client.webSocket("/play?room=ck&clock=3601") {
+            assertEquals(ErrorReason.INVALID_CLOCK, (receiveEvent() as ServerEvent.Error).reason)
+        }
+
+        client.webSocket("/play?room=ck&clock=abc") {
+            assertEquals(ErrorReason.INVALID_CLOCK, (receiveEvent() as ServerEvent.Error).reason)
+        }
+
+        client.webSocket("/play?room=ck&clock=300") {
+            receiveHandshake()
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=ck&clock=300") {
+                    receiveHandshake()
+                    oReady.complete(Unit)
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            val both = receiveState() // the broadcast that O has joined
+            assertEquals(300_000, both.clocks[PlayerSymbol.X]) // the budget rides the state
+            assertTrue(both.clocks[PlayerSymbol.O]!! <= 300_000)
+
+            second.cancel()
+        }
+    }
+
+    @Test
     fun `bot fills the second slot and answers with a move`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient {
             install(WebSockets)
@@ -1139,13 +1286,13 @@ class ApplicationTest {
     @Test
     fun `an unknown bot level is refused before joining`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient {
             install(WebSockets)
         }
 
-        client.webSocket("/play?room=b9&bot=2") {
+        client.webSocket("/play?room=b9&bot=3") {
             assertEquals(ErrorReason.INVALID_BOT_LEVEL, (receiveEvent() as ServerEvent.Error).reason)
         }
 
@@ -1162,7 +1309,7 @@ class ApplicationTest {
     @Test
     fun `the easy bot fills the second slot and answers with a move`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val client = createClient {
             install(WebSockets)
@@ -1182,7 +1329,7 @@ class ApplicationTest {
     @Test
     fun `a second human displaces the bot`() = testApplication {
         application {
-            module()
+            testModule()
         }
         val xClient = createClient {
             install(WebSockets)
@@ -1224,7 +1371,7 @@ class ApplicationTest {
     @Test
     fun `room is freed after everyone leaves`() = testApplication {
         application {
-            module(reconnectGraceMs = 500)
+            testModule(reconnectGraceMs = 500)
         }
         val firstClient = createClient {
             install(WebSockets)
@@ -1314,6 +1461,10 @@ private suspend fun WebSocketSession.sendRequestRematch() {
 
 private suspend fun WebSocketSession.sendRequestDraw() {
     send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.RequestDraw)))
+}
+
+private suspend fun WebSocketSession.sendRequestUndo() {
+    send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.RequestUndo)))
 }
 
 private suspend fun WebSocketSession.sendReact(emoji: String) {

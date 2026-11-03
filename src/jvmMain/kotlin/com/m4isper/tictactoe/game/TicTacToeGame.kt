@@ -22,7 +22,9 @@ class TicTacToeGame(
     val boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
     val winLength: Int = boardSize,
     val botLevel: BotLevel? = null,
+    val secondBotLevel: BotLevel? = null,
     val turnTimeoutMs: Long = 30_000L,
+    val clockBudgetMs: Long? = null,
     private val onRoundOver: (playerNames: Map<PlayerSymbol, String>, winner: PlayerSymbol?, moves: List<Cell>, boardSize: Int) -> Unit = { _, _, _, _ -> },
 ) {
     private val logger = LoggerFactory.getLogger(TicTacToeGame::class.java)
@@ -42,6 +44,9 @@ class TicTacToeGame(
     private var turnTimeoutJob: Job? = null
     private var turnDeadline = 0L
     private var armedTurnFor: PlayerSymbol? = null
+    private var turnStartedAt = 0L
+    private var clockX = clockBudgetMs ?: 0L
+    private var clockO = clockBudgetMs ?: 0L
     private val roundMoves = mutableListOf<Cell>()
     private val lastReactionAt = ConcurrentHashMap<WebSocketSession, Long>()
 
@@ -57,6 +62,10 @@ class TicTacToeGame(
     }
 
     fun connectPlayer(session: WebSocketSession): PlayerSymbol? = synchronized(lock) {
+        if (secondBotLevel != null) {
+            attachExhibitionBotsLocked() // a human can only watch a bot-vs-bot room
+            return null
+        }
         val current = state.value
         val player = if (PlayerSymbol.X in current.connectionPlayers) PlayerSymbol.O else PlayerSymbol.X
         if (player in current.connectionPlayers) {
@@ -186,6 +195,11 @@ class TicTacToeGame(
             val rejection = rejectionReason(player, session, x, y, current)
             if (rejection != null) return rejection
             roundMoves.add(Cell(x, y))
+            if (clockBudgetMs != null && armedTurnFor == player && turnStartedAt > 0) {
+                // the mover pays for their thinking time
+                val spent = System.currentTimeMillis() - turnStartedAt
+                if (player == PlayerSymbol.X) clockX = (clockX - spent).coerceAtLeast(0) else clockO = (clockO - spent).coerceAtLeast(0)
+            }
 
             val newField = current.field.mapIndexed { row, cells ->
                 cells.mapIndexed { col, cell -> if (row == y && col == x) player else cell }
@@ -210,6 +224,7 @@ class TicTacToeGame(
                     winningPlayer = win?.player,
                     winningCells = win?.cells ?: emptyList(),
                     score = newScore,
+                    undoOfferBy = null, // the position moved on: a stale takeback offer dies
                 ),
             )
             if (win != null || isBoardFull) {
@@ -226,12 +241,13 @@ class TicTacToeGame(
             if (!current.isRoundOver) return ErrorReason.ROUND_NOT_OVER
 
             val updated = if (player in current.rematchPlayers) current.rematchPlayers else current.rematchPlayers + player
-            val humans = current.connectionPlayers.filter { it != bot } // the bot never asks
+            val humans = humanSymbols() // the bot never asks
             if (updated.isNotEmpty() && humans.all { it in updated }) {
                 roundRestartJob?.cancel()
                 roundRestartJob = null
                 roundRestartDeadline = 0
                 roundMoves.clear()
+                resetClocksLocked()
                 publish(
                     current.copy(
                         playerAtTurn = PlayerSymbol.X,
@@ -240,6 +256,8 @@ class TicTacToeGame(
                         winningCells = emptyList(),
                         isBoardFull = false,
                         isDrawAgreed = false,
+                        drawPlayers = emptyList(),
+                        undoOfferBy = null,
                         roundRestartInMs = null,
                         rematchPlayers = emptyList(),
                     ),
@@ -257,7 +275,7 @@ class TicTacToeGame(
             val current = state.value
             if (playerSockets[player] !== session) return ErrorReason.STALE_SESSION
             if (current.isRoundOver) return ErrorReason.ROUND_IS_OVER
-            val humans = current.connectionPlayers.filter { it != bot } // the bot never asks
+            val humans = humanSymbols()
             if (humans.size < 2) return ErrorReason.NOT_YOUR_TURN // nothing to agree with
 
             val updated = if (player in current.drawPlayers) current.drawPlayers - player else current.drawPlayers + player
@@ -280,13 +298,50 @@ class TicTacToeGame(
         }
     }
 
+    /** A takeback: the last mover asks, the player on turn approves; the move is reverted and the turn returns. */
+    fun requestUndo(player: PlayerSymbol, session: WebSocketSession): ErrorReason? {
+        synchronized(lock) {
+            val current = state.value
+            if (playerSockets[player] !== session) return ErrorReason.STALE_SESSION
+            if (current.isRoundOver) return ErrorReason.ROUND_IS_OVER
+
+            if (player == current.playerAtTurn) {
+                // the player on turn is the approver
+                val offer = current.undoOfferBy ?: return ErrorReason.NOT_YOUR_TURN
+                val last = roundMoves.removeAt(roundMoves.lastIndex)
+                val reverted = current.field.mapIndexed { y, row ->
+                    row.mapIndexed { x, cell -> if (y == last.y && x == last.x) null else cell }
+                }
+                publish(
+                    current.copy(
+                        field = reverted,
+                        playerAtTurn = offer, // the move goes back to its maker
+                        undoOfferBy = null,
+                        drawPlayers = emptyList(),
+                        rematchPlayers = emptyList(),
+                    ),
+                )
+                return null
+            }
+
+            if (roundMoves.isEmpty()) return ErrorReason.NOTHING_TO_UNDO
+            if (current.undoOfferBy == player) {
+                publish(current.copy(undoOfferBy = null)) // withdrawn
+            } else {
+                publish(current.copy(undoOfferBy = player))
+            }
+            return null
+        }
+    }
+
     fun shutdown() {
         gameScope.cancel()
     }
 
     /** True when an anonymous joiner with these settings can be paired into this game. */
-    fun matches(boardSize: Int, winLength: Int, botLevel: BotLevel?, turnSeconds: Int): Boolean = this.boardSize == boardSize &&
-        this.winLength == winLength && this.botLevel == botLevel && this.turnTimeoutMs == turnSeconds * 1000L
+    fun matches(boardSize: Int, winLength: Int, botLevel: BotLevel?, turnSeconds: Int, clockSeconds: Int = 0): Boolean = this.boardSize == boardSize &&
+        this.winLength == winLength && this.botLevel == botLevel && this.turnTimeoutMs == turnSeconds * 1000L &&
+        this.clockBudgetMs == clockSeconds.takeIf { it > 0 }?.let { it * 1000L }
 
     fun isFull(): Boolean = state.value.connectionPlayers.size >= 2
 
@@ -320,6 +375,7 @@ class TicTacToeGame(
                 roundRestartJob = null
                 roundRestartDeadline = 0
                 roundMoves.clear()
+                resetClocksLocked()
                 publish(
                     state.value.copy(
                         playerAtTurn = PlayerSymbol.X,
@@ -329,6 +385,7 @@ class TicTacToeGame(
                         isBoardFull = false,
                         isDrawAgreed = false,
                         drawPlayers = emptyList(),
+                        undoOfferBy = null,
                         roundRestartInMs = null,
                         rematchPlayers = emptyList(),
                     ),
@@ -351,17 +408,31 @@ class TicTacToeGame(
         } else {
             withRound.copy(turnRemainingMs = null)
         }
-        state.value = withTurn
-        stateChanges.trySend(withTurn)
-        if (roundJustEnded(previous, withTurn)) {
-            onRoundOver(withTurn.playerNames, withTurn.winningPlayer, roundMoves.toList(), boardSize)
+        val withClocks = if (clockBudgetMs != null && !withTurn.isRoundOver && withTurn.connectionPlayers.size >= 2) {
+            val now = System.currentTimeMillis()
+            fun live(sym: PlayerSymbol): Long {
+                val base = clockOf(sym)
+                return if (sym == withTurn.playerAtTurn && turnStartedAt > 0) {
+                    (base - (now - turnStartedAt)).coerceAtLeast(0)
+                } else {
+                    base
+                }
+            }
+            withTurn.copy(clocks = mapOf(PlayerSymbol.X to live(PlayerSymbol.X), PlayerSymbol.O to live(PlayerSymbol.O)))
+        } else {
+            withTurn
         }
-        scheduleBotMoveIfNeeded(withTurn)
+        state.value = withClocks
+        stateChanges.trySend(withClocks)
+        if (roundJustEnded(previous, withClocks)) {
+            onRoundOver(withClocks.playerNames, withClocks.winningPlayer, roundMoves.toList(), boardSize)
+        }
+        scheduleBotMoveIfNeeded(withClocks)
     }
 
     private fun roundJustEnded(previous: GameState, next: GameState): Boolean = !previous.isRoundOver && next.isRoundOver
 
-    /** Forfeits the round to the opponent when the current player stalls past the deadline. */
+    /** Forfeits the round to the opponent when the current player stalls past the deadline — turn budget or clock. */
     private fun armTurnTimerLocked(current: GameState) {
         if (current.isRoundOver || current.connectionPlayers.size < 2) {
             turnTimeoutJob?.cancel()
@@ -371,11 +442,16 @@ class TicTacToeGame(
             return
         }
         if (current.playerAtTurn == armedTurnFor && turnDeadline > 0) return // same turn: keep the original deadline
-        armedTurnFor = current.playerAtTurn
-        turnDeadline = System.currentTimeMillis() + turnTimeoutMs
+        val symbol = current.playerAtTurn
+        armedTurnFor = symbol
+        turnStartedAt = System.currentTimeMillis()
+        // the clock and the turn budget share one job: whichever runs out first forfeits the round
+        val clockLimit = if (symbol != null) clockOf(symbol) else Long.MAX_VALUE
+        val effectiveDelay = minOf(turnTimeoutMs, if (clockBudgetMs != null) clockLimit else turnTimeoutMs)
+        turnDeadline = turnStartedAt + effectiveDelay
         turnTimeoutJob?.cancel()
         turnTimeoutJob = gameScope.launch {
-            delay(turnTimeoutMs)
+            delay(effectiveDelay)
             synchronized(lock) {
                 val snapshot = state.value
                 if (snapshot.isRoundOver) return@launch
@@ -400,22 +476,29 @@ class TicTacToeGame(
         }
     }
 
+    private fun clockOf(symbol: PlayerSymbol): Long = if (symbol == PlayerSymbol.X) clockX else clockO
+
+    private fun resetClocksLocked() {
+        clockX = clockBudgetMs ?: 0L
+        clockO = clockBudgetMs ?: 0L
+        turnStartedAt = 0
+    }
+
     private fun scheduleBotMoveIfNeeded(current: GameState) {
-        val symbol = bot ?: return
-        val level = botLevel ?: return
+        val symbol = current.playerAtTurn ?: return
+        val level = levelFor(symbol) ?: return
         if (current.isRoundOver) return
-        if (current.playerAtTurn != symbol) return
         botMoveJob?.cancel()
         botMoveJob = gameScope.launch {
             delay(BOT_THINK_MS)
             val snapshot = synchronized(lock) {
-                if (bot != symbol) return@launch
+                if (levelFor(symbol) == null) return@launch
                 state.value.takeIf { it.playerAtTurn == symbol && !it.isRoundOver } ?: return@launch
             }
             // the search runs unlocked: a deep think must not stall broadcasts and joins
             val move = BotBrain.chooseMove(snapshot.field, symbol, winLength, level) ?: return@launch
             synchronized(lock) {
-                if (bot != symbol) return@launch
+                if (levelFor(symbol) == null) return@launch
                 val now = state.value
                 // play only if the board is still the one we analyzed
                 if (now.field == snapshot.field && now.playerAtTurn == symbol && !now.isRoundOver) {
@@ -423,6 +506,28 @@ class TicTacToeGame(
                 }
             }
         }
+    }
+
+    /** The bot level owning the slot, or null for a human slot. */
+    private fun levelFor(symbol: PlayerSymbol): BotLevel? = when {
+        secondBotLevel == null -> if (symbol == bot) botLevel else null
+        symbol == PlayerSymbol.X -> botLevel
+        else -> secondBotLevel
+    }
+
+    /** The connected players who are humans; the bots never vote. */
+    private fun humanSymbols(): List<PlayerSymbol> = when {
+        secondBotLevel != null -> emptyList()
+        bot != null -> state.value.connectionPlayers.filter { it != bot }
+        else -> state.value.connectionPlayers
+    }
+
+    private fun attachExhibitionBotsLocked() {
+        if (bot != null) return
+        playerSockets[PlayerSymbol.X] = BotSession
+        playerSockets[PlayerSymbol.O] = BotSession
+        bot = PlayerSymbol.X
+        publish(state.value.copy(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O)))
     }
 
     private fun maybeAttachBotLocked() {

@@ -13,6 +13,7 @@ import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.roomsTitle
 import com.m4isper.tictactoe.ui.soundIcon
 import com.m4isper.tictactoe.ui.soundTitle
+import com.m4isper.tictactoe.ui.undoButtonText
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.html.*
@@ -230,6 +231,11 @@ fun Application.webUi(
                     minHeight = 24.px
                     color = Color("var(--muted)")
                 }
+                rule("#clocks") {
+                    display = Display.none
+                    fontSize = 20.px
+                    color = Color("var(--accent)")
+                }
                 rule("#copy-link") {
                     margin = Margin(vertical = 8.px)
                     padding = Padding(horizontal = 14.px, vertical = 8.px)
@@ -437,6 +443,7 @@ fun Application.webUi(
                     }
                     div { id = "status" }
                     div { id = "score" }
+                    div { id = "clocks" }
                     div(classes = "name-row") {
                         input(InputType.text) {
                             id = "name"
@@ -461,12 +468,20 @@ fun Application.webUi(
                         id = "draw"
                         +drawButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
                     }
+                    button(classes = "secondary") {
+                        id = "undo"
+                        +undoButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
+                    }
                     div {
                         id = "turn-bar"
                         div { id = "turn-bar-fill" }
                     }
                     div { id = "board" }
                     div { id = "error" }
+                    div {
+                        id = "shared-replay"
+                        attributes["style"] = "display:none"
+                    }
                     div {
                         id = "reactions"
                         REACTION_EMOJIS.forEach { emoji ->

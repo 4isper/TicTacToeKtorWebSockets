@@ -24,13 +24,15 @@ data class RoomInfo(
 data class RoomsResponse(val rooms: List<RoomInfo> = emptyList())
 
 class GameLobby(
-    private val newGame: (boardSize: Int, winLength: Int, botLevel: BotLevel?, turnSeconds: Int) -> TicTacToeGame =
-        { boardSize, winLength, botLevel, turnSeconds ->
+    private val newGame: (boardSize: Int, winLength: Int, botLevel: BotLevel?, secondBotLevel: BotLevel?, turnSeconds: Int, clockSeconds: Int) -> TicTacToeGame =
+        { boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds ->
             TicTacToeGame(
                 boardSize = boardSize,
                 winLength = winLength,
                 botLevel = botLevel,
+                secondBotLevel = secondBotLevel,
                 turnTimeoutMs = turnSeconds * 1000L,
+                clockBudgetMs = clockSeconds.takeIf { it > 0 }?.let { it * 1000L },
             )
         },
     private val reconnectGraceMs: Long = 10_000L,
@@ -56,14 +58,16 @@ class GameLobby(
         boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
         winLength: Int = boardSize,
         botLevel: BotLevel? = null,
+        secondBotLevel: BotLevel? = null,
         turnSeconds: Int = GameRules.DEFAULT_TURN_SECONDS,
+        clockSeconds: Int = 0,
     ): Joined? = synchronized(lock) {
         val game = if (room == null) {
             // pair anonymous joiners only with identical settings, or their size/win/bot would be silently ignored
-            games.firstOrNull { !it.isFull() && it.matches(boardSize, winLength, botLevel, turnSeconds) }
-                ?: newGame(boardSize, winLength, botLevel, turnSeconds).also { games.add(it) }
+            games.firstOrNull { !it.isFull() && it.matches(boardSize, winLength, botLevel, turnSeconds, clockSeconds) }
+                ?: newGame(boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds).also { games.add(it) }
         } else {
-            rooms.getOrPut(room) { newGame(boardSize, winLength, botLevel, turnSeconds) }
+            rooms.getOrPut(room) { newGame(boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds) }
         }
         val symbol = game.connectPlayer(session)
         if (symbol == null && room == null) return null // anonymous match stays players-only
