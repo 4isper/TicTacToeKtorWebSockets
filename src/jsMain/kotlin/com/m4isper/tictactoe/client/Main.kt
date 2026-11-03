@@ -2,10 +2,12 @@ package com.m4isper.tictactoe.client
 
 import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.PlayerSymbol
+import com.m4isper.tictactoe.game.GameState
 import com.m4isper.tictactoe.protocol.ClientMessage
 import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
 import com.m4isper.tictactoe.ui.errorText
+import com.m4isper.tictactoe.ui.restartText
 import com.m4isper.tictactoe.ui.scoreText
 import com.m4isper.tictactoe.ui.statusText
 import kotlinx.browser.document
@@ -16,6 +18,7 @@ import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.WebSocket
 import org.w3c.dom.url.URLSearchParams
+import kotlin.js.Date
 
 fun main() {
     val status = document.getElementById("status") as HTMLElement
@@ -23,6 +26,7 @@ fun main() {
     val errorBox = document.getElementById("error") as HTMLElement
     val scoreDiv = document.getElementById("score") as HTMLElement
     val copyLink = document.getElementById("copy-link") as? HTMLButtonElement
+    val rematchButton = document.getElementById("rematch") as HTMLButtonElement
 
     val params = URLSearchParams(window.location.search)
     val room = params.get("room")
@@ -41,6 +45,9 @@ fun main() {
     var mySymbol: PlayerSymbol? = null
     var pendingReconnectToken: String? = null
     var retry = 0
+    var lastState: GameState? = null
+    var roundDeadline = 0.0
+    var countdownTimer: Int? = null
 
     fun send(message: ClientMessage) {
         socket?.send(protocolJson.encodeToString<ClientMessage>(message))
@@ -56,6 +63,30 @@ fun main() {
 
     fun showState(event: ServerEvent.StateChanged) {
         val state = event.state
+        val previous = lastState
+        lastState = state
+
+        countdownTimer?.let { window.clearInterval(it) }
+        countdownTimer = null
+        if (state.roundRestartInMs != null) {
+            if (previous == null || previous.roundRestartInMs == null || roundDeadline == 0.0) {
+                roundDeadline = Date.now() + state.roundRestartInMs
+            }
+            countdownTimer = window.setInterval({
+                val current = lastState ?: return@setInterval
+                val msLeft = roundDeadline - Date.now()
+                if (msLeft <= 0) return@setInterval
+                showStatus(statusText(current, mySymbol) + " · " + restartText(msLeft.toLong()))
+            }, 250)
+        } else {
+            roundDeadline = 0.0
+        }
+
+        rematchButton.style.display = if (state.roundRestartInMs != null && mySymbol != null) "block" else "none"
+        val myRematch = mySymbol != null && mySymbol in state.rematchPlayers
+        rematchButton.disabled = myRematch
+        rematchButton.textContent = if (myRematch) "Ожидание соперника…" else "Играть снова"
+
         showStatus(statusText(state, mySymbol))
         scoreDiv.textContent = scoreText(state)
 
@@ -140,6 +171,8 @@ fun main() {
             window.setTimeout({ button.textContent = "Скопировать ссылку" }, 2000)
         }
     }
+
+    rematchButton.onclick = { send(ClientMessage.RequestRematch) }
 
     connect()
 }

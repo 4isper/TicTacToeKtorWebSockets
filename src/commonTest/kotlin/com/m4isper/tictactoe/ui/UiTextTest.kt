@@ -58,5 +58,13 @@ class UiTextTest {
         assertEquals("Сессия не найдена", errorText(ErrorReason.UNKNOWN_TOKEN))
         assertEquals("Эта вкладка больше не в игре", errorText(ErrorReason.STALE_SESSION))
         assertEquals("Неверный размер доски", errorText(ErrorReason.INVALID_BOARD_SIZE))
+        assertEquals("Неверная длина победной линии", errorText(ErrorReason.INVALID_WIN_LENGTH))
+        assertEquals("Раунд ещё идёт", errorText(ErrorReason.ROUND_NOT_OVER))
+    }
+
+    @Test
+    fun `restart countdown rounds up so it never shows zero while waiting`() {
+        assertEquals("Новый раунд через 5…", restartText(4_500))
+        assertEquals("Новый раунд через 1…", restartText(999))
     }
 }

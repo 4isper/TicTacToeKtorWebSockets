@@ -64,6 +64,21 @@ fun Application.webUi() {
                     borderRadius = 8.px
                     cursor = Cursor.pointer
                 }
+                rule("#rematch") {
+                    display = Display.none
+                    margin = Margin(vertical = 4.px)
+                    padding = Padding(horizontal = 14.px, vertical = 8.px)
+                    fontSize = 15.px
+                    backgroundColor = Color("#1f1f33")
+                    color = Color("#e8e8f0")
+                    borderWidth = 0.px
+                    borderRadius = 8.px
+                    cursor = Cursor.pointer
+                }
+                rule("#rematch:disabled") {
+                    opacity = 0.6
+                    cursor = Cursor.default
+                }
                 rule(".row") {
                     display = Display.flex
                     gap = 4.px
@@ -106,6 +121,10 @@ fun Application.webUi() {
                     }
                     div { id = "status" }
                     div { id = "score" }
+                    button(classes = "secondary") {
+                        id = "rematch"
+                        +"Играть снова"
+                    }
                     div { id = "board" }
                     div { id = "error" }
                     script(src = "/static/app.js") {}

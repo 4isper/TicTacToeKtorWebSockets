@@ -3,6 +3,7 @@ package com.m4isper.tictactoe.ui
 import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.game.GameState
+import kotlin.math.ceil
 
 fun statusText(
     state: GameState,
@@ -35,3 +36,5 @@ fun errorText(reason: ErrorReason): String = when (reason) {
     ErrorReason.INVALID_WIN_LENGTH -> "Неверная длина победной линии"
     ErrorReason.ROUND_NOT_OVER -> "Раунд ещё идёт"
 }
+
+fun restartText(msLeft: Long): String = "Новый раунд через ${ceil(msLeft / 1000.0).toInt()}…"
