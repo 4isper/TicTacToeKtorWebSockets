@@ -56,6 +56,8 @@ class ApplicationTest {
             assertTrue(state.contains("\"winningPlayer\":null"), state)
             assertTrue(state.contains("\"winningCells\":[]"), state)
             assertTrue(state.contains("\"isBoardFull\":false"), state)
+            assertTrue(state.contains("\"roundRestartInMs\":null"), state)
+            assertTrue(state.contains("\"rematchPlayers\":[]"), state)
             assertTrue(state.contains("\"score\":{\"X\":0,\"O\":0}"), state)
         }
     }
@@ -574,6 +576,74 @@ class ApplicationTest {
     }
 
     @Test
+    fun `rematch resets the round when both players ask before the timer`() = testApplication {
+        application {
+            module()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=rm") {
+            receiveHandshake()
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=rm") {
+                    receiveHandshake()
+                    oReady.complete(Unit)
+                    receiveState() // X opens, only then it is O's turn
+                    sendMakeTurn(1, 0)
+                    receiveState()
+                    receiveState()
+                    sendMakeTurn(1, 1)
+                    receiveState()
+                    receiveState() // X's winning move
+                    val xRematch = receiveState() // X asks first, O mirrors after seeing it
+                    assertEquals(listOf(PlayerSymbol.X), xRematch.rematchPlayers)
+                    sendRequestRematch()
+                    val reset = receiveState()
+                    assertNull(reset.winningPlayer)
+                    assertNull(reset.roundRestartInMs)
+                    assertEquals(emptyList(), reset.rematchPlayers)
+                    assertNull(reset.field[0][0])
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            skipBroadcast()
+
+            sendMakeTurn(0, 0)
+            skipBroadcast()
+            skipBroadcast()
+            sendMakeTurn(0, 1)
+            skipBroadcast()
+            skipBroadcast()
+            sendMakeTurn(0, 2)
+            val win = receiveState()
+            assertNotNull(win.roundRestartInMs)
+
+            sendRequestRematch()
+            val afterFirst = receiveState()
+            assertEquals(listOf(PlayerSymbol.X), afterFirst.rematchPlayers)
+
+            val reset = receiveState()
+            assertNull(reset.winningPlayer)
+            assertNull(reset.roundRestartInMs)
+            assertEquals(emptyList(), reset.rematchPlayers)
+            assertNull(reset.field[0][0])
+            assertEquals(mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), reset.score)
+
+            second.cancel()
+        }
+    }
+
+    @Test
     fun `room is freed after everyone leaves`() = testApplication {
         application {
             module(reconnectGraceMs = 500)
@@ -637,4 +707,8 @@ private suspend fun WebSocketSession.sendReconnect(token: String) {
 
 private suspend fun WebSocketSession.sendMakeTurn(x: Int, y: Int) {
     send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.MakeTurn(x, y))))
+}
+
+private suspend fun WebSocketSession.sendRequestRematch() {
+    send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.RequestRematch)))
 }

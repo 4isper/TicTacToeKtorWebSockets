@@ -21,6 +21,10 @@ sealed interface ClientMessage {
     @Serializable
     @SerialName("reconnect")
     data class Reconnect(val token: String) : ClientMessage
+
+    @Serializable
+    @SerialName("request_rematch")
+    data object RequestRematch : ClientMessage
 }
 
 @Serializable

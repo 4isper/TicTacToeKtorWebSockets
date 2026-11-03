@@ -28,6 +28,7 @@ class TicTacToeGame(
 
     private val gameScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var roundRestartJob: Job? = null
+    private var roundRestartDeadline = 0L
 
     init {
         gameScope.launch {
@@ -102,6 +103,10 @@ class TicTacToeGame(
                 current.score
             }
 
+            if (win != null || isBoardFull) {
+                roundRestartDeadline = System.currentTimeMillis() + roundRestartDelayMs
+            }
+
             publish(
                 current.copy(
                     playerAtTurn = player.other,
@@ -112,7 +117,38 @@ class TicTacToeGame(
                     score = newScore,
                 ),
             )
-            if (win != null || isBoardFull) scheduleRoundRestart()
+            if (win != null || isBoardFull) {
+                scheduleRoundRestart()
+            }
+            return null
+        }
+    }
+
+    fun requestRematch(player: PlayerSymbol, session: WebSocketSession): ErrorReason? {
+        synchronized(lock) {
+            val current = state.value
+            if (playerSockets[player] !== session) return ErrorReason.STALE_SESSION
+            if (current.winningPlayer == null && !current.isBoardFull) return ErrorReason.ROUND_NOT_OVER
+
+            val updated = if (player in current.rematchPlayers) current.rematchPlayers else current.rematchPlayers + player
+            if (updated.isNotEmpty() && current.connectionPlayers.all { it in updated }) {
+                roundRestartJob?.cancel()
+                roundRestartJob = null
+                roundRestartDeadline = 0
+                publish(
+                    current.copy(
+                        playerAtTurn = PlayerSymbol.X,
+                        field = GameRules.emptyField(boardSize),
+                        winningPlayer = null,
+                        winningCells = emptyList(),
+                        isBoardFull = false,
+                        roundRestartInMs = null,
+                        rematchPlayers = emptyList(),
+                    ),
+                )
+            } else {
+                publish(current.copy(rematchPlayers = updated))
+            }
             return null
         }
     }
@@ -150,6 +186,8 @@ class TicTacToeGame(
         roundRestartJob = gameScope.launch {
             delay(roundRestartDelayMs)
             synchronized(lock) {
+                roundRestartJob = null
+                roundRestartDeadline = 0
                 publish(
                     state.value.copy(
                         playerAtTurn = PlayerSymbol.X,
@@ -157,6 +195,8 @@ class TicTacToeGame(
                         winningPlayer = null,
                         winningCells = emptyList(),
                         isBoardFull = false,
+                        roundRestartInMs = null,
+                        rematchPlayers = emptyList(),
                     ),
                 )
             }
@@ -164,7 +204,12 @@ class TicTacToeGame(
     }
 
     private fun publish(next: GameState) {
-        state.value = next
-        stateChanges.trySend(next)
+        val withCountdown = if (roundRestartDeadline > 0) {
+            next.copy(roundRestartInMs = (roundRestartDeadline - System.currentTimeMillis()).coerceAtLeast(0))
+        } else {
+            next
+        }
+        state.value = withCountdown
+        stateChanges.trySend(withCountdown)
     }
 }

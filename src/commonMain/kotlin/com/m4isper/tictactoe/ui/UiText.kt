@@ -33,4 +33,5 @@ fun errorText(reason: ErrorReason): String = when (reason) {
     ErrorReason.STALE_SESSION -> "Эта вкладка больше не в игре"
     ErrorReason.INVALID_BOARD_SIZE -> "Неверный размер доски"
     ErrorReason.INVALID_WIN_LENGTH -> "Неверная длина победной линии"
+    ErrorReason.ROUND_NOT_OVER -> "Раунд ещё идёт"
 }

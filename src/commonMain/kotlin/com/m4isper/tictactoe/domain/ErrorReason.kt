@@ -37,4 +37,7 @@ enum class ErrorReason {
 
     @SerialName("invalid win length")
     INVALID_WIN_LENGTH,
+
+    @SerialName("round is not over")
+    ROUND_NOT_OVER,
 }

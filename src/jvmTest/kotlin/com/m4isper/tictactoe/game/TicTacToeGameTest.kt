@@ -15,6 +15,7 @@ import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 class TicTacToeGameTest {
 
     @Suppress("EmptyFunctionBlock")
@@ -94,6 +95,72 @@ class TicTacToeGameTest {
         game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
 
         assertEquals(mapOf(PlayerSymbol.X to 2, PlayerSymbol.O to 0), game.currentState().score)
+        game.shutdown()
+    }
+
+    @Test
+    fun `rematch is rejected while the round is running`() = runBlocking {
+        val game = TicTacToeGame()
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        assertEquals(ErrorReason.ROUND_NOT_OVER, game.requestRematch(PlayerSymbol.X, xSession))
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `round end arms the countdown and rematch resets when both ask`() = runBlocking {
+        val game = TicTacToeGame(roundRestartDelayMs = 60_000)
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 1)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
+
+        val ended = game.currentState()
+        assertEquals(PlayerSymbol.X, ended.winningPlayer)
+        val countdown = ended.roundRestartInMs
+        assertTrue(countdown != null && countdown in 1..60_000, "countdown was $countdown")
+
+        assertNull(game.requestRematch(PlayerSymbol.X, xSession))
+        val afterFirst = game.currentState()
+        assertEquals(listOf(PlayerSymbol.X), afterFirst.rematchPlayers)
+        assertEquals(PlayerSymbol.X, afterFirst.field[0][0]) // not reset yet
+
+        assertNull(game.requestRematch(PlayerSymbol.O, oSession))
+        val reset = game.currentState()
+        assertNull(reset.winningPlayer)
+        assertNull(reset.roundRestartInMs)
+        assertEquals(emptyList(), reset.rematchPlayers)
+        assertNull(reset.field[0][0])
+        assertEquals(mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), reset.score)
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `rematch from a stale session is rejected`() = runBlocking {
+        val game = TicTacToeGame()
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 1)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
+
+        assertEquals(ErrorReason.STALE_SESSION, game.requestRematch(PlayerSymbol.X, FakeSession()))
+
         game.shutdown()
     }
 

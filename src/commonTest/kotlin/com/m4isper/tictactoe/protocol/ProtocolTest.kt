@@ -18,4 +18,11 @@ class ProtocolTest {
         val event = protocolJson.decodeFromString<ServerEvent>("""{"type":"error","reason":"stale session"}""")
         assertEquals(ServerEvent.Error(ErrorReason.STALE_SESSION), event)
     }
+
+    @Test
+    fun `rematch request round-trips`() {
+        val json = protocolJson.encodeToString<ClientMessage>(ClientMessage.RequestRematch)
+        assertEquals("""{"type":"request_rematch"}""", json)
+        assertEquals(ClientMessage.RequestRematch, protocolJson.decodeFromString(json))
+    }
 }

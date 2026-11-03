@@ -57,6 +57,9 @@ fun Route.socket(lobby: GameLobby) {
                         is ClientMessage.MakeTurn -> binding.game.finishTurn(binding.symbol, this, message.x, message.y)
                             ?.let(ServerEvent::Error)
 
+                        is ClientMessage.RequestRematch -> binding.game.requestRematch(binding.symbol, this)
+                            ?.let(ServerEvent::Error)
+
                         is ClientMessage.Reconnect -> {
                             val rebound = lobby.reconnect(message.token, this)
                             if (rebound == null) {
