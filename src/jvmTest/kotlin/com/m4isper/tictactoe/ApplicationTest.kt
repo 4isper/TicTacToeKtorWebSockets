@@ -69,6 +69,7 @@ class ApplicationTest {
             assertTrue(state.contains("\"isBoardFull\":false"), state)
             assertTrue(state.contains("\"roundRestartInMs\":null"), state)
             assertTrue(state.contains("\"rematchPlayers\":[]"), state)
+            assertTrue(state.contains("\"playerNames\":{}"), state)
             assertTrue(state.contains("\"score\":{\"X\":0,\"O\":0}"), state)
         }
     }
@@ -716,6 +717,49 @@ class ApplicationTest {
     }
 
     @Test
+    fun `players name themselves and invalid names are refused`() = testApplication {
+        application {
+            module()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=nm") {
+            receiveHandshake()
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=nm") {
+                    receiveHandshake()
+                    oReady.complete(Unit)
+                    val named = receiveState() // X's set_name broadcast
+                    assertEquals(mapOf(PlayerSymbol.X to "Аня"), named.playerNames)
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            skipBroadcast() // [X, O]
+
+            sendSetName("Аня")
+            val named = receiveState()
+            assertEquals(mapOf(PlayerSymbol.X to "Аня"), named.playerNames)
+
+            sendSetName("   ") // blank after trim
+            assertTrue(receiveEvent() is ServerEvent.Error)
+            sendSetName("x".repeat(21)) // too long
+            assertTrue(receiveEvent() is ServerEvent.Error)
+
+            second.cancel()
+        }
+    }
+
+    @Test
     fun `room is freed after everyone leaves`() = testApplication {
         application {
             module(reconnectGraceMs = 500)
@@ -783,4 +827,8 @@ private suspend fun WebSocketSession.sendMakeTurn(x: Int, y: Int) {
 
 private suspend fun WebSocketSession.sendRequestRematch() {
     send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.RequestRematch)))
+}
+
+private suspend fun WebSocketSession.sendSetName(name: String) {
+    send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.SetName(name))))
 }

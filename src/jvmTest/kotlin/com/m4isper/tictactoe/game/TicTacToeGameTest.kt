@@ -145,6 +145,7 @@ class TicTacToeGameTest {
         game.finishTurn(PlayerSymbol.X, xSession, 0, 1)
         game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
         game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
+        game.setName(PlayerSymbol.X, "Аня")
 
         val ended = game.currentState()
         assertEquals(PlayerSymbol.X, ended.winningPlayer)
@@ -163,6 +164,7 @@ class TicTacToeGameTest {
         assertEquals(emptyList(), reset.rematchPlayers)
         assertNull(reset.field[0][0])
         assertEquals(mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), reset.score)
+        assertEquals("Аня", reset.playerNames[PlayerSymbol.X]) // names survive the reset
 
         game.shutdown()
     }
@@ -181,6 +183,23 @@ class TicTacToeGameTest {
         game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
 
         assertEquals(ErrorReason.STALE_SESSION, game.requestRematch(PlayerSymbol.X, FakeSession()))
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `names are published and cleared when the player disconnects`() = runBlocking {
+        val game = TicTacToeGame()
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        game.setName(PlayerSymbol.X, "Аня")
+        assertEquals(mapOf(PlayerSymbol.X to "Аня"), game.currentState().playerNames)
+
+        game.disconnectPlayer(PlayerSymbol.X)
+        assertEquals(emptyMap(), game.currentState().playerNames)
 
         game.shutdown()
     }

@@ -40,4 +40,7 @@ enum class ErrorReason {
 
     @SerialName("round is not over")
     ROUND_NOT_OVER,
+
+    @SerialName("invalid name")
+    INVALID_NAME,
 }

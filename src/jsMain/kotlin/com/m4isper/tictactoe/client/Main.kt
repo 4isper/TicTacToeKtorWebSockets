@@ -16,6 +16,7 @@ import kotlinx.browser.window
 import kotlinx.serialization.encodeToString
 import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
+import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.WebSocket
 import org.w3c.dom.url.URLSearchParams
 import kotlin.js.Date
@@ -27,6 +28,8 @@ fun main() {
     val scoreDiv = document.getElementById("score") as HTMLElement
     val copyLink = document.getElementById("copy-link") as? HTMLButtonElement
     val rematchButton = document.getElementById("rematch") as HTMLButtonElement
+    val nameInput = document.getElementById("name") as? HTMLInputElement
+    val setNameButton = document.getElementById("set-name") as? HTMLButtonElement
 
     val params = URLSearchParams(window.location.search)
     val room = params.get("room")
@@ -173,6 +176,18 @@ fun main() {
     }
 
     rematchButton.onclick = { send(ClientMessage.RequestRematch) }
+
+    if (nameInput != null && setNameButton != null) {
+        fun submitName() {
+            val name = nameInput.value.trim()
+            if (name.isNotEmpty()) send(ClientMessage.SetName(name))
+            nameInput.value = ""
+        }
+        setNameButton.onclick = { submitName() }
+        nameInput.onkeydown = { event ->
+            if (event.asDynamic().key == "Enter") submitName()
+        }
+    }
 
     connect()
 }

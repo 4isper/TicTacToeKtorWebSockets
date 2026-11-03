@@ -67,7 +67,16 @@ class TicTacToeGame(
 
     fun disconnectPlayer(player: PlayerSymbol): Unit = synchronized(lock) {
         playerSockets.remove(player)
-        publish(state.value.copy(connectionPlayers = state.value.connectionPlayers - player))
+        publish(
+            state.value.copy(
+                connectionPlayers = state.value.connectionPlayers - player,
+                playerNames = state.value.playerNames - player,
+            ),
+        )
+    }
+
+    fun setName(player: PlayerSymbol, name: String): Unit = synchronized(lock) {
+        publish(state.value.copy(playerNames = state.value.playerNames + (player to name)))
     }
 
     fun attachSpectator(session: WebSocketSession) {

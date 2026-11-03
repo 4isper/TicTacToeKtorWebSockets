@@ -7,12 +7,14 @@ import io.ktor.server.http.content.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.css.*
+import kotlinx.html.InputType
 import kotlinx.html.body
 import kotlinx.html.button
 import kotlinx.html.div
 import kotlinx.html.h1
 import kotlinx.html.head
 import kotlinx.html.id
+import kotlinx.html.input
 import kotlinx.html.lang
 import kotlinx.html.link
 import kotlinx.html.meta
@@ -79,6 +81,31 @@ fun Application.webUi() {
                     opacity = 0.6
                     cursor = Cursor.default
                 }
+                rule(".name-row") {
+                    display = Display.flex
+                    gap = 4.px
+                    margin = Margin(vertical = 4.px)
+                }
+                rule("#name") {
+                    backgroundColor = Color("#1f1f33")
+                    color = Color("#e8e8f0")
+                    borderWidth = 0.px
+                    borderRadius = 8.px
+                    padding = Padding(horizontal = 10.px, vertical = 8.px)
+                    fontSize = 15.px
+                }
+                rule("#name::placeholder") {
+                    color = Color("#6a6a85")
+                }
+                rule("#set-name") {
+                    padding = Padding(horizontal = 14.px, vertical = 8.px)
+                    fontSize = 15.px
+                    backgroundColor = Color("#1f1f33")
+                    color = Color("#e8e8f0")
+                    borderWidth = 0.px
+                    borderRadius = 8.px
+                    cursor = Cursor.pointer
+                }
                 rule(".row") {
                     display = Display.flex
                     gap = 4.px
@@ -121,6 +148,17 @@ fun Application.webUi() {
                     }
                     div { id = "status" }
                     div { id = "score" }
+                    div(classes = "name-row") {
+                        input(InputType.text) {
+                            id = "name"
+                            placeholder = "Ваше имя"
+                            maxLength = "20"
+                        }
+                        button(classes = "secondary") {
+                            id = "set-name"
+                            +"ОК"
+                        }
+                    }
                     button(classes = "secondary") {
                         id = "rematch"
                         +"Играть снова"

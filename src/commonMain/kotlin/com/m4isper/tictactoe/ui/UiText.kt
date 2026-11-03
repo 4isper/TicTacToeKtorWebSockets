@@ -9,12 +9,14 @@ fun statusText(
     state: GameState,
     mySymbol: PlayerSymbol?,
 ): String = when {
-    state.winningPlayer != null -> "Победил ${state.winningPlayer}!"
+    state.winningPlayer != null -> "Победил ${displayName(state, state.winningPlayer)}!"
     state.isBoardFull -> "Ничья!"
     state.connectionPlayers.size < 2 -> "Ожидание соперника…"
     state.playerAtTurn == mySymbol -> "Ваш ход"
-    else -> "Ход: ${state.playerAtTurn}"
+    else -> "Ход: ${displayName(state, state.playerAtTurn)}"
 }
+
+private fun displayName(state: GameState, symbol: PlayerSymbol?): String = symbol?.let { state.playerNames[it] ?: it.toString() } ?: "—"
 
 fun scoreText(state: GameState): String {
     val x = state.score[PlayerSymbol.X] ?: 0
@@ -35,6 +37,7 @@ fun errorText(reason: ErrorReason): String = when (reason) {
     ErrorReason.INVALID_BOARD_SIZE -> "Неверный размер доски"
     ErrorReason.INVALID_WIN_LENGTH -> "Неверная длина победной линии"
     ErrorReason.ROUND_NOT_OVER -> "Раунд ещё идёт"
+    ErrorReason.INVALID_NAME -> "Неверное имя"
 }
 
 fun restartText(msLeft: Long): String = "Новый раунд через ${ceil(msLeft / 1000.0).toInt()}…"

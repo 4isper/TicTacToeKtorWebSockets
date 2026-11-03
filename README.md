@@ -17,13 +17,16 @@ Then open http://localhost:8080/ to play in the browser (the page is rendered wi
 - **Board size:** a game's board is square and is picked by the first connection that creates it — add `&size=<n>` (an integer `3..10`) to the room URL, e.g. `http://localhost:8080/?room=alpha&size=5`; players joining later inherit the existing board whatever `size` they pass. Anything outside `3..10` (or not a number) answers `invalid board size` before joining. Clients should read the board dimensions from the `field` array rather than assuming 3×3.
 - **Win length:** the winning line does not have to span the whole board — add `&win=<n>` (`3..boardSize`, default: the full board dimension) for games like 4-in-a-row on a 5×5 board, e.g. `http://localhost:8080/?room=alpha&size=5&win=4`. Anything outside the range answers `invalid win length` before joining. The `state` event reports the winning run as `winningCells` (`[{"x":..,"y":..}, …]`) so clients can highlight it.
 - Players are matched pairwise: the first two connections play one game, the next two get their own game, and so on. In each game the first connection plays `X`, the second `O`. An emptied game (both players left) is retired.
-- Client → server: a text frame holding one JSON message with a `type` discriminator. Currently only:
+- Client → server: a text frame holding one JSON message with a `type` discriminator:
 
   ```json
   {"type":"make_turn","x":<col>,"y":<row>}
+  {"type":"reconnect","token":"<uuid>"}
+  {"type":"request_rematch"}
+  {"type":"set_name","name":"Дима"}
   ```
 
-  `x` is the column and `y` is the row, both `0..2`. A malformed or unknown message is answered with an `error` event and does not close the session.
+  `x` is the column and `y` is the row (`0`-based, `0..size-1`). A malformed or unknown message is answered with an `error` event and does not close the session. `set_name` trims the name and accepts 1–20 characters (`invalid name` otherwise); names travel in every `state` as `playerNames` (`{"X":"Дима"}`), survive round resets and are dropped when a player disconnects.
 - Server → client: a text frame per event, also discriminated by `type`:
 
   ```json

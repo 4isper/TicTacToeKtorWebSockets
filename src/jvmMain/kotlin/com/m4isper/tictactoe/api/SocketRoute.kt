@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory
 private val logger = LoggerFactory.getLogger("com.m4isper.tictactoe.api.SocketRoute")
 
 private val roomNamePattern = Regex("[A-Za-z0-9_-]{1,32}")
+private const val MAX_NAME_LENGTH = 20
 
 fun Route.socket(lobby: GameLobby) {
     route("/play") {
@@ -68,6 +69,20 @@ fun Route.socket(lobby: GameLobby) {
                         is ClientMessage.RequestRematch -> when (val symbol = binding.symbol) {
                             null -> ServerEvent.Error(ErrorReason.NOT_YOUR_TURN)
                             else -> binding.game.requestRematch(symbol, this)?.let(ServerEvent::Error)
+                        }
+
+                        is ClientMessage.SetName -> when (val symbol = binding.symbol) {
+                            null -> ServerEvent.Error(ErrorReason.NOT_YOUR_TURN)
+
+                            else -> {
+                                val name = message.name.trim()
+                                if (name.isEmpty() || name.length > MAX_NAME_LENGTH) {
+                                    ServerEvent.Error(ErrorReason.INVALID_NAME)
+                                } else {
+                                    binding.game.setName(symbol, name)
+                                    null // the broadcast carries the new state
+                                }
+                            }
                         }
 
                         is ClientMessage.Reconnect -> {

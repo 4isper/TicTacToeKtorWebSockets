@@ -41,6 +41,26 @@ class UiTextTest {
     }
 
     @Test
+    fun `status uses the player name when it is known`() {
+        val state = GameState(
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            playerAtTurn = PlayerSymbol.O,
+            playerNames = mapOf(PlayerSymbol.O to "Дима"),
+        )
+        assertEquals("Ход: Дима", statusText(state, mySymbol = PlayerSymbol.X))
+    }
+
+    @Test
+    fun `the winner is announced by name when it is known`() {
+        val state = GameState(
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            winningPlayer = PlayerSymbol.X,
+            playerNames = mapOf(PlayerSymbol.X to "Аня"),
+        )
+        assertEquals("Победил Аня!", statusText(state, mySymbol = PlayerSymbol.O))
+    }
+
+    @Test
     fun `score is rendered for both symbols`() {
         val state = GameState(score = mapOf(PlayerSymbol.X to 2, PlayerSymbol.O to 1))
         assertEquals("Счёт — X 2 : 1 O", scoreText(state))

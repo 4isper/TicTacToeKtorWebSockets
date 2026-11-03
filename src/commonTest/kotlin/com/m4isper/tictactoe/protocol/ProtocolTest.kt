@@ -25,4 +25,11 @@ class ProtocolTest {
         assertEquals("""{"type":"request_rematch"}""", json)
         assertEquals(ClientMessage.RequestRematch, protocolJson.decodeFromString(json))
     }
+
+    @Test
+    fun `set name round-trips`() {
+        val json = protocolJson.encodeToString<ClientMessage>(ClientMessage.SetName("Дима"))
+        assertEquals("""{"type":"set_name","name":"Дима"}""", json)
+        assertEquals(ClientMessage.SetName("Дима"), protocolJson.decodeFromString(json))
+    }
 }
