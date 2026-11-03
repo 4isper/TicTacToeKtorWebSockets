@@ -253,23 +253,24 @@ class TicTacToeGame(
 
     private fun publish(next: GameState) {
         val previous = state.value
-        val withCountdown = if (roundRestartDeadline > 0) {
+        val withRound = if (roundRestartDeadline > 0) {
             next.copy(roundRestartInMs = (roundRestartDeadline - System.currentTimeMillis()).coerceAtLeast(0))
         } else {
             next
         }
-        val withTurnTimer = if (turnDeadline > 0) {
-            withCountdown.copy(turnRemainingMs = (turnDeadline - System.currentTimeMillis()).coerceAtLeast(0))
+        // arm or disarm first so the wire state never carries a stale turn countdown
+        armTurnTimerLocked(withRound)
+        val withTurn = if (turnDeadline > 0) {
+            withRound.copy(turnRemainingMs = (turnDeadline - System.currentTimeMillis()).coerceAtLeast(0))
         } else {
-            withCountdown.copy(turnRemainingMs = null)
+            withRound.copy(turnRemainingMs = null)
         }
-        state.value = withTurnTimer
-        stateChanges.trySend(withTurnTimer)
-        if (roundJustEnded(previous, withTurnTimer)) {
-            onRoundOver(withTurnTimer.playerNames, withTurnTimer.winningPlayer)
+        state.value = withTurn
+        stateChanges.trySend(withTurn)
+        if (roundJustEnded(previous, withTurn)) {
+            onRoundOver(withTurn.playerNames, withTurn.winningPlayer)
         }
-        scheduleBotMoveIfNeeded(withTurnTimer)
-        armTurnTimerLocked(withTurnTimer)
+        scheduleBotMoveIfNeeded(withTurn)
     }
 
     private fun roundJustEnded(previous: GameState, next: GameState): Boolean = !(previous.winningPlayer != null || previous.isBoardFull) &&
@@ -299,6 +300,8 @@ class TicTacToeGame(
 
                 val winner = loser.other
                 roundRestartDeadline = System.currentTimeMillis() + roundRestartDelayMs
+                turnDeadline = 0 // the round is over — no turn countdown on the wire
+                armedTurnFor = null
                 scheduleRoundRestart()
                 publish(
                     snapshot.copy(

@@ -244,6 +244,24 @@ class TicTacToeGameTest {
     }
 
     @Test
+    fun `the turn timer disarms when the opponent leaves`() = runBlocking {
+        val game = TicTacToeGame(turnTimeoutMs = 1_000)
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
+        assertTrue(game.currentState().turnRemainingMs != null)
+
+        game.disconnectPlayer(PlayerSymbol.O)
+        delay(50)
+        assertNull(game.currentState().turnRemainingMs) // nobody to forfeit
+
+        game.shutdown()
+    }
+
+    @Test
     fun `a move in time cancels the forfeit`() = runBlocking {
         val game = TicTacToeGame(turnTimeoutMs = 1_000)
         val xSession = FakeSession()
