@@ -42,7 +42,7 @@ class ApplicationTest {
         val client = createClient { }
 
         val russian = client.get("/?room=lang").bodyAsText()
-        assertTrue("Скопировать ссылку" in russian, "default page should be russian")
+        assertTrue("Скопировать ссылку" in russian, "default page should be russian, got: $russian")
         assertTrue("lang=\"ru\"" in russian)
 
         val english = client.get("/?room=lang&lang=en").bodyAsText()

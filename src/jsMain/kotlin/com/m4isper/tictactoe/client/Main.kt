@@ -15,6 +15,8 @@ import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.restartText
 import com.m4isper.tictactoe.ui.scoreText
+import com.m4isper.tictactoe.ui.soundIcon
+import com.m4isper.tictactoe.ui.soundTitle
 import com.m4isper.tictactoe.ui.statusText
 import com.m4isper.tictactoe.ui.timerSuffix
 import kotlinx.browser.document
@@ -63,6 +65,7 @@ fun main() {
     var roundDeadline = 0.0
     var turnDeadline = 0.0
     var countdownTimer: Int? = null
+    var muted = localStorage.getItem("tictactoe-muted") == "1"
 
     fun send(message: ClientMessage) {
         socket?.send(protocolJson.encodeToString<ClientMessage>(message))
@@ -110,6 +113,7 @@ fun main() {
     }
 
     fun beep(freq: Double, durationMs: Int, type: String = "sine") {
+        if (muted) return
         try {
             ensureAudio()
             val ctx = audioCtx ?: return
@@ -279,6 +283,20 @@ fun main() {
             window.setTimeout({ button.textContent = copyLinkText(lang) }, 2000)
         }
     }
+
+    val soundButton = document.getElementById("sound") as HTMLButtonElement
+
+    fun renderSound() {
+        soundButton.textContent = soundIcon(muted)
+        soundButton.title = soundTitle(muted, lang)
+    }
+
+    soundButton.onclick = {
+        muted = !muted
+        localStorage.setItem("tictactoe-muted", if (muted) "1" else "0")
+        renderSound()
+    }
+    renderSound()
 
     rematchButton.onclick = { send(ClientMessage.RequestRematch) }
 

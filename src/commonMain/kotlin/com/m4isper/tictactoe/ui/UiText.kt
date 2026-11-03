@@ -122,3 +122,10 @@ fun leaderboardTitle(lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> "Зал славы"
     Lang.EN -> "Leaderboard"
 }
+
+fun soundIcon(muted: Boolean): String = if (muted) "🔇" else "🔊"
+
+fun soundTitle(muted: Boolean, lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> if (muted) "Включить звук" else "Выключить звук"
+    Lang.EN -> if (muted) "Unmute" else "Mute"
+}

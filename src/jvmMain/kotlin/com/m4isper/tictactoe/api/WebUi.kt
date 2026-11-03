@@ -8,6 +8,8 @@ import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.namePlaceholder
 import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.rematchButtonText
+import com.m4isper.tictactoe.ui.soundIcon
+import com.m4isper.tictactoe.ui.soundTitle
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.html.*
@@ -219,6 +221,11 @@ fun Application.webUi(scoreboard: Scoreboard) {
                         button(classes = "secondary") {
                             id = "set-name"
                             +"ОК"
+                        }
+                        button(classes = "secondary") {
+                            id = "sound"
+                            title = soundTitle(muted = false, lang = pageLang)
+                            +soundIcon(muted = false)
                         }
                     }
                     button(classes = "secondary") {
