@@ -8,6 +8,7 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.css.*
 import kotlinx.html.body
+import kotlinx.html.button
 import kotlinx.html.div
 import kotlinx.html.h1
 import kotlinx.html.head
@@ -48,6 +49,21 @@ fun Application.webUi() {
                     color = Color("#ff7b7b")
                     minHeight = 24.px
                 }
+                rule("#score") {
+                    fontSize = 18.px
+                    minHeight = 24.px
+                    color = Color("#9a9ab8")
+                }
+                rule("#copy-link") {
+                    margin = Margin(vertical = 8.px)
+                    padding = Padding(horizontal = 14.px, vertical = 8.px)
+                    fontSize = 15.px
+                    backgroundColor = Color("#1f1f33")
+                    color = Color("#e8e8f0")
+                    borderWidth = 0.px
+                    borderRadius = 8.px
+                    cursor = Cursor.pointer
+                }
                 rule(".row") {
                     display = Display.flex
                     gap = 4.px
@@ -81,8 +97,15 @@ fun Application.webUi() {
                 }
                 body {
                     h1 { +"Крестики-нолики" }
-                    room?.let { p { +"Комната: $it" } }
+                    room?.let {
+                        p { +"Комната: $it" }
+                        button(classes = "secondary") {
+                            id = "copy-link"
+                            +"Скопировать ссылку"
+                        }
+                    }
                     div { id = "status" }
+                    div { id = "score" }
                     div { id = "board" }
                     div { id = "error" }
                     script(src = "/static/app.js") {}

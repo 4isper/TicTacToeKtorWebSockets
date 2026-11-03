@@ -4,6 +4,8 @@ import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.protocol.ClientMessage
 import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
+import com.m4isper.tictactoe.ui.scoreText
+import com.m4isper.tictactoe.ui.statusText
 import kotlinx.browser.document
 import kotlinx.browser.localStorage
 import kotlinx.browser.window
@@ -17,6 +19,8 @@ fun main() {
     val status = document.getElementById("status") as HTMLElement
     val board = document.getElementById("board") as HTMLElement
     val errorBox = document.getElementById("error") as HTMLElement
+    val scoreDiv = document.getElementById("score") as HTMLElement
+    val copyLink = document.getElementById("copy-link") as? HTMLButtonElement
 
     val room = URLSearchParams(window.location.search).get("room")
     val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
@@ -42,14 +46,8 @@ fun main() {
 
     fun showState(event: ServerEvent.StateChanged) {
         val state = event.state
-        showStatus(
-            when {
-                state.winningPlayer != null -> "Победил ${state.winningPlayer}!"
-                state.isBoardFull -> "Ничья!"
-                state.playerAtTurn == mySymbol -> "Ваш ход"
-                else -> "Ход: ${state.playerAtTurn}"
-            },
-        )
+        showStatus(statusText(state, mySymbol))
+        scoreDiv.textContent = scoreText(state)
 
         board.innerHTML = ""
         state.field.forEachIndexed { y, row ->
@@ -63,7 +61,8 @@ fun main() {
                     PlayerSymbol.O -> "O"
                     null -> ""
                 }
-                cellButton.disabled = cell != null || mySymbol == null || state.playerAtTurn != mySymbol
+                cellButton.disabled =
+                    cell != null || mySymbol == null || state.connectionPlayers.size < 2 || state.playerAtTurn != mySymbol
                 cellButton.onclick = { send(ClientMessage.MakeTurn(x = x, y = y)) }
                 rowDiv.appendChild(cellButton)
             }
@@ -113,6 +112,14 @@ fun main() {
         }
         socket?.onerror = {
             showError("Ошибка соединения")
+        }
+    }
+
+    copyLink?.let { button ->
+        button.onclick = {
+            window.navigator.clipboard?.writeText(window.location.href)
+            button.textContent = "Скопировано!"
+            window.setTimeout({ button.textContent = "Скопировать ссылку" }, 2000)
         }
     }
 

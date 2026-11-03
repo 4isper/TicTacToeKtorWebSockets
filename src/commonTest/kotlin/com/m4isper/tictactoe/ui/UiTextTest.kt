@@ -1,0 +1,52 @@
+package com.m4isper.tictactoe.ui
+
+import com.m4isper.tictactoe.domain.PlayerSymbol
+import com.m4isper.tictactoe.game.GameState
+import kotlin.test.*
+
+class UiTextTest {
+
+    @Test
+    fun `win beats every other status`() {
+        val state = GameState(
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            winningPlayer = PlayerSymbol.X,
+        )
+        assertEquals("Победил X!", statusText(state, mySymbol = PlayerSymbol.O))
+    }
+
+    @Test
+    fun `full board is a draw`() {
+        val state = GameState(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O), isBoardFull = true)
+        assertEquals("Ничья!", statusText(state, mySymbol = PlayerSymbol.X))
+    }
+
+    @Test
+    fun `waiting for the opponent beats my turn`() {
+        val state = GameState(connectionPlayers = listOf(PlayerSymbol.X), playerAtTurn = PlayerSymbol.X)
+        assertEquals("Ожидание соперника…", statusText(state, mySymbol = PlayerSymbol.X))
+    }
+
+    @Test
+    fun `my turn when both players are connected`() {
+        val state = GameState(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O), playerAtTurn = PlayerSymbol.X)
+        assertEquals("Ваш ход", statusText(state, mySymbol = PlayerSymbol.X))
+    }
+
+    @Test
+    fun `opponent turn when both players are connected`() {
+        val state = GameState(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O), playerAtTurn = PlayerSymbol.O)
+        assertEquals("Ход: O", statusText(state, mySymbol = PlayerSymbol.X))
+    }
+
+    @Test
+    fun `score is rendered for both symbols`() {
+        val state = GameState(score = mapOf(PlayerSymbol.X to 2, PlayerSymbol.O to 1))
+        assertEquals("Счёт — X 2 : 1 O", scoreText(state))
+    }
+
+    @Test
+    fun `missing score entries count as zero`() {
+        assertEquals("Счёт — X 0 : 0 O", scoreText(GameState(score = emptyMap())))
+    }
+}
