@@ -60,16 +60,27 @@ class ScoreboardTest {
     }
 
     @Test
-    fun `top sorts by wins and respects the limit`() {
+    fun `top sorts by the win margin and respects the limit`() {
         val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
         repeat(3) { board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), PlayerSymbol.X) }
         repeat(2) { board.recordRound(mapOf(PlayerSymbol.X to "Вера", PlayerSymbol.O to "Аня"), PlayerSymbol.X) }
+        // Аня sits at +1 (3 wins, 2 losses), Вера at +2 (2 wins, 0 losses)
 
         val top = board.top(limit = 2)
 
-        assertEquals(listOf("Аня", "Вера"), top.map { it.name })
-        assertEquals(3, top[0].stats.wins)
-        assertEquals(2, top[1].stats.wins)
+        assertEquals(listOf("Вера", "Аня"), top.map { it.name })
+        assertEquals(2, top[0].stats.wins)
+        assertEquals(3, top[1].stats.wins)
+    }
+
+    @Test
+    fun `equal margins are broken by wins then by name`() {
+        val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
+        board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), PlayerSymbol.X)
+        board.recordRound(mapOf(PlayerSymbol.X to "Боря", PlayerSymbol.O to "Аня"), PlayerSymbol.X) // Аня and Боря both 1W 1L
+        board.recordRound(mapOf(PlayerSymbol.X to "Гоша", PlayerSymbol.O to "Вера"), PlayerSymbol.X) // Гоша 1W 0L
+
+        assertEquals(listOf("Гоша", "Аня", "Боря", "Вера"), board.top(limit = 4).map { it.name })
     }
 
     @Test

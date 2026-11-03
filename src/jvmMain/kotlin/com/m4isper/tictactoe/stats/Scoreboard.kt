@@ -150,7 +150,11 @@ class Scoreboard(private val store: ScoreStore) {
 
     fun top(limit: Int = 10): List<LeaderboardEntry> = store.loadAll()
         .entries
-        .sortedWith(compareByDescending<Map.Entry<String, PlayerStats>> { it.value.wins }.thenBy { it.key })
+        .sortedWith(
+            compareByDescending<Map.Entry<String, PlayerStats>> { it.value.wins - it.value.losses }
+                .thenByDescending { it.value.wins }
+                .thenBy { it.key },
+        )
         .take(limit)
         .map { LeaderboardEntry(it.key, it.value) }
 }

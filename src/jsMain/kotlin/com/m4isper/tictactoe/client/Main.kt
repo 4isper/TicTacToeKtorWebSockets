@@ -493,6 +493,7 @@ fun main() {
     }
 
     refreshLeaderboard()
+    window.setInterval({ refreshLeaderboard() }, 30_000) // the table also moves while nobody finishes a round
     refreshRooms()
     window.setInterval({ refreshRooms() }, 5_000)
     connect()
