@@ -111,6 +111,17 @@ class UiTextTest {
     }
 
     @Test
+    fun `room list is phrased per language`() {
+        assertEquals("Открытые комнаты", roomsTitle())
+        assertEquals("Open rooms", roomsTitle(Lang.EN))
+        assertEquals("Пока нет открытых комнат — создайте свою по ссылке", noRoomsText())
+        assertEquals("No open rooms yet — create one with a link", noRoomsText(Lang.EN))
+        assertEquals("бот: easy", "${botLabel()}: easy")
+        assertEquals("60 с", turnSecondsText(60))
+        assertEquals("60s", turnSecondsText(60, Lang.EN))
+    }
+
+    @Test
     fun `restart countdown rounds up so it never shows zero while waiting`() {
         assertEquals("Новый раунд через 5…", restartText(4_500))
         assertEquals("Новый раунд через 1…", restartText(999))

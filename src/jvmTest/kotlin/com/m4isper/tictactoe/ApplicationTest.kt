@@ -947,6 +947,27 @@ class ApplicationTest {
     }
 
     @Test
+    fun `the rooms endpoint lists open named rooms with their settings`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=listme&size=5&win=4&bot=hard&turn=60") {
+            receiveHandshake()
+
+            val body = client.get("/rooms").bodyAsText()
+            assertTrue("\"listme\"" in body, body)
+            assertTrue("\"boardSize\":5" in body, body)
+            assertTrue("\"winLength\":4" in body, body)
+            assertTrue("\"botLevel\":\"hard\"" in body, body)
+            assertTrue("\"turnSeconds\":60" in body, body)
+        }
+    }
+
+    @Test
     fun `bot fills the second slot and answers with a move`() = testApplication {
         application {
             module()

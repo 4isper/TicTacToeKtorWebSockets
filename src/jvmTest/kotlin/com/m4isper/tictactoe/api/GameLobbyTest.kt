@@ -9,11 +9,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNotSame
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class GameLobbyTest {
 
@@ -47,6 +50,41 @@ class GameLobbyTest {
         val third = assertNotNull(lobby.join(FakeSession(), boardSize = 5, winLength = 4))
         assertNotSame(first.game, third.game) // the full pair stays closed
 
+        lobby.shutdownAll()
+    }
+
+    @Test
+    fun `room snapshots list live named rooms with their settings`() {
+        val lobby = GameLobby()
+        lobby.join(FakeSession(), room = "alpha", boardSize = 5, winLength = 4, botLevel = BotLevel.HARD, turnSeconds = 60)
+        lobby.join(FakeSession(), room = "alpha") // the second player
+        lobby.join(FakeSession(), room = "alpha") // a spectator
+        lobby.join(FakeSession(), room = "beta")
+        lobby.join(FakeSession()) // anonymous: never listed
+
+        val rooms = lobby.roomSnapshots()
+        assertEquals(listOf("alpha", "beta"), rooms.map { it.name })
+        val alpha = rooms.first()
+        assertEquals(2, alpha.players)
+        assertEquals(1, alpha.spectators)
+        assertEquals(5, alpha.boardSize)
+        assertEquals(4, alpha.winLength)
+        assertEquals(BotLevel.HARD, alpha.botLevel)
+        assertEquals(60, alpha.turnSeconds)
+
+        lobby.shutdownAll()
+    }
+
+    @Test
+    fun `an emptied room disappears from the snapshots`() = runBlocking {
+        val lobby = GameLobby(reconnectGraceMs = 50)
+        val session = FakeSession()
+        val first = assertNotNull(lobby.join(session, room = "alpha"))
+
+        lobby.sessionClosed(first.token, session)
+        delay(150)
+
+        assertTrue(lobby.roomSnapshots().isEmpty())
         lobby.shutdownAll()
     }
 

@@ -149,6 +149,26 @@ fun leaderboardTitle(lang: Lang = Lang.RU): String = when (lang) {
     Lang.EN -> "Leaderboard"
 }
 
+fun roomsTitle(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Открытые комнаты"
+    Lang.EN -> "Open rooms"
+}
+
+fun noRoomsText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Пока нет открытых комнат — создайте свою по ссылке"
+    Lang.EN -> "No open rooms yet — create one with a link"
+}
+
+fun botLabel(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "бот"
+    Lang.EN -> "bot"
+}
+
+fun turnSecondsText(seconds: Int, lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "$seconds с"
+    Lang.EN -> "${seconds}s"
+}
+
 fun soundIcon(muted: Boolean): String = if (muted) "🔇" else "🔊"
 
 fun soundTitle(muted: Boolean, lang: Lang = Lang.RU): String = when (lang) {

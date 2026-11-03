@@ -6,7 +6,22 @@ import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.game.TicTacToeGame
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
+import kotlinx.serialization.Serializable
 import java.util.UUID
+
+@Serializable
+data class RoomInfo(
+    val name: String,
+    val players: Int,
+    val spectators: Int,
+    val boardSize: Int,
+    val winLength: Int,
+    val botLevel: BotLevel? = null,
+    val turnSeconds: Int,
+)
+
+@Serializable
+data class RoomsResponse(val rooms: List<RoomInfo> = emptyList())
 
 class GameLobby(
     private val newGame: (boardSize: Int, winLength: Int, botLevel: BotLevel?, turnSeconds: Int) -> TicTacToeGame =
@@ -106,6 +121,23 @@ class GameLobby(
         rooms.clear()
         tokens.clear()
         lobbyScope.cancel()
+    }
+
+    /** Every named room that still holds players — the page's room list. */
+    fun roomSnapshots(): List<RoomInfo> = synchronized(lock) {
+        rooms.mapNotNull { (name, game) ->
+            val players = game.currentState().connectionPlayers.size
+            if (players == 0) return@mapNotNull null // an emptied room is on its way out
+            RoomInfo(
+                name = name,
+                players = players,
+                spectators = game.spectatorCount(),
+                boardSize = game.boardSize,
+                winLength = game.winLength,
+                botLevel = game.botLevel,
+                turnSeconds = (game.turnTimeoutMs / 1000L).toInt(),
+            )
+        }.sortedBy { it.name }
     }
 
     private fun retire(game: TicTacToeGame): Unit = synchronized(lock) {

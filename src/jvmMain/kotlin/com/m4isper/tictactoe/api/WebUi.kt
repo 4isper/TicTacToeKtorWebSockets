@@ -9,6 +9,7 @@ import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.namePlaceholder
 import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.rematchButtonText
+import com.m4isper.tictactoe.ui.roomsTitle
 import com.m4isper.tictactoe.ui.soundIcon
 import com.m4isper.tictactoe.ui.soundTitle
 import io.ktor.http.*
@@ -44,15 +45,18 @@ private suspend fun ApplicationCall.respondCss(builder: CssBuilder.() -> Unit) {
     respondText(CssBuilder().apply(builder).toString(), ContentType.Text.CSS)
 }
 
-private val leaderboardJson = Json { encodeDefaults = true }
+private val apiJson = Json { encodeDefaults = true }
 
-fun Application.webUi(scoreboard: Scoreboard) {
+fun Application.webUi(
+    scoreboard: Scoreboard,
+    lobby: GameLobby,
+) {
     routing {
         staticFiles("/static", File(CLIENT_DIST))
 
         get("/leaderboard") {
             call.respondText(
-                leaderboardJson.encodeToString(LeaderboardResponse(scoreboard.top(limit = 10))),
+                apiJson.encodeToString(LeaderboardResponse(scoreboard.top(limit = 10))),
                 ContentType.Application.Json,
             )
         }
@@ -62,8 +66,15 @@ fun Application.webUi(scoreboard: Scoreboard) {
             if (profile == null) {
                 call.respond(HttpStatusCode.NotFound)
             } else {
-                call.respondText(leaderboardJson.encodeToString(profile), ContentType.Application.Json)
+                call.respondText(apiJson.encodeToString(profile), ContentType.Application.Json)
             }
+        }
+
+        get("/rooms") {
+            call.respondText(
+                apiJson.encodeToString(RoomsResponse(lobby.roomSnapshots())),
+                ContentType.Application.Json,
+            )
         }
 
         get("/styles.css") {
@@ -248,6 +259,11 @@ fun Application.webUi(scoreboard: Scoreboard) {
                     }
                     div { id = "board" }
                     div { id = "error" }
+                    div {
+                        id = "rooms"
+                        h2 { +roomsTitle(pageLang) }
+                        ul { id = "rooms-rows" }
+                    }
                     div {
                         id = "leaderboard"
                         h2 { +leaderboardTitle(pageLang) }

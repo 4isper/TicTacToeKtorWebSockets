@@ -18,10 +18,10 @@ import java.util.concurrent.ConcurrentHashMap
 
 class TicTacToeGame(
     private val roundRestartDelayMs: Long = 5_000L,
-    private val boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
-    private val winLength: Int = boardSize,
-    private val botLevel: BotLevel? = null,
-    private val turnTimeoutMs: Long = 30_000L,
+    val boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
+    val winLength: Int = boardSize,
+    val botLevel: BotLevel? = null,
+    val turnTimeoutMs: Long = 30_000L,
     private val onRoundOver: (playerNames: Map<PlayerSymbol, String>, winner: PlayerSymbol?) -> Unit = { _, _ -> },
 ) {
     private val logger = LoggerFactory.getLogger(TicTacToeGame::class.java)
@@ -111,6 +111,8 @@ class TicTacToeGame(
     fun detachSpectator(session: WebSocketSession) {
         spectatorSockets.remove(session)
     }
+
+    fun spectatorCount(): Int = spectatorSockets.size
 
     suspend fun broadcast(state: GameState) {
         for ((player, socket) in playerSockets) {

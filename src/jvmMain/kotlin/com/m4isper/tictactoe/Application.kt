@@ -43,5 +43,5 @@ fun Application.module(
     configureSerialization()
     configureMonitoring()
     configureRouting(lobby)
-    webUi(scoreboard)
+    webUi(scoreboard, lobby)
 }

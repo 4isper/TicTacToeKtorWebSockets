@@ -8,6 +8,7 @@ import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
 import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.SoundCue
+import com.m4isper.tictactoe.ui.botLabel
 import com.m4isper.tictactoe.ui.connectionErrorText
 import com.m4isper.tictactoe.ui.connectionLostText
 import com.m4isper.tictactoe.ui.copiedText
@@ -18,6 +19,7 @@ import com.m4isper.tictactoe.ui.isRoundRestartTransition
 import com.m4isper.tictactoe.ui.isTurnTransition
 import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.newMoveCells
+import com.m4isper.tictactoe.ui.noRoomsText
 import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.restartText
@@ -27,6 +29,7 @@ import com.m4isper.tictactoe.ui.soundIcon
 import com.m4isper.tictactoe.ui.soundTitle
 import com.m4isper.tictactoe.ui.statusText
 import com.m4isper.tictactoe.ui.timerSuffix
+import com.m4isper.tictactoe.ui.turnSecondsText
 import kotlinx.browser.document
 import kotlinx.browser.localStorage
 import kotlinx.browser.window
@@ -156,6 +159,44 @@ fun main() {
                     }
                 }
             }.catch { /* the leaderboard is decorative */ }
+        } catch (t: Throwable) {
+            // decorative as well
+        }
+    }
+
+    fun refreshRooms() {
+        try {
+            window.asDynamic().fetch("/rooms").then { response: dynamic ->
+                response.json().then { data: dynamic ->
+                    val rows = document.getElementById("rooms-rows") as HTMLElement
+                    rows.innerHTML = ""
+                    val rooms = (data.rooms ?: js("[]")) as Array<dynamic>
+                    if (rooms.isEmpty()) {
+                        val li = document.createElement("li")
+                        li.textContent = noRoomsText(lang)
+                        rows.appendChild(li)
+                        return@then
+                    }
+                    rooms.forEach { room ->
+                        val li = document.createElement("li") as HTMLElement
+                        val details = buildString {
+                            append("${room.boardSize}×${room.boardSize}")
+                            if (room.winLength != room.boardSize) append(", win ${room.winLength}")
+                            val level = room.botLevel as? String
+                            if (level != null) append(", ${botLabel(lang)}: $level")
+                            val seconds = room.turnSeconds as? Int
+                            if (seconds != null && seconds != 30) append(", ${turnSecondsText(seconds, lang)}")
+                        }
+                        li.textContent = "${room.name} — ${room.players}/2 · $details"
+                        li.style.cursor = "pointer"
+                        li.onclick = {
+                            val langParam = params.get("lang")?.let { "&lang=$it" } ?: ""
+                            window.location.href = "${window.location.pathname}?room=${room.name}$langParam"
+                        }
+                        rows.appendChild(li)
+                    }
+                }
+            }.catch { /* the room list is decorative */ }
         } catch (t: Throwable) {
             // decorative as well
         }
@@ -385,5 +426,7 @@ fun main() {
     }
 
     refreshLeaderboard()
+    refreshRooms()
+    window.setInterval({ refreshRooms() }, 5_000)
     connect()
 }
