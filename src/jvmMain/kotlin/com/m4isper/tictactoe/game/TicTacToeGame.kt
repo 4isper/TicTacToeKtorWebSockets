@@ -72,6 +72,7 @@ class TicTacToeGame(
     fun detachSession(player: PlayerSymbol, session: WebSocketSession): Boolean = synchronized(lock) {
         if (playerSockets[player] === session) {
             playerSockets.remove(player)
+            lastReactionAt.remove(session)
             true
         } else {
             false
@@ -86,7 +87,7 @@ class TicTacToeGame(
     }
 
     fun disconnectPlayer(player: PlayerSymbol): Unit = synchronized(lock) {
-        playerSockets.remove(player)
+        playerSockets.remove(player)?.let { lastReactionAt.remove(it) }
         publish(
             state.value.copy(
                 connectionPlayers = state.value.connectionPlayers - player,
@@ -114,6 +115,7 @@ class TicTacToeGame(
 
     fun detachSpectator(session: WebSocketSession) {
         spectatorSockets.remove(session)
+        lastReactionAt.remove(session)
     }
 
     fun spectatorCount(): Int = spectatorSockets.size
@@ -406,14 +408,19 @@ class TicTacToeGame(
         botMoveJob?.cancel()
         botMoveJob = gameScope.launch {
             delay(BOT_THINK_MS)
+            val snapshot = synchronized(lock) {
+                if (bot != symbol) return@launch
+                state.value.takeIf { it.playerAtTurn == symbol && !it.isRoundOver } ?: return@launch
+            }
+            // the search runs unlocked: a deep think must not stall broadcasts and joins
+            val move = BotBrain.chooseMove(snapshot.field, symbol, winLength, level) ?: return@launch
             synchronized(lock) {
                 if (bot != symbol) return@launch
-                val snapshot = state.value
-                if (snapshot.playerAtTurn != symbol || snapshot.isRoundOver) {
-                    return@launch
+                val now = state.value
+                // play only if the board is still the one we analyzed
+                if (now.field == snapshot.field && now.playerAtTurn == symbol && !now.isRoundOver) {
+                    finishTurn(symbol, BotSession, move.x, move.y)
                 }
-                val move: Cell = BotBrain.chooseMove(snapshot.field, symbol, winLength, level) ?: return@launch
-                finishTurn(symbol, BotSession, move.x, move.y)
             }
         }
     }
