@@ -53,13 +53,14 @@ fun errorText(
         ErrorReason.CELL_OUT_OF_BOUNDS -> "Клетка за пределами доски"
         ErrorReason.MALFORMED_MESSAGE -> "Непонятное сообщение"
         ErrorReason.UNKNOWN_TOKEN -> "Сессия не найдена"
-        ErrorReason.ROOM_IS_FULL -> "В комнате уже два игрока"
+        ErrorReason.ROOM_IS_FULL -> "Нет свободных игр — создайте комнату и пригласите друга"
         ErrorReason.INVALID_ROOM_NAME -> "Неверное имя комнаты"
         ErrorReason.STALE_SESSION -> "Эта вкладка больше не в игре"
         ErrorReason.INVALID_BOARD_SIZE -> "Неверный размер доски"
         ErrorReason.INVALID_WIN_LENGTH -> "Неверная длина победной линии"
         ErrorReason.ROUND_NOT_OVER -> "Раунд ещё идёт"
         ErrorReason.INVALID_NAME -> "Неверное имя"
+        ErrorReason.NAME_TAKEN -> "Это имя уже занято"
     }
 
     Lang.EN -> when (reason) {
@@ -69,13 +70,14 @@ fun errorText(
         ErrorReason.CELL_OUT_OF_BOUNDS -> "Cell out of bounds"
         ErrorReason.MALFORMED_MESSAGE -> "Malformed message"
         ErrorReason.UNKNOWN_TOKEN -> "Session not found"
-        ErrorReason.ROOM_IS_FULL -> "The room already has two players"
+        ErrorReason.ROOM_IS_FULL -> "No open games — create a room and invite a friend"
         ErrorReason.INVALID_ROOM_NAME -> "Invalid room name"
         ErrorReason.STALE_SESSION -> "This tab is no longer in the game"
         ErrorReason.INVALID_BOARD_SIZE -> "Invalid board size"
         ErrorReason.INVALID_WIN_LENGTH -> "Invalid win length"
         ErrorReason.ROUND_NOT_OVER -> "Round is not over"
         ErrorReason.INVALID_NAME -> "Invalid name"
+        ErrorReason.NAME_TAKEN -> "Name already taken"
     }
 }
 
@@ -128,4 +130,14 @@ fun soundIcon(muted: Boolean): String = if (muted) "🔇" else "🔊"
 fun soundTitle(muted: Boolean, lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> if (muted) "Включить звук" else "Выключить звук"
     Lang.EN -> if (muted) "Unmute" else "Mute"
+}
+
+fun connectionLostText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Соединение потеряно, переподключение…"
+    Lang.EN -> "Connection lost, reconnecting…"
+}
+
+fun connectionErrorText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Ошибка соединения"
+    Lang.EN -> "Connection error"
 }

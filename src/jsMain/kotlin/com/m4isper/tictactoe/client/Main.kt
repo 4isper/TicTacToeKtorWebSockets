@@ -8,6 +8,8 @@ import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
 import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.SoundCue
+import com.m4isper.tictactoe.ui.connectionErrorText
+import com.m4isper.tictactoe.ui.connectionLostText
 import com.m4isper.tictactoe.ui.copiedText
 import com.m4isper.tictactoe.ui.copyLinkText
 import com.m4isper.tictactoe.ui.errorText
@@ -61,11 +63,19 @@ fun main() {
     ).joinToString("&")
     val wsUrl = "$wsProtocol://${window.location.host}/play" + (query.takeIf { it.isNotEmpty() }?.let { "?$it" } ?: "")
     val tokenKey = "tictactoe-token" + (room?.let { ":$it" } ?: "")
+    // answered before the game even started: the server closes the socket, so retrying cannot fix them
+    val fatalReasons = setOf(
+        ErrorReason.ROOM_IS_FULL,
+        ErrorReason.INVALID_ROOM_NAME,
+        ErrorReason.INVALID_BOARD_SIZE,
+        ErrorReason.INVALID_WIN_LENGTH,
+    )
 
     var socket: WebSocket? = null
     var mySymbol: PlayerSymbol? = null
     var pendingReconnectToken: String? = null
     var retry = 0
+    var fatal = false
     var lastState: GameState? = null
     var roundDeadline = 0.0
     var turnDeadline = 0.0
@@ -292,6 +302,7 @@ fun main() {
             is ServerEvent.Error -> {
                 pendingReconnectToken = null
                 if (event.reason == ErrorReason.UNKNOWN_TOKEN) localStorage.removeItem(tokenKey)
+                if (event.reason in fatalReasons) fatal = true
                 showError(errorText(event.reason, lang))
             }
         }
@@ -312,12 +323,17 @@ fun main() {
             handleMessage(event.data.toString())
         }
         socket?.onclose = {
-            showStatus("Соединение потеряно, переподключение...")
-            retry++
-            window.setTimeout({ connect() }, (retry.coerceAtMost(5) * 1000))
+            if (fatal) {
+                // the join was rejected: the reason is in the error box, there is nothing to reconnect to
+                showStatus("")
+            } else {
+                showStatus(connectionLostText(lang))
+                retry++
+                window.setTimeout({ connect() }, (retry.coerceAtMost(5) * 1000))
+            }
         }
         socket?.onerror = {
-            showError("Ошибка соединения")
+            showError(connectionErrorText(lang))
         }
     }
 
