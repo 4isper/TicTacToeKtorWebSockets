@@ -6,6 +6,7 @@ import com.m4isper.tictactoe.domain.Cell
 import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.GameRules
 import com.m4isper.tictactoe.domain.PlayerSymbol
+import com.m4isper.tictactoe.protocol.REACTION_EMOJIS
 import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
 import io.ktor.websocket.*
@@ -42,9 +43,11 @@ class TicTacToeGame(
     private var turnDeadline = 0L
     private var armedTurnFor: PlayerSymbol? = null
     private val roundMoves = mutableListOf<Cell>()
+    private val lastReactionAt = ConcurrentHashMap<WebSocketSession, Long>()
 
     private companion object {
         const val BOT_THINK_MS = 400L
+        const val REACTION_COOLDOWN_MS = 1_000L
     }
 
     init {
@@ -114,6 +117,36 @@ class TicTacToeGame(
     }
 
     fun spectatorCount(): Int = spectatorSockets.size
+
+    /** Broadcasts a whitelisted emoji to everyone in the game; a repeat inside the cooldown is dropped quietly. */
+    suspend fun react(
+        from: PlayerSymbol?,
+        session: WebSocketSession,
+        emoji: String,
+    ): ErrorReason? {
+        if (emoji !in REACTION_EMOJIS) return ErrorReason.INVALID_REACTION
+        val now = System.currentTimeMillis()
+        val last = lastReactionAt[session] ?: 0L
+        if (now - last < REACTION_COOLDOWN_MS) return null
+        lastReactionAt[session] = now
+
+        val wire = protocolJson.encodeToString<ServerEvent>(ServerEvent.Reaction(from, emoji))
+        for (socket in playerSockets.values) {
+            try {
+                socket.send(wire)
+            } catch (e: Exception) {
+                logger.warn("Failed to deliver a reaction to a player socket", e)
+            }
+        }
+        for (socket in spectatorSockets) {
+            try {
+                socket.send(wire)
+            } catch (e: Exception) {
+                logger.warn("Failed to deliver a reaction to a spectator socket", e)
+            }
+        }
+        return null
+    }
 
     suspend fun broadcast(state: GameState) {
         for ((player, socket) in playerSockets) {

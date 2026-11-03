@@ -172,6 +172,15 @@ fun main() {
         render()
     }
 
+    fun showReaction(emoji: String) {
+        val bubble = document.createElement("span") as HTMLElement
+        bubble.className = "reaction-bubble"
+        bubble.textContent = emoji
+        bubble.style.left = "${(10..80).random()}%"
+        board.appendChild(bubble)
+        window.setTimeout({ bubble.remove() }, 2_000)
+    }
+
     fun showProfile(name: String) {
         try {
             val encoded = js("encodeURIComponent(name)")
@@ -431,6 +440,8 @@ fun main() {
                 if (event.reason in fatalReasons) fatal = true
                 showError(errorText(event.reason, lang))
             }
+
+            is ServerEvent.Reaction -> showReaction(event.emoji)
         }
     }
 
@@ -487,6 +498,12 @@ fun main() {
 
     rematchButton.onclick = { send(ClientMessage.RequestRematch) }
     drawButton.onclick = { send(ClientMessage.RequestDraw) }
+
+    document.querySelectorAll("#reactions button").asDynamic().forEach { node: dynamic ->
+        (node as? HTMLButtonElement)?.let { button ->
+            button.onclick = { send(ClientMessage.React(button.textContent ?: "")) }
+        }
+    }
 
     if (nameInput != null && setNameButton != null) {
         fun submitName() {

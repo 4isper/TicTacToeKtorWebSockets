@@ -52,4 +52,7 @@ enum class ErrorReason {
 
     @SerialName("invalid bot level")
     INVALID_BOT_LEVEL,
+
+    @SerialName("invalid reaction")
+    INVALID_REACTION,
 }

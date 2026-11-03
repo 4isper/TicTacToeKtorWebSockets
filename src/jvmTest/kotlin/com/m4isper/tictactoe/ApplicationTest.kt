@@ -998,6 +998,69 @@ class ApplicationTest {
     }
 
     @Test
+    fun `a reaction is broadcast to everyone and invalid ones are refused`() = testApplication {
+        application {
+            module()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=rct") {
+            receiveHandshake()
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=rct") {
+                    receiveHandshake()
+                    oReady.complete(Unit)
+
+                    assertEquals(ServerEvent.Reaction(PlayerSymbol.X, "👍"), receiveEvent()) // X's 👍 reaches O
+                    sendReact("❤️")
+                    assertEquals(ServerEvent.Reaction(PlayerSymbol.O, "❤️"), receiveEvent()) // own echo
+
+                    sendReact("🍕") // not on the whitelist
+                    assertTrue(receiveEvent() is ServerEvent.Error)
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            skipBroadcast() // [X, O]
+
+            sendReact("👍")
+            assertEquals(ServerEvent.Reaction(PlayerSymbol.X, "👍"), receiveEvent()) // own echo
+            assertEquals(ServerEvent.Reaction(PlayerSymbol.O, "❤️"), receiveEvent())
+
+            second.cancel()
+        }
+    }
+
+    @Test
+    fun `a second reaction inside the cooldown is dropped quietly`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=rct2") {
+            receiveHandshake()
+
+            sendReact("👍")
+            sendReact("❤️") // within the cooldown
+            sendReact("🍕")
+            assertEquals(ServerEvent.Reaction(PlayerSymbol.X, "👍"), receiveEvent())
+            assertTrue(receiveEvent() is ServerEvent.Error) // the dropped ❤️ produced nothing before the error
+        }
+    }
+
+    @Test
     fun `bot fills the second slot and answers with a move`() = testApplication {
         application {
             module()
@@ -1196,6 +1259,10 @@ private suspend fun WebSocketSession.sendRequestRematch() {
 
 private suspend fun WebSocketSession.sendRequestDraw() {
     send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.RequestDraw)))
+}
+
+private suspend fun WebSocketSession.sendReact(emoji: String) {
+    send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.React(emoji))))
 }
 
 private suspend fun WebSocketSession.sendSetName(name: String) {

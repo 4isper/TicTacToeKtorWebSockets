@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe.api
 
+import com.m4isper.tictactoe.protocol.REACTION_EMOJIS
 import com.m4isper.tictactoe.stats.LeaderboardResponse
 import com.m4isper.tictactoe.stats.Scoreboard
 import com.m4isper.tictactoe.ui.Lang
@@ -257,6 +258,39 @@ fun Application.webUi(
                     lineHeight = LineHeight("26px")
                     textAlign = TextAlign.center
                 }
+                rule("#board") {
+                    position = Position.relative
+                }
+                rule("#reactions") {
+                    display = Display.flex
+                    gap = 8.px
+                    margin = Margin(vertical = 6.px)
+                }
+                rule(".reaction") {
+                    backgroundColor = Color("#1f1f33")
+                    borderWidth = 0.px
+                    borderRadius = 8.px
+                    padding = Padding(horizontal = 10.px, vertical = 4.px)
+                    fontSize = 18.px
+                    cursor = Cursor.pointer
+                }
+                rule(".reaction-bubble") {
+                    position = Position.absolute
+                    bottom = 20.pct
+                    fontSize = 30.px
+                    pointerEvents = PointerEvents.none
+                    animation += Animation("reaction-float", 2000.ms, Timing.easeOut, fillMode = FillMode.forwards)
+                }
+                rule("@keyframes reaction-float") {
+                    rule("from") {
+                        opacity = 1
+                        transform { translateY(0.px) }
+                    }
+                    rule("to") {
+                        opacity = 0
+                        transform { translateY((-60).px) }
+                    }
+                }
                 rule("@keyframes cell-pop") {
                     rule("from") {
                         opacity = 0
@@ -351,6 +385,15 @@ fun Application.webUi(
                     }
                     div { id = "board" }
                     div { id = "error" }
+                    div {
+                        id = "reactions"
+                        REACTION_EMOJIS.forEach { emoji ->
+                            button(classes = "reaction") {
+                                attributes["aria-label"] = emoji
+                                +emoji
+                            }
+                        }
+                    }
                     div {
                         id = "rooms"
                         h2 { +roomsTitle(pageLang) }

@@ -92,6 +92,11 @@ fun Route.socket(lobby: GameLobby) {
                             else -> binding.game.requestDraw(symbol, this)?.let(ServerEvent::Error)
                         }
 
+                        is ClientMessage.React -> {
+                            val rejection = binding.game.react(binding.symbol, this, message.emoji)
+                            rejection?.let(ServerEvent::Error) // otherwise the reaction itself went out
+                        }
+
                         is ClientMessage.SetName -> when (val symbol = binding.symbol) {
                             null -> ServerEvent.Error(ErrorReason.NOT_YOUR_TURN)
 

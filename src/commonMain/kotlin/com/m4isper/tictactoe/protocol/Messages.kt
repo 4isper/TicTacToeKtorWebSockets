@@ -12,6 +12,9 @@ val protocolJson: Json = Json {
     encodeDefaults = true
 }
 
+/** The emoji a client may send with `react`; anything else answers `invalid reaction`. */
+val REACTION_EMOJIS = listOf("👍", "❤️", "😂", "😮")
+
 @Serializable
 sealed interface ClientMessage {
     @Serializable
@@ -31,6 +34,10 @@ sealed interface ClientMessage {
     data object RequestDraw : ClientMessage
 
     @Serializable
+    @SerialName("react")
+    data class React(val emoji: String) : ClientMessage
+
+    @Serializable
     @SerialName("set_name")
     data class SetName(val name: String) : ClientMessage
 }
@@ -48,4 +55,8 @@ sealed interface ServerEvent {
     @Serializable
     @SerialName("error")
     data class Error(val reason: ErrorReason) : ServerEvent
+
+    @Serializable
+    @SerialName("reaction")
+    data class Reaction(val from: PlayerSymbol?, val emoji: String) : ServerEvent
 }

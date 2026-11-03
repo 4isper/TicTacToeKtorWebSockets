@@ -28,6 +28,7 @@ Then open http://localhost:8080/ to play in the browser (the page is rendered wi
   {"type":"reconnect","token":"<uuid>"}
   {"type":"request_rematch"}
   {"type":"request_draw"}
+  {"type":"react","emoji":"👍"}
   {"type":"set_name","name":"Дима"}
   ```
 
@@ -43,6 +44,7 @@ Then open http://localhost:8080/ to play in the browser (the page is rendered wi
   Every field of `state` is always present in the JSON, including defaults (`winningPlayer: null`, `isBoardFull: false`, `playerAtTurn: "X"`) — no omitted-fields special cases.
 - Reconnect: right after connecting every player receives `{"type":"joined","token":"<uuid>","symbol":"X"}`. If the connection drops, the player's slot is held for 10 seconds (`reconnectGraceMs`); reconnecting with `{"type":"reconnect","token":"<uuid>"}` rebinds the session to the same game and symbol and answers with the current `state`. After the grace expires the slot is freed (the next joiner takes the symbol) and the token stops working. A client that reconnects with an unknown token stays in the game it was handed on connect.
 - A won or full round resets the board automatically 5 seconds later; the `score` object (`{"X":<wins>,"O":<wins>}`) accumulates across rounds for as long as the same two players stay connected. While the round is over, every `state` carries `roundRestartInMs` (remaining milliseconds until the automatic reset) and, once a player asks, `rematchPlayers` — the client may send `{"type":"request_rematch"}` to reset early, and the board resets as soon as every connected player has asked. Asking while a round is still running answers `round is not over`.
+- **Reactions:** a player or spectator may send `{"type":"react","emoji":"👍"}` — one of 👍 ❤️ 😂 😮 (`invalid reaction` otherwise, and a repeat within a second is dropped quietly). The server broadcasts `{"type":"reaction","from":<symbol|null>,"emoji":…}` to everyone in the game; the page floats the emoji over the board.
 - **Draw by agreement:** while the round is still running, a player may send `{"type":"request_draw"}` — the offer rides every later `state` as `drawPlayers`, and asking again withdraws it. The round ends in a draw (the board restarts like after any other round end, no `score` bump) as soon as both connected humans have offered; with a bot in the game a draw cannot be agreed. Every `state` marks such a round with `isDrawAgreed: true`. Asking while the round is over answers `round is over`.
 ## Development
 
