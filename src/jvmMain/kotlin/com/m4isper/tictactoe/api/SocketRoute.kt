@@ -81,8 +81,8 @@ fun Route.socket(lobby: GameLobby) {
                                 if (name.isEmpty() || name.length > MAX_NAME_LENGTH) {
                                     ServerEvent.Error(ErrorReason.INVALID_NAME)
                                 } else {
-                                    binding.game.setName(symbol, name)
-                                    null // the broadcast carries the new state
+                                    // a null result means accepted — the broadcast carries the new state
+                                    binding.game.setName(symbol, name)?.let(ServerEvent::Error)
                                 }
                             }
                         }

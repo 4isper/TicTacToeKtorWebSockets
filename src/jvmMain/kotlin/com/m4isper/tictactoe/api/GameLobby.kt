@@ -36,7 +36,9 @@ class GameLobby(
         botEnabled: Boolean = false,
     ): Joined? = synchronized(lock) {
         val game = if (room == null) {
-            games.firstOrNull { !it.isFull() } ?: newGame(boardSize, winLength, botEnabled).also { games.add(it) }
+            // pair anonymous joiners only with identical settings, or their size/win/bot would be silently ignored
+            games.firstOrNull { !it.isFull() && it.matches(boardSize, winLength, botEnabled) }
+                ?: newGame(boardSize, winLength, botEnabled).also { games.add(it) }
         } else {
             rooms.getOrPut(room) { newGame(boardSize, winLength, botEnabled) }
         }

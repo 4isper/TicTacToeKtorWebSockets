@@ -91,8 +91,16 @@ class TicTacToeGame(
         maybeAttachBotLocked()
     }
 
-    fun setName(player: PlayerSymbol, name: String): Unit = synchronized(lock) {
-        publish(state.value.copy(playerNames = state.value.playerNames + (player to name)))
+    fun setName(player: PlayerSymbol, name: String): ErrorReason? = synchronized(lock) {
+        val takenByOpponent = state.value.playerNames.any { (other, taken) ->
+            other != player && taken.equals(name, ignoreCase = true)
+        }
+        if (takenByOpponent) {
+            ErrorReason.NAME_TAKEN
+        } else {
+            publish(state.value.copy(playerNames = state.value.playerNames + (player to name)))
+            null
+        }
     }
 
     fun attachSpectator(session: WebSocketSession) {
@@ -204,6 +212,9 @@ class TicTacToeGame(
     fun shutdown() {
         gameScope.cancel()
     }
+
+    /** True when an anonymous joiner with these settings can be paired into this game. */
+    fun matches(boardSize: Int, winLength: Int, botEnabled: Boolean): Boolean = this.boardSize == boardSize && this.winLength == winLength && this.botEnabled == botEnabled
 
     fun isFull(): Boolean = state.value.connectionPlayers.size >= 2
 

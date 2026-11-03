@@ -43,4 +43,7 @@ enum class ErrorReason {
 
     @SerialName("invalid name")
     INVALID_NAME,
+
+    @SerialName("name is taken")
+    NAME_TAKEN,
 }

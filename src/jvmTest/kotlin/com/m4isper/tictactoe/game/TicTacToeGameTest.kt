@@ -205,6 +205,23 @@ class TicTacToeGameTest {
     }
 
     @Test
+    fun `a name taken by the opponent is rejected`() = runBlocking {
+        val game = TicTacToeGame()
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        assertNull(game.setName(PlayerSymbol.X, "Дима"))
+        assertEquals(ErrorReason.NAME_TAKEN, game.setName(PlayerSymbol.O, "Дима"))
+        assertEquals(ErrorReason.NAME_TAKEN, game.setName(PlayerSymbol.O, "ДИМА")) // case-insensitive
+        assertNull(game.setName(PlayerSymbol.O, "Боря"))
+        assertNull(game.setName(PlayerSymbol.X, "Дима")) // keeping your own name is fine
+
+        game.shutdown()
+    }
+
+    @Test
     fun `an expired turn forfeits the round to the opponent`() = runBlocking {
         val game = TicTacToeGame(turnTimeoutMs = 100, roundRestartDelayMs = 60_000)
         val xSession = FakeSession()
