@@ -8,8 +8,8 @@ import kotlinx.coroutines.*
 import java.util.UUID
 
 class GameLobby(
-    private val newGame: (boardSize: Int, winLength: Int) -> TicTacToeGame = { boardSize, winLength ->
-        TicTacToeGame(boardSize = boardSize, winLength = winLength)
+    private val newGame: (boardSize: Int, winLength: Int, botEnabled: Boolean) -> TicTacToeGame = { boardSize, winLength, botEnabled ->
+        TicTacToeGame(boardSize = boardSize, winLength = winLength, botEnabled = botEnabled)
     },
     private val reconnectGraceMs: Long = 10_000L,
 ) {
@@ -33,11 +33,12 @@ class GameLobby(
         room: String? = null,
         boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
         winLength: Int = boardSize,
+        botEnabled: Boolean = false,
     ): Joined? = synchronized(lock) {
         val game = if (room == null) {
-            games.firstOrNull { !it.isFull() } ?: newGame(boardSize, winLength).also { games.add(it) }
+            games.firstOrNull { !it.isFull() } ?: newGame(boardSize, winLength, botEnabled).also { games.add(it) }
         } else {
-            rooms.getOrPut(room) { newGame(boardSize, winLength) }
+            rooms.getOrPut(room) { newGame(boardSize, winLength, botEnabled) }
         }
         val symbol = game.connectPlayer(session)
         if (symbol == null && room == null) return null // anonymous match stays players-only

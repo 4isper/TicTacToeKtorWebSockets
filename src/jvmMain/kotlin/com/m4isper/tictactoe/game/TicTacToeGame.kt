@@ -1,5 +1,7 @@
 package com.m4isper.tictactoe.game
 
+import com.m4isper.tictactoe.domain.BotBrain
+import com.m4isper.tictactoe.domain.Cell
 import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.GameRules
 import com.m4isper.tictactoe.domain.PlayerSymbol
@@ -17,6 +19,7 @@ class TicTacToeGame(
     private val roundRestartDelayMs: Long = 5_000L,
     private val boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
     private val winLength: Int = boardSize,
+    private val botEnabled: Boolean = false,
 ) {
     private val logger = LoggerFactory.getLogger(TicTacToeGame::class.java)
 
@@ -30,6 +33,12 @@ class TicTacToeGame(
     private val gameScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var roundRestartJob: Job? = null
     private var roundRestartDeadline = 0L
+    private var bot: PlayerSymbol? = null
+    private var botMoveJob: Job? = null
+
+    private companion object {
+        const val BOT_THINK_MS = 400L
+    }
 
     init {
         gameScope.launch {
@@ -41,12 +50,13 @@ class TicTacToeGame(
         val current = state.value
         val player = if (PlayerSymbol.X in current.connectionPlayers) PlayerSymbol.O else PlayerSymbol.X
         if (player in current.connectionPlayers) {
-            null
-        } else {
-            playerSockets[player] = session
-            publish(current.copy(connectionPlayers = current.connectionPlayers + player))
-            player
+            if (bot != player) return null
+            detachBotLocked() // a human takes the bot's slot
         }
+        playerSockets[player] = session
+        publish(state.value.copy(connectionPlayers = state.value.connectionPlayers + player))
+        maybeAttachBotLocked()
+        player
     }
 
     fun detachSession(player: PlayerSymbol, session: WebSocketSession): Boolean = synchronized(lock) {
@@ -73,6 +83,7 @@ class TicTacToeGame(
                 playerNames = state.value.playerNames - player,
             ),
         )
+        maybeAttachBotLocked()
     }
 
     fun setName(player: PlayerSymbol, name: String): Unit = synchronized(lock) {
@@ -162,7 +173,8 @@ class TicTacToeGame(
             if (current.winningPlayer == null && !current.isBoardFull) return ErrorReason.ROUND_NOT_OVER
 
             val updated = if (player in current.rematchPlayers) current.rematchPlayers else current.rematchPlayers + player
-            if (updated.isNotEmpty() && current.connectionPlayers.all { it in updated }) {
+            val humans = current.connectionPlayers.filter { it != bot } // the bot never asks
+            if (updated.isNotEmpty() && humans.all { it in updated }) {
                 roundRestartJob?.cancel()
                 roundRestartJob = null
                 roundRestartDeadline = 0
@@ -242,5 +254,43 @@ class TicTacToeGame(
         }
         state.value = withCountdown
         stateChanges.trySend(withCountdown)
+        scheduleBotMoveIfNeeded(withCountdown)
+    }
+
+    private fun scheduleBotMoveIfNeeded(current: GameState) {
+        val symbol = bot ?: return
+        if (current.winningPlayer != null || current.isBoardFull) return
+        if (current.playerAtTurn != symbol) return
+        botMoveJob?.cancel()
+        botMoveJob = gameScope.launch {
+            delay(BOT_THINK_MS)
+            synchronized(lock) {
+                if (bot != symbol) return@launch
+                val snapshot = state.value
+                if (snapshot.playerAtTurn != symbol || snapshot.winningPlayer != null || snapshot.isBoardFull) {
+                    return@launch
+                }
+                val move: Cell = BotBrain.chooseMove(snapshot.field, symbol, winLength) ?: return@launch
+                finishTurn(symbol, BotSession, move.x, move.y)
+            }
+        }
+    }
+
+    private fun maybeAttachBotLocked() {
+        if (!botEnabled || bot != null) return
+        if (state.value.connectionPlayers.size != 1) return
+        val symbol = if (PlayerSymbol.X in state.value.connectionPlayers) PlayerSymbol.O else PlayerSymbol.X
+        playerSockets[symbol] = BotSession
+        bot = symbol
+        publish(state.value.copy(connectionPlayers = state.value.connectionPlayers + symbol))
+    }
+
+    private fun detachBotLocked() {
+        val symbol = bot ?: return
+        bot = null
+        botMoveJob?.cancel()
+        botMoveJob = null
+        playerSockets.remove(symbol)
+        publish(state.value.copy(connectionPlayers = state.value.connectionPlayers - symbol))
     }
 }

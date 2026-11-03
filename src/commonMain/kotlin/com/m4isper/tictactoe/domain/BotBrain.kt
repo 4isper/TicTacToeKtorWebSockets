@@ -38,7 +38,7 @@ object BotBrain {
                 root = me,
                 winLength = winLength,
                 depth = depth - 1,
-                alphaIn = -betaCeiling,
+                alphaIn = -BETA_CEILING,
                 betaIn = -alpha,
             )
             if (score > bestScore) {
@@ -50,7 +50,7 @@ object BotBrain {
         return best
     }
 
-    private const val betaCeiling = Int.MAX_VALUE
+    private const val BETA_CEILING = Int.MAX_VALUE
 
     private fun negamax(
         field: List<List<PlayerSymbol?>>,

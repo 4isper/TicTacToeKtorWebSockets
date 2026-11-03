@@ -34,8 +34,12 @@ class BotBrainTest {
         val field = GameRules.emptyField().mapIndexed { row, cells ->
             cells.mapIndexed { col, _ ->
                 when {
-                    col == 0 && row <= 1 -> PlayerSymbol.X // bot's winning line
-                    col == 2 && row <= 1 -> PlayerSymbol.O // opponent's threat
+                    col == 0 && row <= 1 -> PlayerSymbol.X
+
+                    // bot's winning line
+                    col == 2 && row <= 1 -> PlayerSymbol.O
+
+                    // opponent's threat
                     else -> null
                 }
             }
@@ -49,6 +53,21 @@ class BotBrainTest {
             cells.mapIndexed { col, _ -> if (row == col && row <= 1) PlayerSymbol.O else null }
         }
         assertEquals(Cell(2, 2), BotBrain.chooseMove(field, PlayerSymbol.X, winLength = 3))
+    }
+
+    @Test
+    fun `bot blocks a row fork`() {
+        val field = GameRules.emptyField().mapIndexed { row, cells ->
+            cells.mapIndexed { col, _ ->
+                when {
+                    row == 0 && col == 0 -> PlayerSymbol.X
+                    row == 0 && col == 2 -> PlayerSymbol.X
+                    row == 1 && col == 1 -> PlayerSymbol.O
+                    else -> null
+                }
+            }
+        }
+        assertEquals(Cell(1, 0), BotBrain.chooseMove(field, PlayerSymbol.O, winLength = 3))
     }
 
     @Test

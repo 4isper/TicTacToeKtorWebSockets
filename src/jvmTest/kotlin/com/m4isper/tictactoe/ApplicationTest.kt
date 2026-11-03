@@ -760,6 +760,69 @@ class ApplicationTest {
     }
 
     @Test
+    fun `bot fills the second slot and answers with a move`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=vsbot&bot=1") {
+            val (joined, _) = receiveHandshake()
+            assertEquals(PlayerSymbol.X, joined.symbol)
+
+            sendMakeTurn(0, 0)
+            val botReply = awaitStateWhere { it.field.sumOf { row -> row.count { it != null } } >= 2 }
+            assertEquals(2, botReply.field.sumOf { row -> row.count { it != null } })
+            assertTrue(botReply.field.any { row -> row.contains(PlayerSymbol.O) }) // the bot played
+            assertEquals(PlayerSymbol.X, botReply.playerAtTurn) // and handed the turn back
+        }
+    }
+
+    @Test
+    fun `a second human displaces the bot`() = testApplication {
+        application {
+            module()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=vsbot2&bot=1") {
+            receiveHandshake()
+
+            // the opening: X moves, the bot answers
+            sendMakeTurn(0, 0)
+            awaitStateWhere { it.field.sumOf { row -> row.count { it != null } } >= 2 }
+
+            // a human takes the bot's O slot
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=vsbot2") {
+                    val (joined, _) = receiveHandshake()
+                    assertEquals(PlayerSymbol.O, joined.symbol)
+                    oReady.complete(Unit)
+                    awaitStateWhere { it.playerAtTurn == PlayerSymbol.O } // X's move below
+                    sendMakeTurn(2, 1)
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            sendMakeTurn(2, 2)
+            val humanReply = awaitStateWhere { it.field[1][2] == PlayerSymbol.O }
+            assertEquals(PlayerSymbol.X, humanReply.playerAtTurn)
+
+            second.cancel()
+        }
+    }
+
+    @Test
     fun `room is freed after everyone leaves`() = testApplication {
         application {
             module(reconnectGraceMs = 500)
@@ -809,6 +872,19 @@ private suspend fun WebSocketSession.receiveEvent(): ServerEvent = withTimeout(5
 }
 
 private suspend fun WebSocketSession.receiveState(): GameState = (receiveEvent() as ServerEvent.StateChanged).state
+
+/** Reads states until one matches, absorbing anything broadcast in between. */
+private suspend fun WebSocketSession.awaitStateWhere(
+    timeoutMs: Long = 5_000,
+    predicate: (GameState) -> Boolean,
+): GameState = withTimeout(timeoutMs) {
+    while (true) {
+        val state = receiveState()
+        if (predicate(state)) return@withTimeout state
+    }
+    @Suppress("UNREACHABLE_CODE")
+    receiveState()
+}
 
 private suspend fun WebSocketSession.receiveHandshake(): Pair<ServerEvent.Joined, GameState> {
     val events = listOf(receiveEvent(), receiveEvent())

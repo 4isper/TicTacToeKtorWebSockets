@@ -35,11 +35,13 @@ fun main() {
     val room = params.get("room")
     val size = params.get("size")
     val win = params.get("win")
+    val bot = params.get("bot")
     val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
     val query = listOfNotNull(
         room?.let { "room=$it" },
         size?.let { "size=$it" },
         win?.let { "win=$it" },
+        bot?.let { "bot=$it" },
     ).joinToString("&")
     val wsUrl = "$wsProtocol://${window.location.host}/play" + (query.takeIf { it.isNotEmpty() }?.let { "?$it" } ?: "")
     val tokenKey = "tictactoe-token" + (room?.let { ":$it" } ?: "")

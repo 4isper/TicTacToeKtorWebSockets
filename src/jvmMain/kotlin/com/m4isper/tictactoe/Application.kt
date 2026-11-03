@@ -14,12 +14,14 @@ fun main(args: Array<String>) {
 }
 
 fun Application.module() {
-    module(newGame = { boardSize, winLength -> TicTacToeGame(boardSize = boardSize, winLength = winLength) })
+    module(newGame = { boardSize, winLength, botEnabled ->
+        TicTacToeGame(boardSize = boardSize, winLength = winLength, botEnabled = botEnabled)
+    })
 }
 
 fun Application.module(
-    newGame: (boardSize: Int, winLength: Int) -> TicTacToeGame = { boardSize, winLength ->
-        TicTacToeGame(boardSize = boardSize, winLength = winLength)
+    newGame: (boardSize: Int, winLength: Int, botEnabled: Boolean) -> TicTacToeGame = { boardSize, winLength, botEnabled ->
+        TicTacToeGame(boardSize = boardSize, winLength = winLength, botEnabled = botEnabled)
     },
     reconnectGraceMs: Long = 10_000L,
 ) {

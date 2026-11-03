@@ -80,6 +80,7 @@ tasks.named("check") {
 
 tasks.configureEach {
     if (name == "jvmRun") {
-        dependsOn("jsBrowserProductionWebpack")
+        // the distribution task also refreshes build/dist, which the server serves
+        dependsOn("jsBrowserDistribution")
     }
 }

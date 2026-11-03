@@ -42,7 +42,9 @@ fun Route.socket(lobby: GameLobby) {
                 return@webSocket
             }
 
-            var binding = lobby.join(this, room, size, winLength ?: size) ?: run {
+            val botEnabled = call.request.queryParameters["bot"] == "1"
+
+            var binding = lobby.join(this, room, size, winLength ?: size, botEnabled) ?: run {
                 sendError(ErrorReason.ROOM_IS_FULL)
                 return@webSocket
             }
