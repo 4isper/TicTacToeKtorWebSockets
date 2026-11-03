@@ -82,6 +82,7 @@ class UiTextTest {
         assertEquals("Раунд ещё идёт", errorText(ErrorReason.ROUND_NOT_OVER))
         assertEquals("Нет свободных игр — создайте комнату и пригласите друга", errorText(ErrorReason.ROOM_IS_FULL))
         assertEquals("Это имя уже занято", errorText(ErrorReason.NAME_TAKEN))
+        assertEquals("Неверное время хода", errorText(ErrorReason.INVALID_TURN_TIME))
     }
 
     @Test
@@ -131,6 +132,7 @@ class UiTextTest {
         assertEquals("Cell occupied", errorText(ErrorReason.CELL_OCCUPIED, Lang.EN))
         assertEquals("No open games — create a room and invite a friend", errorText(ErrorReason.ROOM_IS_FULL, Lang.EN))
         assertEquals("Name already taken", errorText(ErrorReason.NAME_TAKEN, Lang.EN))
+        assertEquals("Invalid turn time", errorText(ErrorReason.INVALID_TURN_TIME, Lang.EN))
         assertEquals("Play again", rematchButtonText(waiting = false, Lang.EN))
         assertEquals("Copy link", copyLinkText(Lang.EN))
     }

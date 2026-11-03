@@ -834,6 +834,72 @@ class ApplicationTest {
     }
 
     @Test
+    fun `an out of range turn time is refused before joining`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=t9&turn=4") {
+            assertEquals(ErrorReason.INVALID_TURN_TIME, (receiveEvent() as ServerEvent.Error).reason)
+        }
+
+        client.webSocket("/play?room=t9&turn=601") {
+            assertEquals(ErrorReason.INVALID_TURN_TIME, (receiveEvent() as ServerEvent.Error).reason)
+        }
+
+        client.webSocket("/play?room=t9&turn=abc") {
+            assertEquals(ErrorReason.INVALID_TURN_TIME, (receiveEvent() as ServerEvent.Error).reason)
+        }
+
+        client.webSocket("/play?room=t9") {
+            val (_, state) = receiveHandshake()
+            assertEquals(3, state.field.size)
+        }
+    }
+
+    @Test
+    fun `the turn timer honors the requested seconds`() = testApplication {
+        application {
+            module()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=tt&turn=45") {
+            receiveHandshake()
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=tt&turn=45") {
+                    receiveHandshake()
+                    oReady.complete(Unit)
+                    awaitStateWhere { it.playerAtTurn == PlayerSymbol.O } // X's opening
+                    sendMakeTurn(1, 0)
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            skipBroadcast() // [X, O]
+
+            sendMakeTurn(0, 0)
+            val state = receiveState()
+            val left = state.turnRemainingMs
+            assertTrue(left != null && left in 30_001..45_000, "turn timer was $left, not the requested 45s")
+
+            second.cancel()
+        }
+    }
+
+    @Test
     fun `bot fills the second slot and answers with a move`() = testApplication {
         application {
             module()

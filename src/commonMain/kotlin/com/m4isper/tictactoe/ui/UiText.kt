@@ -61,6 +61,7 @@ fun errorText(
         ErrorReason.ROUND_NOT_OVER -> "Раунд ещё идёт"
         ErrorReason.INVALID_NAME -> "Неверное имя"
         ErrorReason.NAME_TAKEN -> "Это имя уже занято"
+        ErrorReason.INVALID_TURN_TIME -> "Неверное время хода"
     }
 
     Lang.EN -> when (reason) {
@@ -78,6 +79,7 @@ fun errorText(
         ErrorReason.ROUND_NOT_OVER -> "Round is not over"
         ErrorReason.INVALID_NAME -> "Invalid name"
         ErrorReason.NAME_TAKEN -> "Name already taken"
+        ErrorReason.INVALID_TURN_TIME -> "Invalid turn time"
     }
 }
 

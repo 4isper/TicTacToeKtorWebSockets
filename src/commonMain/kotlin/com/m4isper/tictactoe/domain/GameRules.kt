@@ -5,6 +5,9 @@ object GameRules {
     const val MIN_BOARD_SIZE = 3
     const val MAX_BOARD_SIZE = 10
     const val MIN_WIN_LENGTH = 3
+    const val DEFAULT_TURN_SECONDS = 30
+    const val MIN_TURN_SECONDS = 5
+    const val MAX_TURN_SECONDS = 600
 
     fun emptyField(size: Int = DEFAULT_BOARD_SIZE): List<List<PlayerSymbol?>> = List(size) { List(size) { null } }
 

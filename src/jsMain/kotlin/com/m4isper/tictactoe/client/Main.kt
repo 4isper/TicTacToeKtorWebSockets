@@ -52,6 +52,7 @@ fun main() {
     val size = params.get("size")
     val win = params.get("win")
     val bot = params.get("bot")
+    val turn = params.get("turn")
     val lang = parseLang(params.get("lang"))
     val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
     val query = listOfNotNull(
@@ -59,6 +60,7 @@ fun main() {
         size?.let { "size=$it" },
         win?.let { "win=$it" },
         bot?.let { "bot=$it" },
+        turn?.let { "turn=$it" },
         params.get("lang")?.let { "lang=$it" },
     ).joinToString("&")
     val wsUrl = "$wsProtocol://${window.location.host}/play" + (query.takeIf { it.isNotEmpty() }?.let { "?$it" } ?: "")
@@ -69,6 +71,7 @@ fun main() {
         ErrorReason.INVALID_ROOM_NAME,
         ErrorReason.INVALID_BOARD_SIZE,
         ErrorReason.INVALID_WIN_LENGTH,
+        ErrorReason.INVALID_TURN_TIME,
     )
 
     var socket: WebSocket? = null

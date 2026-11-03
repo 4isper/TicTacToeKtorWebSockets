@@ -34,8 +34,10 @@ class GameLobbyTest {
         val first = assertNotNull(lobby.join(FakeSession(), boardSize = 5, winLength = 4))
         val otherSize = assertNotNull(lobby.join(FakeSession(), boardSize = 3, winLength = 3))
         val otherWin = assertNotNull(lobby.join(FakeSession(), boardSize = 5, winLength = 5))
+        val otherTurn = assertNotNull(lobby.join(FakeSession(), boardSize = 5, winLength = 4, turnSeconds = 60))
         assertNotSame(first.game, otherSize.game) // their settings would otherwise be silently ignored
         assertNotSame(first.game, otherWin.game)
+        assertNotSame(first.game, otherTurn.game)
 
         val partner = assertNotNull(lobby.join(FakeSession(), boardSize = 5, winLength = 4))
         assertSame(first.game, partner.game)

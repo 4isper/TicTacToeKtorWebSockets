@@ -8,9 +8,15 @@ import kotlinx.coroutines.*
 import java.util.UUID
 
 class GameLobby(
-    private val newGame: (boardSize: Int, winLength: Int, botEnabled: Boolean) -> TicTacToeGame = { boardSize, winLength, botEnabled ->
-        TicTacToeGame(boardSize = boardSize, winLength = winLength, botEnabled = botEnabled)
-    },
+    private val newGame: (boardSize: Int, winLength: Int, botEnabled: Boolean, turnSeconds: Int) -> TicTacToeGame =
+        { boardSize, winLength, botEnabled, turnSeconds ->
+            TicTacToeGame(
+                boardSize = boardSize,
+                winLength = winLength,
+                botEnabled = botEnabled,
+                turnTimeoutMs = turnSeconds * 1000L,
+            )
+        },
     private val reconnectGraceMs: Long = 10_000L,
 ) {
     data class Joined(val game: TicTacToeGame, val symbol: PlayerSymbol?, val token: String)
@@ -34,13 +40,14 @@ class GameLobby(
         boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
         winLength: Int = boardSize,
         botEnabled: Boolean = false,
+        turnSeconds: Int = GameRules.DEFAULT_TURN_SECONDS,
     ): Joined? = synchronized(lock) {
         val game = if (room == null) {
             // pair anonymous joiners only with identical settings, or their size/win/bot would be silently ignored
-            games.firstOrNull { !it.isFull() && it.matches(boardSize, winLength, botEnabled) }
-                ?: newGame(boardSize, winLength, botEnabled).also { games.add(it) }
+            games.firstOrNull { !it.isFull() && it.matches(boardSize, winLength, botEnabled, turnSeconds) }
+                ?: newGame(boardSize, winLength, botEnabled, turnSeconds).also { games.add(it) }
         } else {
-            rooms.getOrPut(room) { newGame(boardSize, winLength, botEnabled) }
+            rooms.getOrPut(room) { newGame(boardSize, winLength, botEnabled, turnSeconds) }
         }
         val symbol = game.connectPlayer(session)
         if (symbol == null && room == null) return null // anonymous match stays players-only

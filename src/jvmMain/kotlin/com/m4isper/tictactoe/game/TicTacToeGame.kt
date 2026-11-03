@@ -214,7 +214,8 @@ class TicTacToeGame(
     }
 
     /** True when an anonymous joiner with these settings can be paired into this game. */
-    fun matches(boardSize: Int, winLength: Int, botEnabled: Boolean): Boolean = this.boardSize == boardSize && this.winLength == winLength && this.botEnabled == botEnabled
+    fun matches(boardSize: Int, winLength: Int, botEnabled: Boolean, turnSeconds: Int): Boolean = this.boardSize == boardSize && this.winLength == winLength && this.botEnabled == botEnabled &&
+        this.turnTimeoutMs == turnSeconds * 1000L
 
     fun isFull(): Boolean = state.value.connectionPlayers.size >= 2
 

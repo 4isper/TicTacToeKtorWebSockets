@@ -46,4 +46,7 @@ enum class ErrorReason {
 
     @SerialName("name is taken")
     NAME_TAKEN,
+
+    @SerialName("invalid turn time")
+    INVALID_TURN_TIME,
 }

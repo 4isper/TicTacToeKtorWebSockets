@@ -44,7 +44,15 @@ fun Route.socket(lobby: GameLobby) {
 
             val botEnabled = call.request.queryParameters["bot"] == "1"
 
-            var binding = lobby.join(this, room, size, winLength ?: size, botEnabled) ?: run {
+            val turnParam = call.request.queryParameters["turn"]
+            val turnSeconds = turnParam?.toIntOrNull()
+            if (turnParam != null && turnSeconds !in GameRules.MIN_TURN_SECONDS..GameRules.MAX_TURN_SECONDS) {
+                sendError(ErrorReason.INVALID_TURN_TIME)
+                return@webSocket
+            }
+            val turn = turnSeconds ?: GameRules.DEFAULT_TURN_SECONDS
+
+            var binding = lobby.join(this, room, size, winLength ?: size, botEnabled, turn) ?: run {
                 sendError(ErrorReason.ROOM_IS_FULL)
                 return@webSocket
             }

@@ -24,14 +24,16 @@ fun Application.module() {
 
 fun Application.module(
     scoreboard: Scoreboard = defaultScoreboard(),
-    newGame: (boardSize: Int, winLength: Int, botEnabled: Boolean) -> TicTacToeGame = { boardSize, winLength, botEnabled ->
-        TicTacToeGame(
-            boardSize = boardSize,
-            winLength = winLength,
-            botEnabled = botEnabled,
-            onRoundOver = scoreboard::recordRound,
-        )
-    },
+    newGame: (boardSize: Int, winLength: Int, botEnabled: Boolean, turnSeconds: Int) -> TicTacToeGame =
+        { boardSize, winLength, botEnabled, turnSeconds ->
+            TicTacToeGame(
+                boardSize = boardSize,
+                winLength = winLength,
+                botEnabled = botEnabled,
+                turnTimeoutMs = turnSeconds * 1000L,
+                onRoundOver = scoreboard::recordRound,
+            )
+        },
     reconnectGraceMs: Long = 10_000L,
 ) {
     val lobby = GameLobby(newGame, reconnectGraceMs)
