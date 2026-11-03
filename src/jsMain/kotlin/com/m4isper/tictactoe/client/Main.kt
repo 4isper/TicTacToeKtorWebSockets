@@ -8,6 +8,11 @@ import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
 import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.copiedText
+import com.m4isper.tictactoe.ui.isRoundRestartTransition
+import com.m4isper.tictactoe.ui.isTurnTransition
+import com.m4isper.tictactoe.ui.newMoveCells
+import com.m4isper.tictactoe.ui.soundCue
+import com.m4isper.tictactoe.ui.SoundCue
 import com.m4isper.tictactoe.ui.copyLinkText
 import com.m4isper.tictactoe.ui.errorText
 import com.m4isper.tictactoe.ui.leaderboardTitle
@@ -132,20 +137,16 @@ fun main() {
     }
 
     fun playStateSounds(previous: GameState?, state: GameState) {
-        if (previous == null) return
-        val movesBefore = previous.field.sumOf { row -> row.count { it != null } }
-        val movesNow = state.field.sumOf { row -> row.count { it != null } }
-        when {
-            state.winningPlayer != null && previous.winningPlayer == null -> {
+        when (soundCue(previous, state)) {
+            SoundCue.WIN -> {
                 beep(523.0, 120)
                 window.setTimeout({ beep(659.0, 120) }, 120)
                 window.setTimeout({ beep(784.0, 220) }, 240)
             }
 
-            state.isBoardFull && state.winningPlayer == null && !previous.isBoardFull ->
-                beep(220.0, 250, "triangle")
-
-            movesNow > movesBefore -> beep(660.0, 60)
+            SoundCue.DRAW -> beep(220.0, 250, "triangle")
+            SoundCue.MOVE -> beep(660.0, 60)
+            SoundCue.NONE -> Unit
         }
     }
 
@@ -157,7 +158,7 @@ fun main() {
         countdownTimer?.let { window.clearInterval(it) }
         countdownTimer = null
         if (state.roundRestartInMs != null) {
-            if (previous == null || previous.roundRestartInMs == null || roundDeadline == 0.0) {
+            if (isRoundRestartTransition(previous, state) || roundDeadline == 0.0) {
                 roundDeadline = Date.now() + state.roundRestartInMs
             }
             countdownTimer = window.setInterval({
@@ -170,7 +171,7 @@ fun main() {
             roundDeadline = 0.0
         }
         if (state.roundRestartInMs == null && state.turnRemainingMs != null) {
-            if (previous == null || previous.playerAtTurn != state.playerAtTurn || previous.turnRemainingMs == null) {
+            if (isTurnTransition(previous, state) || turnDeadline == 0.0) {
                 turnDeadline = Date.now() + state.turnRemainingMs
             }
             countdownTimer = window.setInterval({
@@ -199,16 +200,16 @@ fun main() {
             .toInt()
             .coerceAtMost(76)
         val winningCells = state.winningCells.map { "${it.x},${it.y}" }.toSet()
+        val newMoves = newMoveCells(previous, state)
         state.field.forEachIndexed { y, row ->
             val rowDiv = document.createElement("div")
             rowDiv.className = "row"
             row.forEachIndexed { x, cell ->
                 val cellButton = document.createElement("button") as HTMLButtonElement
-                val isNewMove = previous != null && previous.field[y][x] == null && cell != null
                 cellButton.className = buildString {
                     append("cell")
                     if ("$x,$y" in winningCells) append(" winning")
-                    if (isNewMove) append(" pop")
+                    if (newMoves.any { it.x == x && it.y == y }) append(" pop")
                 }
                 cellButton.style.width = "${cellPx}px"
                 cellButton.style.height = "${cellPx}px"
