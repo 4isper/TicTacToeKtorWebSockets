@@ -15,6 +15,7 @@ Then open http://localhost:8080/ to play in the browser (the page is rendered wi
 - Endpoint: `ws://localhost:8080/play`
 - **Rooms / invite links:** connect to `ws://localhost:8080/play?room=<name>` to play with a specific opponent — the first two connections to a room play each other, a third gets `{"type":"error","reason":"room is full"}`. Room names are 1–32 characters of letters, digits, `-` and `_` (anything else answers `invalid room name`). A room ceases to exist once both players have left (after the reconnect grace), so the name can be reused. Connections without a `room` parameter are matched automatically, as before.
 - **Board size:** a game's board is square and is picked by the first connection that creates it — add `&size=<n>` (an integer `3..10`) to the room URL, e.g. `http://localhost:8080/?room=alpha&size=5`; players joining later inherit the existing board whatever `size` they pass. Anything outside `3..10` (or not a number) answers `invalid board size` before joining. Clients should read the board dimensions from the `field` array rather than assuming 3×3.
+- **Win length:** the winning line does not have to span the whole board — add `&win=<n>` (`3..boardSize`, default: the full board dimension) for games like 4-in-a-row on a 5×5 board, e.g. `http://localhost:8080/?room=alpha&size=5&win=4`. Anything outside the range answers `invalid win length` before joining. The `state` event reports the winning run as `winningCells` (`[{"x":..,"y":..}, …]`) so clients can highlight it.
 - Players are matched pairwise: the first two connections play one game, the next two get their own game, and so on. In each game the first connection plays `X`, the second `O`. An emptied game (both players left) is retired.
 - Client → server: a text frame holding one JSON message with a `type` discriminator. Currently only:
 
@@ -48,4 +49,4 @@ CI runs `./gradlew build` on every push and pull request (GitHub Actions).
 
 ## Roadmap
 
-- Win length other than the full row/column/diagonal (e.g. 4-in-a-row on a 5×5 board)
+- Rematch button and a visible countdown instead of the silent 5-second board reset

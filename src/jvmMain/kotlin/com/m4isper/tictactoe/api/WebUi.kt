@@ -79,6 +79,9 @@ fun Application.webUi() {
                     cursor = Cursor.default
                     opacity = 0.85
                 }
+                rule(".cell.winning") {
+                    backgroundColor = Color("#2e7d4f")
+                }
             }
         }
 

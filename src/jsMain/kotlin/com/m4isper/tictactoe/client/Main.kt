@@ -27,10 +27,12 @@ fun main() {
     val params = URLSearchParams(window.location.search)
     val room = params.get("room")
     val size = params.get("size")
+    val win = params.get("win")
     val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
     val query = listOfNotNull(
         room?.let { "room=$it" },
         size?.let { "size=$it" },
+        win?.let { "win=$it" },
     ).joinToString("&")
     val wsUrl = "$wsProtocol://${window.location.host}/play" + (query.takeIf { it.isNotEmpty() }?.let { "?$it" } ?: "")
     val tokenKey = "tictactoe-token" + (room?.let { ":$it" } ?: "")
@@ -61,12 +63,13 @@ fun main() {
         val cellPx = (minOf(window.innerWidth, window.innerHeight) * 0.8 / state.field.size)
             .toInt()
             .coerceAtMost(76)
+        val winningCells = state.winningCells.map { "${it.x},${it.y}" }.toSet()
         state.field.forEachIndexed { y, row ->
             val rowDiv = document.createElement("div")
             rowDiv.className = "row"
             row.forEachIndexed { x, cell ->
                 val cellButton = document.createElement("button") as HTMLButtonElement
-                cellButton.className = "cell"
+                cellButton.className = if ("$x,$y" in winningCells) "cell winning" else "cell"
                 cellButton.style.width = "${cellPx}px"
                 cellButton.style.height = "${cellPx}px"
                 cellButton.style.fontSize = "${cellPx / 2}px"
