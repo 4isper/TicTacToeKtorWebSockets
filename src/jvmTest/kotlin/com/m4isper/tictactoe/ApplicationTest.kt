@@ -9,6 +9,7 @@ import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
 import io.ktor.client.plugins.websocket.*
 import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.*
@@ -1057,6 +1058,29 @@ class ApplicationTest {
             sendReact("🍕")
             assertEquals(ServerEvent.Reaction(PlayerSymbol.X, "👍"), receiveEvent())
             assertTrue(receiveEvent() is ServerEvent.Error) // the dropped ❤️ produced nothing before the error
+        }
+    }
+
+    @Test
+    fun `the manifest offers raster icons alongside the svg one`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient { }
+
+        val manifest = client.get("/manifest.webmanifest").bodyAsText()
+        assertTrue("\"/icon-192.png\"" in manifest, manifest)
+        assertTrue("\"/icon-512.png\"" in manifest, manifest)
+
+        listOf("/icon-192.png", "/icon-512.png").forEach { src ->
+            val icon = client.get(src)
+            assertEquals(HttpStatusCode.OK, icon.status)
+            val bytes = icon.bodyAsBytes()
+            assertTrue(bytes.size > 500, "$src looks empty: ${bytes.size} bytes")
+            assertTrue(
+                bytes.take(4).toByteArray().contentEquals(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)), // PNG magic
+                "$src is not a PNG",
+            )
         }
     }
 

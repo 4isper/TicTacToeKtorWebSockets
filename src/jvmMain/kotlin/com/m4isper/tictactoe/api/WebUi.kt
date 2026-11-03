@@ -39,7 +39,14 @@ import kotlinx.html.title
 import kotlinx.html.ul
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.awt.BasicStroke
+import java.awt.RenderingHints
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+import javax.imageio.ImageIO
+import java.awt.Color as AwtColor
 
 private const val CLIENT_DIST = "build/dist/js/productionExecutable"
 
@@ -73,6 +80,28 @@ private const val SERVICE_WORKER_JS =
     """self.addEventListener("install", function (e) { self.skipWaiting() });""" +
         """self.addEventListener("activate", function (e) { self.clients.claim() });""" +
         """self.addEventListener("fetch", function (e) { /* pass-through: the game is online-only */ });"""
+
+private val iconCache = ConcurrentHashMap<Int, ByteArray>()
+
+/** The manifest icon drawn with Java2D — the same X/O glyph the SVG one carries. */
+private fun iconPng(size: Int): ByteArray = iconCache.getOrPut(size) {
+    val image = BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB)
+    val g = image.createGraphics()
+    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+    val unit = size / 100.0
+    g.color = AwtColor(0x14, 0x14, 0x1f)
+    g.fillRect(0, 0, size, size)
+    g.stroke = BasicStroke((7 * unit).toFloat(), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+    g.color = AwtColor(0x7a, 0xa2, 0xf7)
+    g.drawLine((22 * unit).toInt(), (22 * unit).toInt(), (46 * unit).toInt(), (46 * unit).toInt())
+    g.drawLine((46 * unit).toInt(), (22 * unit).toInt(), (22 * unit).toInt(), (46 * unit).toInt())
+    g.color = AwtColor(0xe8, 0xe8, 0xf0)
+    g.drawOval((53 * unit).toInt(), (53 * unit).toInt(), (26 * unit).toInt(), (26 * unit).toInt())
+    g.dispose()
+    val out = ByteArrayOutputStream()
+    ImageIO.write(image, "png", out)
+    out.toByteArray()
+}
 
 fun Application.webUi(
     scoreboard: Scoreboard,
@@ -115,13 +144,25 @@ fun Application.webUi(
                     Lang.RU -> "Крестики"
                     Lang.EN -> "Tic-tac-toe"
                 },
-                icons = listOf(WebManifestIcon("/icon.svg", "any")),
+                icons = listOf(
+                    WebManifestIcon("/icon.svg", "any"),
+                    WebManifestIcon("/icon-192.png", "192x192", "image/png"),
+                    WebManifestIcon("/icon-512.png", "512x512", "image/png"),
+                ),
             )
             call.respondText(apiJson.encodeToString(manifest), ContentType.Application.Json)
         }
 
         get("/icon.svg") {
             call.respondText(ICON_SVG, ContentType.Image.SVG)
+        }
+
+        get("/icon-192.png") {
+            call.respondBytes(iconPng(192), ContentType.Image.PNG)
+        }
+
+        get("/icon-512.png") {
+            call.respondBytes(iconPng(512), ContentType.Image.PNG)
         }
 
         get("/sw.js") {
