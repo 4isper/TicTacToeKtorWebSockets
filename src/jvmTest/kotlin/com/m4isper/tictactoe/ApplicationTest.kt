@@ -443,7 +443,9 @@ class ApplicationTest {
         }
 
         thirdClient.webSocket("/play?room=alpha") {
-            assertTrue(receiveEvent() is ServerEvent.Error)
+            val (joined, state) = receiveHandshake()
+            assertNull(joined.symbol) // third comer watches as a spectator
+            assertEquals(listOf(PlayerSymbol.X, PlayerSymbol.O), state.connectionPlayers)
         }
 
         betaClient.webSocket("/play?room=beta") {
@@ -653,6 +655,63 @@ class ApplicationTest {
             assertEquals(mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), reset.score)
 
             second.cancel()
+        }
+    }
+
+    @Test
+    fun `a third connection to a named room watches as a spectator`() = testApplication {
+        application {
+            module()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+        val spectatorClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=spec") {
+            receiveHandshake()
+
+            val oReady = CompletableDeferred<Unit>()
+            val spectatorReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=spec") {
+                    receiveHandshake()
+                    oReady.complete(Unit)
+                    awaitCancellation()
+                }
+            }
+            oReady.await() // the spectator must see both players on arrival
+
+            val third = scope.launch {
+                spectatorClient.webSocket("/play?room=spec") {
+                    val (joined, state) = receiveHandshake()
+                    assertNull(joined.symbol)
+                    assertEquals(listOf(PlayerSymbol.X, PlayerSymbol.O), state.connectionPlayers)
+                    spectatorReady.complete(Unit)
+
+                    sendMakeTurn(0, 0)
+                    // the rejection and X's real move may arrive in either order
+                    val events = listOf(receiveEvent(), receiveEvent())
+                    assertTrue(events.any { it is ServerEvent.Error }) // spectators cannot play
+                    assertTrue(events.any { it is ServerEvent.StateChanged }) // X's move reaches the spectator
+                    awaitCancellation()
+                }
+            }
+            spectatorReady.await()
+
+            skipBroadcast() // [X, O]
+
+            sendMakeTurn(0, 0)
+            skipBroadcast() // own broadcast
+
+            second.cancel()
+            third.cancel()
         }
     }
 

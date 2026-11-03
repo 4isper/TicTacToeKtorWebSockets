@@ -25,6 +25,7 @@ class TicTacToeGame(
     private val lock = Any()
 
     private val playerSockets = ConcurrentHashMap<PlayerSymbol, WebSocketSession>()
+    private val spectatorSockets = ConcurrentHashMap.newKeySet<WebSocketSession>()
 
     private val gameScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var roundRestartJob: Job? = null
@@ -69,6 +70,14 @@ class TicTacToeGame(
         publish(state.value.copy(connectionPlayers = state.value.connectionPlayers - player))
     }
 
+    fun attachSpectator(session: WebSocketSession) {
+        spectatorSockets.add(session)
+    }
+
+    fun detachSpectator(session: WebSocketSession) {
+        spectatorSockets.remove(session)
+    }
+
     suspend fun broadcast(state: GameState) {
         for ((player, socket) in playerSockets) {
             try {
@@ -80,6 +89,16 @@ class TicTacToeGame(
                 synchronized(lock) {
                     if (playerSockets[player] === socket) disconnectPlayer(player)
                 }
+            }
+        }
+        for (socket in spectatorSockets) {
+            try {
+                socket.send(
+                    protocolJson.encodeToString<ServerEvent>(ServerEvent.StateChanged(state)),
+                )
+            } catch (e: Exception) {
+                logger.warn("Failed to broadcast game state to a spectator socket", e)
+                spectatorSockets.remove(socket)
             }
         }
     }

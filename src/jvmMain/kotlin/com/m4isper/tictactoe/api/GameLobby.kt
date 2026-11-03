@@ -13,9 +13,13 @@ class GameLobby(
     },
     private val reconnectGraceMs: Long = 10_000L,
 ) {
-    data class Joined(val game: TicTacToeGame, val symbol: PlayerSymbol, val token: String)
+    data class Joined(val game: TicTacToeGame, val symbol: PlayerSymbol?, val token: String)
 
-    private data class TokenBinding(val game: TicTacToeGame, val symbol: PlayerSymbol)
+    private data class TokenBinding(
+        val game: TicTacToeGame,
+        val symbol: PlayerSymbol?,
+        val session: WebSocketSession,
+    )
 
     private val lock = Any()
     private val games = mutableListOf<TicTacToeGame>()
@@ -35,20 +39,27 @@ class GameLobby(
         } else {
             rooms.getOrPut(room) { newGame(boardSize, winLength) }
         }
-        val symbol = game.connectPlayer(session) ?: return null
+        val symbol = game.connectPlayer(session)
+        if (symbol == null && room == null) return null // anonymous match stays players-only
         val token = UUID.randomUUID().toString()
-        tokens[token] = TokenBinding(game, symbol)
+        tokens[token] = TokenBinding(game, symbol, session)
+        if (symbol == null) game.attachSpectator(session)
         Joined(game, symbol, token)
     }
 
     fun sessionClosed(token: String, session: WebSocketSession): Unit = synchronized(lock) {
         val binding = tokens[token] ?: return
+        if (binding.symbol == null) {
+            tokens.remove(token)
+            binding.game.detachSpectator(session)
+            return
+        }
         if (!binding.game.detachSession(binding.symbol, session)) return
         graceJobs[token] = lobbyScope.launch {
             delay(reconnectGraceMs)
             synchronized(lock) {
                 val pending = tokens.remove(token) ?: return@launch
-                pending.game.disconnectPlayer(pending.symbol)
+                pending.game.disconnectPlayer(pending.symbol!!)
                 if (pending.game.isEmpty()) retire(pending.game)
             }
         }
@@ -57,13 +68,21 @@ class GameLobby(
     fun reconnect(token: String, session: WebSocketSession): Joined? = synchronized(lock) {
         val binding = tokens[token] ?: return null
         graceJobs.remove(token)?.cancel()
-        binding.game.reattachSession(binding.symbol, session)
+        if (binding.symbol == null) {
+            binding.game.attachSpectator(session)
+        } else {
+            binding.game.reattachSession(binding.symbol, session)
+        }
         Joined(binding.game, binding.symbol, token)
     }
 
     fun abandonJoin(token: String): Unit = synchronized(lock) {
         val binding = tokens.remove(token) ?: return
         graceJobs.remove(token)?.cancel()
+        if (binding.symbol == null) {
+            binding.game.detachSpectator(binding.session)
+            return
+        }
         binding.game.disconnectPlayer(binding.symbol)
         if (binding.game.isEmpty()) retire(binding.game)
     }

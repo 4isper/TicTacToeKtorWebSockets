@@ -47,6 +47,10 @@ fun Route.socket(lobby: GameLobby) {
             }
             try {
                 send(protocolJson.encodeToString<ServerEvent>(ServerEvent.Joined(binding.token, binding.symbol)))
+                if (binding.symbol == null) {
+                    // spectators get no join broadcast of their own — hand them the current state
+                    send(protocolJson.encodeToString<ServerEvent>(ServerEvent.StateChanged(binding.game.currentState())))
+                }
 
                 incoming.consumeEach { frame ->
                     if (frame !is Frame.Text) return@consumeEach
@@ -54,11 +58,17 @@ fun Route.socket(lobby: GameLobby) {
                         .getOrNull()
 
                     val event: ServerEvent? = when (message) {
-                        is ClientMessage.MakeTurn -> binding.game.finishTurn(binding.symbol, this, message.x, message.y)
-                            ?.let(ServerEvent::Error)
+                        is ClientMessage.MakeTurn -> when (val symbol = binding.symbol) {
+                            null -> ServerEvent.Error(ErrorReason.NOT_YOUR_TURN)
 
-                        is ClientMessage.RequestRematch -> binding.game.requestRematch(binding.symbol, this)
-                            ?.let(ServerEvent::Error)
+                            else -> binding.game.finishTurn(symbol, this, message.x, message.y)
+                                ?.let(ServerEvent::Error)
+                        }
+
+                        is ClientMessage.RequestRematch -> when (val symbol = binding.symbol) {
+                            null -> ServerEvent.Error(ErrorReason.NOT_YOUR_TURN)
+                            else -> binding.game.requestRematch(symbol, this)?.let(ServerEvent::Error)
+                        }
 
                         is ClientMessage.Reconnect -> {
                             val rebound = lobby.reconnect(message.token, this)

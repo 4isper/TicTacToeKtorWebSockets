@@ -31,7 +31,7 @@ sealed interface ClientMessage {
 sealed interface ServerEvent {
     @Serializable
     @SerialName("joined")
-    data class Joined(val token: String, val symbol: PlayerSymbol) : ServerEvent
+    data class Joined(val token: String, val symbol: PlayerSymbol?) : ServerEvent
 
     @Serializable
     @SerialName("state")
