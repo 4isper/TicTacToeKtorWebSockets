@@ -77,9 +77,21 @@ private const val ICON_SVG =
         """<g stroke="#e8e8f0" stroke-width="7"><circle cx="66" cy="66" r="13" fill="none"/></g></svg>"""
 
 private const val SERVICE_WORKER_JS =
-    """self.addEventListener("install", function (e) { self.skipWaiting() });""" +
-        """self.addEventListener("activate", function (e) { self.clients.claim() });""" +
-        """self.addEventListener("fetch", function (e) { /* pass-through: the game is online-only */ });"""
+    """const OFFLINE_URL = "/offline";""" +
+        """self.addEventListener("install", function (e) {""" +
+        """e.waitUntil(caches.open("ttt-v1").then(function (c) { return c.add(OFFLINE_URL); })); self.skipWaiting(); });""" +
+        """self.addEventListener("activate", function (e) { self.clients.claim(); });""" +
+        """self.addEventListener("fetch", function (e) {""" +
+        """if (e.request.mode === "navigate") {""" +
+        """e.respondWith(fetch(e.request).catch(function () { return caches.match(OFFLINE_URL); })); } });"""
+
+private const val OFFLINE_HTML =
+    """<!doctype html><html lang="ru"><head><meta charset="utf-8">""" +
+        """<meta name="viewport" content="width=device-width, initial-scale=1"><title>Offline</title></head>""" +
+        """<body style="font-family:system-ui,sans-serif;background:#14141f;color:#e8e8f0;""" +
+        """display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center">""" +
+        """<div><h1>Нет соединения</h1><p>Партия живёт на сервере — проверьте сеть и обновите страницу.</p>""" +
+        """<p style="opacity:.7">You are offline — reconnect and reload.</p></div></body></html>"""
 
 private val iconCache = ConcurrentHashMap<Int, ByteArray>()
 
@@ -167,6 +179,10 @@ fun Application.webUi(
 
         get("/sw.js") {
             call.respondText(SERVICE_WORKER_JS, ContentType.Text.JavaScript)
+        }
+
+        get("/offline") {
+            call.respondText(OFFLINE_HTML, ContentType.Text.Html)
         }
 
         get("/styles.css") {

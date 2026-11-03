@@ -1100,6 +1100,22 @@ class ApplicationTest {
     }
 
     @Test
+    fun `the service worker falls back to an offline page`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient { }
+
+        val sw = client.get("/sw.js").bodyAsText()
+        assertTrue("caches.open" in sw, sw)
+        assertTrue("""e.request.mode === "navigate"""" in sw, sw)
+
+        val offline = client.get("/offline")
+        assertEquals(HttpStatusCode.OK, offline.status)
+        assertTrue("Нет соединения" in offline.bodyAsText())
+    }
+
+    @Test
     fun `bot fills the second slot and answers with a move`() = testApplication {
         application {
             module()
