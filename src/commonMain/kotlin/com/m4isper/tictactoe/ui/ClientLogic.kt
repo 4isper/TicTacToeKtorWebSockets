@@ -35,10 +35,8 @@ fun soundCue(
 }
 
 /** A round restart countdown just appeared and the deadline should be captured once. */
-fun isRoundRestartTransition(previous: GameState?, state: GameState): Boolean =
-    state.roundRestartInMs != null && (previous == null || previous.roundRestartInMs == null)
+fun isRoundRestartTransition(previous: GameState?, state: GameState): Boolean = state.roundRestartInMs != null && (previous == null || previous.roundRestartInMs == null)
 
 /** A fresh turn began and the turn deadline should be captured once. */
-fun isTurnTransition(previous: GameState?, state: GameState): Boolean =
-    state.roundRestartInMs == null && state.turnRemainingMs != null &&
-        (previous == null || previous.playerAtTurn != state.playerAtTurn || previous.turnRemainingMs == null)
+fun isTurnTransition(previous: GameState?, state: GameState): Boolean = state.roundRestartInMs == null && state.turnRemainingMs != null &&
+    (previous == null || previous.playerAtTurn != state.playerAtTurn || previous.turnRemainingMs == null)

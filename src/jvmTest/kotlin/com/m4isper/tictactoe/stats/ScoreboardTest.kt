@@ -37,8 +37,14 @@ class ScoreboardTest {
         board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), winner = null)
 
         val top = board.top(limit = 10).associateBy { it.name }
-        assertEquals(PlayerStats(wins = 1, losses = 0, draws = 1), top["Аня"]?.stats)
-        assertEquals(PlayerStats(wins = 0, losses = 1, draws = 1), top["Боря"]?.stats)
+        val anya = top["Аня"]!!.stats
+        val boris = top["Боря"]!!.stats
+        assertEquals(PlayerStats(wins = 1, losses = 0, draws = 1, history = anya.history), anya)
+        assertEquals(PlayerStats(wins = 0, losses = 1, draws = 1, history = boris.history), boris)
+        assertEquals(RoundResult.DRAW, anya.history[0].result) // newest first
+        assertEquals(RoundResult.WIN, anya.history[1].result)
+        assertEquals("Боря", anya.history[0].opponent)
+        assertEquals("Боря", anya.history[1].opponent)
     }
 
     @Test
@@ -63,6 +69,31 @@ class ScoreboardTest {
         assertEquals(listOf("Аня", "Вера"), top.map { it.name })
         assertEquals(3, top[0].stats.wins)
         assertEquals(2, top[1].stats.wins)
+    }
+
+    @Test
+    fun `history keeps the opponent and caps at twenty entries`() {
+        val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
+
+        repeat(25) { board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), PlayerSymbol.X) }
+
+        val stats = board.profile("Аня")!!.stats
+        assertEquals(25, stats.wins)
+        assertEquals(20, stats.history.size)
+        assertEquals(RoundResult.WIN, stats.history.first().result)
+        assertEquals("Боря", stats.history.first().opponent)
+        assertEquals("Аня", board.profile("Боря")!!.stats.history.first().opponent) // the loser's opponent is the winner
+    }
+
+    @Test
+    fun `profile is null for unknown or blank names`() {
+        val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
+        board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), PlayerSymbol.X)
+
+        assertEquals(null, board.profile("Кто-то"))
+        assertEquals(null, board.profile(null))
+        assertEquals(null, board.profile("  "))
+        assertEquals("Аня", board.profile("Аня")!!.name)
     }
 
     @Test

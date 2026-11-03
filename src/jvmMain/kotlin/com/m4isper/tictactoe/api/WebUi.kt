@@ -56,6 +56,15 @@ fun Application.webUi(scoreboard: Scoreboard) {
             )
         }
 
+        get("/player") {
+            val profile = scoreboard.profile(call.request.queryParameters["name"])
+            if (profile == null) {
+                call.respond(HttpStatusCode.NotFound)
+            } else {
+                call.respondText(leaderboardJson.encodeToString(profile), ContentType.Application.Json)
+            }
+        }
+
         get("/styles.css") {
             call.respondCss {
                 rule("body") {
@@ -239,6 +248,7 @@ fun Application.webUi(scoreboard: Scoreboard) {
                         h2 { +leaderboardTitle(pageLang) }
                         ul { id = "leaderboard-rows" }
                     }
+                    div { id = "profile" }
                     script(src = "/static/app.js") {}
                 }
             }

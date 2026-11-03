@@ -7,14 +7,28 @@ import kotlinx.serialization.json.Json
 import java.io.File
 
 @Serializable
+data class MatchRecord(
+    val epochMs: Long,
+    val opponent: String? = null,
+    val result: RoundResult,
+)
+
+@Serializable
 data class PlayerStats(
     val wins: Int = 0,
     val losses: Int = 0,
     val draws: Int = 0,
+    val history: List<MatchRecord> = emptyList(),
 )
 
 @Serializable
 data class LeaderboardEntry(
+    val name: String,
+    val stats: PlayerStats,
+)
+
+@Serializable
+data class PlayerProfile(
     val name: String,
     val stats: PlayerStats,
 )
@@ -28,7 +42,13 @@ private data class StoredScores(val players: Map<String, PlayerStats> = emptyMap
 enum class RoundResult { WIN, LOSS, DRAW }
 
 interface ScoreStore {
-    fun addResult(name: String, result: RoundResult)
+    fun addResult(
+        name: String,
+        result: RoundResult,
+        opponent: String? = null,
+        atMs: Long = System.currentTimeMillis(),
+    )
+
     fun loadAll(): Map<String, PlayerStats>
 }
 
@@ -53,13 +73,19 @@ class JsonScoreStore(private val file: File) : ScoreStore {
         }
     }
 
-    override fun addResult(name: String, result: RoundResult): Unit = synchronized(lock) {
+    override fun addResult(
+        name: String,
+        result: RoundResult,
+        opponent: String?,
+        atMs: Long,
+    ): Unit = synchronized(lock) {
         val current = players[name] ?: PlayerStats()
-        players[name] = when (result) {
+        val stats = when (result) {
             RoundResult.WIN -> current.copy(wins = current.wins + 1)
             RoundResult.LOSS -> current.copy(losses = current.losses + 1)
             RoundResult.DRAW -> current.copy(draws = current.draws + 1)
         }
+        players[name] = stats.copy(history = (listOf(MatchRecord(atMs, opponent, result)) + stats.history).take(HISTORY_LIMIT))
         persistLocked()
     }
 
@@ -74,6 +100,10 @@ class JsonScoreStore(private val file: File) : ScoreStore {
             tmp.delete()
         }
     }
+
+    private companion object {
+        const val HISTORY_LIMIT = 20
+    }
 }
 
 /** Keeps per-name round results; unnamed players are invisible to the leaderboard. */
@@ -84,11 +114,22 @@ class Scoreboard(private val store: ScoreStore) {
         winner: PlayerSymbol?,
     ) {
         if (winner == null) {
-            playerNames.values.forEach { store.addResult(it, RoundResult.DRAW) }
+            val named = playerNames.values.toList()
+            named.forEach { name ->
+                store.addResult(name, RoundResult.DRAW, opponent = named.filter { it != name }.firstOrNull())
+            }
             return
         }
-        playerNames[winner]?.let { store.addResult(it, RoundResult.WIN) }
-        playerNames[winner.other]?.let { store.addResult(it, RoundResult.LOSS) }
+        val winnerName = playerNames[winner]
+        val loserName = playerNames[winner.other]
+        winnerName?.let { store.addResult(it, RoundResult.WIN, loserName) }
+        loserName?.let { store.addResult(it, RoundResult.LOSS, winnerName) }
+    }
+
+    fun profile(name: String?): PlayerProfile? {
+        if (name.isNullOrBlank()) return null
+        val stats = store.loadAll()[name] ?: return null
+        return PlayerProfile(name, stats)
     }
 
     fun top(limit: Int = 10): List<LeaderboardEntry> = store.loadAll()

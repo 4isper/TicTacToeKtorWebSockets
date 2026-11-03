@@ -7,19 +7,19 @@ import com.m4isper.tictactoe.protocol.ClientMessage
 import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
 import com.m4isper.tictactoe.ui.Lang
-import com.m4isper.tictactoe.ui.copiedText
-import com.m4isper.tictactoe.ui.isRoundRestartTransition
-import com.m4isper.tictactoe.ui.isTurnTransition
-import com.m4isper.tictactoe.ui.newMoveCells
-import com.m4isper.tictactoe.ui.soundCue
 import com.m4isper.tictactoe.ui.SoundCue
+import com.m4isper.tictactoe.ui.copiedText
 import com.m4isper.tictactoe.ui.copyLinkText
 import com.m4isper.tictactoe.ui.errorText
+import com.m4isper.tictactoe.ui.isRoundRestartTransition
+import com.m4isper.tictactoe.ui.isTurnTransition
 import com.m4isper.tictactoe.ui.leaderboardTitle
+import com.m4isper.tictactoe.ui.newMoveCells
 import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.restartText
 import com.m4isper.tictactoe.ui.scoreText
+import com.m4isper.tictactoe.ui.soundCue
 import com.m4isper.tictactoe.ui.soundIcon
 import com.m4isper.tictactoe.ui.soundTitle
 import com.m4isper.tictactoe.ui.statusText
@@ -86,6 +86,45 @@ fun main() {
 
     fun roundIsOver(s: GameState): Boolean = s.winningPlayer != null || s.isBoardFull
 
+    fun resultMark(result: String): String = when (result) {
+        "WIN" -> "✓"
+        "LOSS" -> "✗"
+        else -> "="
+    }
+
+    fun showProfile(name: String) {
+        try {
+            val encoded = js("encodeURIComponent(name)")
+            window.asDynamic().fetch("/player?name=" + encoded).then { response: dynamic ->
+                val profileDiv = document.getElementById("profile") as HTMLElement
+                if (response.status != 200) {
+                    profileDiv.innerHTML = ""
+                    return@then
+                }
+                response.json().then { data: dynamic ->
+                    profileDiv.innerHTML = ""
+                    val title = document.createElement("h3")
+                    title.textContent = data.name as String
+                    val ul = document.createElement("ul") as HTMLElement
+                    val history = (data.stats.history ?: js("[]")) as Array<dynamic>
+                    history.forEach { rec ->
+                        val li = document.createElement("li")
+                        val opponent = rec.opponent as? String
+                        val d = Date(rec.epochMs as Double)
+                        val stamp = "${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')} " +
+                            "${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}"
+                        li.textContent = "${resultMark(rec.result as String)} ${if (opponent != null) "vs $opponent · " else ""}$stamp"
+                        ul.appendChild(li)
+                    }
+                    profileDiv.appendChild(title)
+                    profileDiv.appendChild(ul)
+                }
+            }.catch { /* the profile is decorative */ }
+        } catch (t: Throwable) {
+            // decorative as well
+        }
+    }
+
     fun refreshLeaderboard() {
         try {
             window.asDynamic().fetch("/leaderboard").then { response: dynamic ->
@@ -94,8 +133,11 @@ fun main() {
                     rows.innerHTML = ""
                     val entries = data.entries as Array<dynamic>
                     entries.forEachIndexed { index, entry ->
-                        val li = document.createElement("li")
+                        val li = document.createElement("li") as HTMLElement
                         li.textContent = "${index + 1}. ${entry.name} — ${entry.stats.wins} : ${entry.stats.losses} : ${entry.stats.draws}"
+                        li.style.cursor = "pointer"
+                        li.title = entry.name as String
+                        li.onclick = { showProfile(entry.name as String) }
                         rows.appendChild(li)
                     }
                 }
@@ -145,7 +187,9 @@ fun main() {
             }
 
             SoundCue.DRAW -> beep(220.0, 250, "triangle")
+
             SoundCue.MOVE -> beep(660.0, 60)
+
             SoundCue.NONE -> Unit
         }
     }

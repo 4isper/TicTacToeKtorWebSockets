@@ -10,6 +10,7 @@ import com.m4isper.tictactoe.protocol.protocolJson
 import io.ktor.client.plugins.websocket.*
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.CompletableDeferred
@@ -97,6 +98,13 @@ class ApplicationTest {
         val board = client.get("/leaderboard").bodyAsText()
         assertTrue("Аня" in board, "leaderboard should contain Аня: $board")
         assertTrue("Боря" in board, "leaderboard should contain Боря: $board")
+
+        val profile = client.get("/player?name=Аня")
+        assertEquals(HttpStatusCode.OK, profile.status)
+        assertTrue("Боря" in profile.bodyAsText(), "history should name the opponent: ${profile.bodyAsText()}")
+        assertTrue("WIN" in profile.bodyAsText())
+
+        assertEquals(HttpStatusCode.NotFound, client.get("/player?name=Кто-то").status)
     }
 
     @Test

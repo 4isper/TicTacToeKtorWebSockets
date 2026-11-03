@@ -84,6 +84,5 @@ class ClientLogicTest {
 }
 
 private object Boards {
-    fun fieldWith(moves: List<Pair<Cell, PlayerSymbol>>): List<List<PlayerSymbol?>> =
-        List(3) { y -> List(3) { x -> moves.firstOrNull { it.first == Cell(x, y) }?.second } }
+    fun fieldWith(moves: List<Pair<Cell, PlayerSymbol>>): List<List<PlayerSymbol?>> = List(3) { y -> List(3) { x -> moves.firstOrNull { it.first == Cell(x, y) }?.second } }
 }
