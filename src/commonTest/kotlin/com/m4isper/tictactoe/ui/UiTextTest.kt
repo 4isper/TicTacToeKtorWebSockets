@@ -122,6 +122,15 @@ class UiTextTest {
     }
 
     @Test
+    fun `cells announce their coordinates and contents`() {
+        assertEquals("Ряд 2, колонка 3, пусто", cellAriaText(x = 2, y = 1, symbol = null))
+        assertEquals("Ряд 1, колонка 1: X", cellAriaText(x = 0, y = 0, symbol = PlayerSymbol.X))
+        assertEquals("Ряд 3, колонка 2: O", cellAriaText(x = 1, y = 2, symbol = PlayerSymbol.O))
+        assertEquals("Row 2, column 3, empty", cellAriaText(x = 2, y = 1, symbol = null, Lang.EN))
+        assertEquals("Row 1, column 1: X", cellAriaText(x = 0, y = 0, symbol = PlayerSymbol.X, Lang.EN))
+    }
+
+    @Test
     fun `restart countdown rounds up so it never shows zero while waiting`() {
         assertEquals("Новый раунд через 5…", restartText(4_500))
         assertEquals("Новый раунд через 1…", restartText(999))

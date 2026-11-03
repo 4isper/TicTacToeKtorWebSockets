@@ -232,6 +232,12 @@ fun Application.webUi(
                 rule(".cell.pop") {
                     animation += Animation("cell-pop", 180.ms, Timing.easeOut)
                 }
+                rule(".cell.last-move") {
+                    boxSizing = BoxSizing.borderBox
+                    borderWidth = 2.px
+                    borderStyle = BorderStyle.solid
+                    borderColor = Color("#7aa2f7")
+                }
                 rule(".cell.winning") {
                     backgroundColor = Color("#2e7d4f")
                     animation += Animation("win-pulse", 1200.ms, Timing.easeInOut, iterationCount = IterationCount.infinite)

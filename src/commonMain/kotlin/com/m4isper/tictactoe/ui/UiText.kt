@@ -174,6 +174,25 @@ fun replayHintText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.EN -> "Replay this match"
 }
 
+fun cellAriaText(
+    x: Int,
+    y: Int,
+    symbol: PlayerSymbol?,
+    lang: Lang = Lang.RU,
+): String = when (lang) {
+    Lang.RU -> when (symbol) {
+        PlayerSymbol.X -> "Ряд ${y + 1}, колонка ${x + 1}: X"
+        PlayerSymbol.O -> "Ряд ${y + 1}, колонка ${x + 1}: O"
+        null -> "Ряд ${y + 1}, колонка ${x + 1}, пусто"
+    }
+
+    Lang.EN -> when (symbol) {
+        PlayerSymbol.X -> "Row ${y + 1}, column ${x + 1}: X"
+        PlayerSymbol.O -> "Row ${y + 1}, column ${x + 1}: O"
+        null -> "Row ${y + 1}, column ${x + 1}, empty"
+    }
+}
+
 fun soundIcon(muted: Boolean): String = if (muted) "🔇" else "🔊"
 
 fun soundTitle(muted: Boolean, lang: Lang = Lang.RU): String = when (lang) {

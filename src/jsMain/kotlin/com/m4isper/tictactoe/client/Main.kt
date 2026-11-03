@@ -9,6 +9,7 @@ import com.m4isper.tictactoe.protocol.protocolJson
 import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.SoundCue
 import com.m4isper.tictactoe.ui.botLabel
+import com.m4isper.tictactoe.ui.cellAriaText
 import com.m4isper.tictactoe.ui.connectionErrorText
 import com.m4isper.tictactoe.ui.connectionLostText
 import com.m4isper.tictactoe.ui.copiedText
@@ -387,8 +388,9 @@ fun main() {
                 cellButton.className = buildString {
                     append("cell")
                     if ("$x,$y" in winningCells) append(" winning")
-                    if (newMoves.any { it.x == x && it.y == y }) append(" pop")
+                    if (newMoves.any { it.x == x && it.y == y }) append(" pop last-move")
                 }
+                cellButton.setAttribute("aria-label", cellAriaText(x, y, cell, lang))
                 cellButton.style.width = "${cellPx}px"
                 cellButton.style.height = "${cellPx}px"
                 cellButton.style.fontSize = "${cellPx / 2}px"
