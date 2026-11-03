@@ -70,13 +70,16 @@ class TicTacToeGame(
     }
 
     suspend fun broadcast(state: GameState) {
-        playerSockets.values.forEach { socket ->
+        for ((player, socket) in playerSockets) {
             try {
                 socket.send(
                     protocolJson.encodeToString<ServerEvent>(ServerEvent.StateChanged(state)),
                 )
             } catch (e: Exception) {
-                logger.warn("Failed to broadcast game state to a socket", e)
+                logger.warn("Failed to broadcast game state to a player socket", e)
+                synchronized(lock) {
+                    if (playerSockets[player] === socket) disconnectPlayer(player)
+                }
             }
         }
     }

@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
 class TicTacToeGameTest {
 
     @Suppress("EmptyFunctionBlock")
-    private class FakeSession : WebSocketSession {
+    private open class FakeSession : WebSocketSession {
         override val coroutineContext = SupervisorJob()
         override var masking: Boolean = false
         override var maxFrameSize: Long = Long.MAX_VALUE
@@ -28,6 +28,27 @@ class TicTacToeGameTest {
         override val extensions: List<WebSocketExtension<*>> = emptyList()
         override suspend fun flush() {}
         override fun terminate() {}
+    }
+
+    private class DeadSession : FakeSession() {
+        override val outgoing: SendChannel<Frame> = Channel<Frame>().apply { close() }
+    }
+
+    @Test
+    fun `a socket that fails to accept broadcasts is dropped from the game`() = runBlocking {
+        val game = TicTacToeGame()
+        val oSession = FakeSession()
+        game.connectPlayer(DeadSession())
+        game.connectPlayer(oSession)
+
+        game.finishTurn(PlayerSymbol.O, oSession, 0, 0)
+
+        withTimeout(2_000) {
+            while (PlayerSymbol.X in game.currentState().connectionPlayers) delay(10)
+        }
+        assertEquals(listOf(PlayerSymbol.O), game.currentState().connectionPlayers)
+
+        game.shutdown()
     }
 
     @Test
