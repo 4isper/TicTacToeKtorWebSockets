@@ -31,13 +31,32 @@ class TicTacToeGameTest {
     @Test
     fun `illegal moves are rejected with a reason`() = runBlocking {
         val game = TicTacToeGame()
-        game.connectPlayer(FakeSession())
-        game.connectPlayer(FakeSession())
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
 
-        assertEquals("cell out of bounds", game.finishTurn(PlayerSymbol.X, 3, 0))
-        assertEquals("not your turn", game.finishTurn(PlayerSymbol.O, 0, 0))
-        assertNull(game.finishTurn(PlayerSymbol.X, 0, 0))
-        assertEquals("cell occupied", game.finishTurn(PlayerSymbol.O, 0, 0))
+        assertEquals("cell out of bounds", game.finishTurn(PlayerSymbol.X, xSession, 3, 0))
+        assertEquals("not your turn", game.finishTurn(PlayerSymbol.O, oSession, 0, 0))
+        assertNull(game.finishTurn(PlayerSymbol.X, xSession, 0, 0))
+        assertEquals("cell occupied", game.finishTurn(PlayerSymbol.O, oSession, 0, 0))
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `a session that lost the player slot cannot play for the player`() = runBlocking {
+        val game = TicTacToeGame()
+        val originalSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(originalSession)
+        game.connectPlayer(oSession)
+
+        val replacementSession = FakeSession()
+        game.reattachSession(PlayerSymbol.X, replacementSession)
+
+        assertEquals("stale session", game.finishTurn(PlayerSymbol.X, originalSession, 0, 0))
+        assertNull(game.finishTurn(PlayerSymbol.X, replacementSession, 0, 0))
 
         game.shutdown()
     }
@@ -45,14 +64,16 @@ class TicTacToeGameTest {
     @Test
     fun `score accumulates across rounds and survives the auto restart`() = runBlocking {
         val game = TicTacToeGame(roundRestartDelayMs = 50)
-        game.connectPlayer(FakeSession())
-        game.connectPlayer(FakeSession())
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
 
-        game.finishTurn(PlayerSymbol.X, 0, 0)
-        game.finishTurn(PlayerSymbol.O, 1, 0)
-        game.finishTurn(PlayerSymbol.X, 0, 1)
-        game.finishTurn(PlayerSymbol.O, 1, 1)
-        game.finishTurn(PlayerSymbol.X, 0, 2)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 1)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
 
         val won = game.currentState()
         assertEquals(PlayerSymbol.X, won.winningPlayer)
@@ -65,11 +86,11 @@ class TicTacToeGameTest {
         assertNull(restarted.winningPlayer)
         assertEquals(mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), restarted.score)
 
-        game.finishTurn(PlayerSymbol.X, 0, 0)
-        game.finishTurn(PlayerSymbol.O, 1, 0)
-        game.finishTurn(PlayerSymbol.X, 0, 1)
-        game.finishTurn(PlayerSymbol.O, 1, 1)
-        game.finishTurn(PlayerSymbol.X, 0, 2)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 1)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
 
         assertEquals(mapOf(PlayerSymbol.X to 2, PlayerSymbol.O to 0), game.currentState().score)
         game.shutdown()
@@ -78,18 +99,20 @@ class TicTacToeGameTest {
     @Test
     fun `four by four board accepts moves up to its bounds and detects the win`() = runBlocking {
         val game = TicTacToeGame(boardSize = 4)
-        game.connectPlayer(FakeSession())
-        game.connectPlayer(FakeSession())
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
 
-        assertEquals("cell out of bounds", game.finishTurn(PlayerSymbol.X, 4, 0))
+        assertEquals("cell out of bounds", game.finishTurn(PlayerSymbol.X, xSession, 4, 0))
 
-        game.finishTurn(PlayerSymbol.X, 0, 0)
-        game.finishTurn(PlayerSymbol.O, 1, 0)
-        game.finishTurn(PlayerSymbol.X, 0, 1)
-        game.finishTurn(PlayerSymbol.O, 1, 1)
-        game.finishTurn(PlayerSymbol.X, 0, 2)
-        game.finishTurn(PlayerSymbol.O, 1, 2)
-        assertNull(game.finishTurn(PlayerSymbol.X, 0, 3))
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 1)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 2)
+        assertNull(game.finishTurn(PlayerSymbol.X, xSession, 0, 3))
 
         val won = game.currentState()
         assertEquals(PlayerSymbol.X, won.winningPlayer)

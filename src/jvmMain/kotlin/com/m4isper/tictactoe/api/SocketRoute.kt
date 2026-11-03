@@ -37,7 +37,7 @@ fun Route.socket(lobby: GameLobby) {
                         .getOrNull()
 
                     val event: ServerEvent? = when (message) {
-                        is ClientMessage.MakeTurn -> binding.game.finishTurn(binding.symbol, message.x, message.y)
+                        is ClientMessage.MakeTurn -> binding.game.finishTurn(binding.symbol, this, message.x, message.y)
                             ?.let(ServerEvent::Error)
 
                         is ClientMessage.Reconnect -> {

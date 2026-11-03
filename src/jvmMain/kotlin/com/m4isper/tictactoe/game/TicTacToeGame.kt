@@ -78,10 +78,15 @@ class TicTacToeGame(
         }
     }
 
-    fun finishTurn(player: PlayerSymbol, x: Int, y: Int): String? {
+    fun finishTurn(
+        player: PlayerSymbol,
+        session: WebSocketSession,
+        x: Int,
+        y: Int,
+    ): String? {
         synchronized(lock) {
             val current = state.value
-            val rejection = rejectionReason(player, x, y, current)
+            val rejection = rejectionReason(player, session, x, y, current)
             if (rejection != null) return rejection
 
             val newField = current.field.mapIndexed { row, cells ->
@@ -119,9 +124,16 @@ class TicTacToeGame(
 
     fun currentState(): GameState = state.value
 
-    private fun rejectionReason(player: PlayerSymbol, x: Int, y: Int, current: GameState): String? {
+    private fun rejectionReason(
+        player: PlayerSymbol,
+        session: WebSocketSession,
+        x: Int,
+        y: Int,
+        current: GameState,
+    ): String? {
         val size = current.field.size
         return when {
+            playerSockets[player] !== session -> "stale session"
             x !in 0 until size || y !in 0 until size -> "cell out of bounds"
             current.playerAtTurn != player -> "not your turn"
             current.winningPlayer != null -> "round is over"

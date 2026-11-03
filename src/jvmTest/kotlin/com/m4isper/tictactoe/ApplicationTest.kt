@@ -313,6 +313,41 @@ class ApplicationTest {
     }
 
     @Test
+    fun `a replaced session can no longer play for the player`() = testApplication {
+        application {
+            module()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play") {
+            val (joined, _) = receiveHandshake()
+
+            val reconnected = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val replacement = scope.launch {
+                xClient.webSocket("/play") {
+                    receiveHandshake()
+                    sendReconnect(joined.token)
+                    reconnected.complete(Unit)
+                    awaitCancellation()
+                }
+            }
+            reconnected.await()
+            // drain the broadcast about the replacement's short-lived join
+            skipBroadcast()
+
+            // the outer session lost the X slot to the reconnected one
+            sendMakeTurn(0, 0)
+            val event = receiveEvent()
+            assertTrue(event is ServerEvent.Error)
+
+            replacement.cancel()
+        }
+    }
+
+    @Test
     fun `slot is freed when the grace expires and the old token dies`() = testApplication {
         application {
             module(reconnectGraceMs = 500)
