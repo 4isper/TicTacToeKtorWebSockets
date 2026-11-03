@@ -973,6 +973,31 @@ class ApplicationTest {
     }
 
     @Test
+    fun `the page is installable`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient { }
+
+        val page = client.get("/?lang=en").bodyAsText()
+        assertTrue("/manifest.webmanifest" in page, "the page should link the manifest: $page")
+        assertTrue("theme-color" in page, "the page should carry the theme color")
+
+        val manifest = client.get("/manifest.webmanifest")
+        assertEquals(HttpStatusCode.OK, manifest.status)
+        assertTrue("\"start_url\":\"/\"" in manifest.bodyAsText(), manifest.bodyAsText())
+        assertTrue("\"display\":\"standalone\"" in manifest.bodyAsText())
+
+        val sw = client.get("/sw.js")
+        assertEquals(HttpStatusCode.OK, sw.status)
+        assertTrue("""addEventListener("fetch"""" in sw.bodyAsText(), sw.bodyAsText())
+
+        val icon = client.get("/icon.svg")
+        assertEquals(HttpStatusCode.OK, icon.status)
+        assertTrue("<svg" in icon.bodyAsText())
+    }
+
+    @Test
     fun `bot fills the second slot and answers with a move`() = testApplication {
         application {
             module()

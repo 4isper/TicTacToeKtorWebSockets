@@ -43,6 +43,12 @@ import org.w3c.dom.url.URLSearchParams
 import kotlin.js.Date
 
 fun main() {
+    try {
+        window.asDynamic().navigator.serviceWorker.register("/sw.js").catch { /* offline support is decorative */ }
+    } catch (_: Throwable) {
+        // no service worker support: the page still works
+    }
+
     val status = document.getElementById("status") as HTMLElement
     val board = document.getElementById("board") as HTMLElement
     val errorBox = document.getElementById("error") as HTMLElement

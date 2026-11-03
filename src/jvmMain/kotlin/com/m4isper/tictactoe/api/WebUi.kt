@@ -36,6 +36,7 @@ import kotlinx.html.p
 import kotlinx.html.script
 import kotlinx.html.title
 import kotlinx.html.ul
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
 
@@ -46,6 +47,31 @@ private suspend fun ApplicationCall.respondCss(builder: CssBuilder.() -> Unit) {
 }
 
 private val apiJson = Json { encodeDefaults = true }
+
+@Serializable
+private data class WebManifestIcon(val src: String, val sizes: String, val type: String = "image/svg+xml")
+
+@Serializable
+private data class WebManifest(
+    val name: String,
+    val short_name: String,
+    val start_url: String = "/",
+    val display: String = "standalone",
+    val background_color: String = "#14141f",
+    val theme_color: String = "#14141f",
+    val icons: List<WebManifestIcon>,
+)
+
+private const val ICON_SVG =
+    """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">""" +
+        """<rect width="100" height="100" rx="18" fill="#14141f"/>""" +
+        """<g stroke="#7aa2f7" stroke-width="7" stroke-linecap="round"><line x1="22" y1="22" x2="46" y2="46"/><line x1="46" y1="22" x2="22" y2="46"/></g>""" +
+        """<g stroke="#e8e8f0" stroke-width="7"><circle cx="66" cy="66" r="13" fill="none"/></g></svg>"""
+
+private const val SERVICE_WORKER_JS =
+    """self.addEventListener("install", function (e) { self.skipWaiting() });""" +
+        """self.addEventListener("activate", function (e) { self.clients.claim() });""" +
+        """self.addEventListener("fetch", function (e) { /* pass-through: the game is online-only */ });"""
 
 fun Application.webUi(
     scoreboard: Scoreboard,
@@ -75,6 +101,30 @@ fun Application.webUi(
                 apiJson.encodeToString(RoomsResponse(lobby.roomSnapshots())),
                 ContentType.Application.Json,
             )
+        }
+
+        get("/manifest.webmanifest") {
+            val lang = parseLang(call.request.queryParameters["lang"])
+            val manifest = WebManifest(
+                name = when (lang) {
+                    Lang.RU -> "Крестики-нолики"
+                    Lang.EN -> "Tic-tac-toe"
+                },
+                short_name = when (lang) {
+                    Lang.RU -> "Крестики"
+                    Lang.EN -> "Tic-tac-toe"
+                },
+                icons = listOf(WebManifestIcon("/icon.svg", "any")),
+            )
+            call.respondText(apiJson.encodeToString(manifest), ContentType.Application.Json)
+        }
+
+        get("/icon.svg") {
+            call.respondText(ICON_SVG, ContentType.Image.SVG)
+        }
+
+        get("/sw.js") {
+            call.respondText(SERVICE_WORKER_JS, ContentType.Text.JavaScript)
         }
 
         get("/styles.css") {
@@ -233,6 +283,9 @@ fun Application.webUi(
                 head {
                     meta { charset = "utf-8" }
                     meta(name = "viewport", content = "width=device-width, initial-scale=1")
+                    meta(name = "theme-color", content = "#14141f")
+                    link(rel = "manifest", href = "/manifest.webmanifest")
+                    link(rel = "icon", href = "/icon.svg")
                     title {
                         +"${when (pageLang) {
                             Lang.RU -> "Крестики-нолики"
