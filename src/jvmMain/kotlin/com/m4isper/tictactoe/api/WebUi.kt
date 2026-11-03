@@ -1,5 +1,10 @@
 package com.m4isper.tictactoe.api
 
+import com.m4isper.tictactoe.ui.Lang
+import com.m4isper.tictactoe.ui.copyLinkText
+import com.m4isper.tictactoe.ui.namePlaceholder
+import com.m4isper.tictactoe.ui.parseLang
+import com.m4isper.tictactoe.ui.rematchButtonText
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.html.*
@@ -152,21 +157,40 @@ fun Application.webUi() {
 
         get("/") {
             val room = call.request.queryParameters["room"]
+            val pageLang = parseLang(call.request.queryParameters["lang"])
             call.respondHtml {
-                lang = "ru"
+                lang = when (pageLang) {
+                    Lang.RU -> "ru"
+                    Lang.EN -> "en"
+                }
                 head {
                     meta { charset = "utf-8" }
                     meta(name = "viewport", content = "width=device-width, initial-scale=1")
-                    title { +"Крестики-нолики" }
+                    title {
+                        +"${when (pageLang) {
+                            Lang.RU -> "Крестики-нолики"
+                            Lang.EN -> "Tic-tac-toe"
+                        }}"
+                    }
                     link(rel = "stylesheet", href = "/styles.css")
                 }
                 body {
-                    h1 { +"Крестики-нолики" }
+                    h1 {
+                        +"${when (pageLang) {
+                            Lang.RU -> "Крестики-нолики"
+                            Lang.EN -> "Tic-tac-toe"
+                        }}"
+                    }
                     room?.let {
-                        p { +"Комната: $it" }
+                        p {
+                            +"${when (pageLang) {
+                                Lang.RU -> "Комната: $it"
+                                Lang.EN -> "Room: $it"
+                            }}"
+                        }
                         button(classes = "secondary") {
                             id = "copy-link"
-                            +"Скопировать ссылку"
+                            +copyLinkText(pageLang)
                         }
                     }
                     div { id = "status" }
@@ -174,7 +198,7 @@ fun Application.webUi() {
                     div(classes = "name-row") {
                         input(InputType.text) {
                             id = "name"
-                            placeholder = "Ваше имя"
+                            placeholder = namePlaceholder(pageLang)
                             maxLength = "20"
                         }
                         button(classes = "secondary") {
@@ -184,7 +208,7 @@ fun Application.webUi() {
                     }
                     button(classes = "secondary") {
                         id = "rematch"
-                        +"Играть снова"
+                        +rematchButtonText(waiting = false, lang = pageLang)
                     }
                     div { id = "board" }
                     div { id = "error" }

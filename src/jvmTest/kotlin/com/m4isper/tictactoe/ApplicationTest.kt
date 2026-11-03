@@ -35,6 +35,23 @@ class ApplicationTest {
     }
 
     @Test
+    fun `the page is rendered in the requested language`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient { }
+
+        val russian = client.get("/?room=lang").bodyAsText()
+        assertTrue("Скопировать ссылку" in russian, "default page should be russian")
+        assertTrue("lang=\"ru\"" in russian)
+
+        val english = client.get("/?room=lang&lang=en").bodyAsText()
+        assertTrue("Copy link" in english, "lang=en should render english")
+        assertTrue("lang=\"en\"" in english)
+        assertTrue("Tic-tac-toe" in english)
+    }
+
+    @Test
     fun `first player receives game state after connect`() = testApplication {
         application {
             module()

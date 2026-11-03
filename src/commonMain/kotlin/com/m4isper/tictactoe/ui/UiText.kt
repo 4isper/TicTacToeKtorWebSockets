@@ -8,38 +8,112 @@ import kotlin.math.ceil
 fun statusText(
     state: GameState,
     mySymbol: PlayerSymbol?,
-): String = when {
-    state.winningPlayer != null -> "Победил ${displayName(state, state.winningPlayer)}!"
-    state.isBoardFull -> "Ничья!"
-    state.connectionPlayers.size < 2 -> "Ожидание соперника…"
-    state.playerAtTurn == mySymbol -> "Ваш ход"
-    else -> "Ход: ${displayName(state, state.playerAtTurn)}"
+    lang: Lang = Lang.RU,
+): String = when (lang) {
+    Lang.RU -> when {
+        state.winningPlayer != null -> "Победил ${displayName(state, state.winningPlayer)}!"
+        state.isBoardFull -> "Ничья!"
+        state.connectionPlayers.size < 2 -> "Ожидание соперника…"
+        state.playerAtTurn == mySymbol -> "Ваш ход"
+        else -> "Ход: ${displayName(state, state.playerAtTurn)}"
+    }
+
+    Lang.EN -> when {
+        state.winningPlayer != null -> "${displayName(state, state.winningPlayer)} won!"
+        state.isBoardFull -> "Draw!"
+        state.connectionPlayers.size < 2 -> "Waiting for the opponent…"
+        state.playerAtTurn == mySymbol -> "Your move"
+        else -> "Turn: ${displayName(state, state.playerAtTurn)}"
+    }
 }
 
 private fun displayName(state: GameState, symbol: PlayerSymbol?): String = symbol?.let { state.playerNames[it] ?: it.toString() } ?: "—"
 
-fun scoreText(state: GameState): String {
+fun scoreText(
+    state: GameState,
+    lang: Lang = Lang.RU,
+): String {
     val x = state.score[PlayerSymbol.X] ?: 0
     val o = state.score[PlayerSymbol.O] ?: 0
-    return "Счёт — X $x : $o O"
+    val label = when (lang) {
+        Lang.RU -> "Счёт"
+        Lang.EN -> "Score"
+    }
+    return "$label — X $x : $o O"
 }
 
-fun errorText(reason: ErrorReason): String = when (reason) {
-    ErrorReason.CELL_OCCUPIED -> "Клетка занята"
-    ErrorReason.NOT_YOUR_TURN -> "Сейчас не ваш ход"
-    ErrorReason.ROUND_IS_OVER -> "Раунд окончен"
-    ErrorReason.CELL_OUT_OF_BOUNDS -> "Клетка за пределами доски"
-    ErrorReason.MALFORMED_MESSAGE -> "Непонятное сообщение"
-    ErrorReason.UNKNOWN_TOKEN -> "Сессия не найдена"
-    ErrorReason.ROOM_IS_FULL -> "В комнате уже два игрока"
-    ErrorReason.INVALID_ROOM_NAME -> "Неверное имя комнаты"
-    ErrorReason.STALE_SESSION -> "Эта вкладка больше не в игре"
-    ErrorReason.INVALID_BOARD_SIZE -> "Неверный размер доски"
-    ErrorReason.INVALID_WIN_LENGTH -> "Неверная длина победной линии"
-    ErrorReason.ROUND_NOT_OVER -> "Раунд ещё идёт"
-    ErrorReason.INVALID_NAME -> "Неверное имя"
+fun errorText(
+    reason: ErrorReason,
+    lang: Lang = Lang.RU,
+): String = when (lang) {
+    Lang.RU -> when (reason) {
+        ErrorReason.CELL_OCCUPIED -> "Клетка занята"
+        ErrorReason.NOT_YOUR_TURN -> "Сейчас не ваш ход"
+        ErrorReason.ROUND_IS_OVER -> "Раунд окончен"
+        ErrorReason.CELL_OUT_OF_BOUNDS -> "Клетка за пределами доски"
+        ErrorReason.MALFORMED_MESSAGE -> "Непонятное сообщение"
+        ErrorReason.UNKNOWN_TOKEN -> "Сессия не найдена"
+        ErrorReason.ROOM_IS_FULL -> "В комнате уже два игрока"
+        ErrorReason.INVALID_ROOM_NAME -> "Неверное имя комнаты"
+        ErrorReason.STALE_SESSION -> "Эта вкладка больше не в игре"
+        ErrorReason.INVALID_BOARD_SIZE -> "Неверный размер доски"
+        ErrorReason.INVALID_WIN_LENGTH -> "Неверная длина победной линии"
+        ErrorReason.ROUND_NOT_OVER -> "Раунд ещё идёт"
+        ErrorReason.INVALID_NAME -> "Неверное имя"
+    }
+
+    Lang.EN -> when (reason) {
+        ErrorReason.CELL_OCCUPIED -> "Cell occupied"
+        ErrorReason.NOT_YOUR_TURN -> "Not your turn"
+        ErrorReason.ROUND_IS_OVER -> "Round is over"
+        ErrorReason.CELL_OUT_OF_BOUNDS -> "Cell out of bounds"
+        ErrorReason.MALFORMED_MESSAGE -> "Malformed message"
+        ErrorReason.UNKNOWN_TOKEN -> "Session not found"
+        ErrorReason.ROOM_IS_FULL -> "The room already has two players"
+        ErrorReason.INVALID_ROOM_NAME -> "Invalid room name"
+        ErrorReason.STALE_SESSION -> "This tab is no longer in the game"
+        ErrorReason.INVALID_BOARD_SIZE -> "Invalid board size"
+        ErrorReason.INVALID_WIN_LENGTH -> "Invalid win length"
+        ErrorReason.ROUND_NOT_OVER -> "Round is not over"
+        ErrorReason.INVALID_NAME -> "Invalid name"
+    }
 }
 
-fun restartText(msLeft: Long): String = "Новый раунд через ${ceil(msLeft / 1000.0).toInt()}…"
+fun restartText(
+    msLeft: Long,
+    lang: Lang = Lang.RU,
+): String = when (lang) {
+    Lang.RU -> "Новый раунд через ${ceil(msLeft / 1000.0).toInt()}…"
+    Lang.EN -> "Next round in ${ceil(msLeft / 1000.0).toInt()}…"
+}
 
-fun timerSuffix(msLeft: Long): String = " · ${ceil(msLeft / 1000.0).toInt()} с"
+fun timerSuffix(
+    msLeft: Long,
+    lang: Lang = Lang.RU,
+): String = when (lang) {
+    Lang.RU -> " · ${ceil(msLeft / 1000.0).toInt()} с"
+    Lang.EN -> " · ${ceil(msLeft / 1000.0).toInt()}s"
+}
+
+fun rematchButtonText(
+    waiting: Boolean,
+    lang: Lang = Lang.RU,
+): String = when (lang) {
+    Lang.RU -> if (waiting) "Ожидание соперника…" else "Играть снова"
+    Lang.EN -> if (waiting) "Waiting for the opponent…" else "Play again"
+}
+
+fun copyLinkText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Скопировать ссылку"
+    Lang.EN -> "Copy link"
+}
+
+fun copiedText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Скопировано!"
+    Lang.EN -> "Copied!"
+}
+
+fun namePlaceholder(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Ваше имя"
+    Lang.EN -> "Your name"
+}

@@ -93,4 +93,33 @@ class UiTextTest {
         assertEquals(" · 30 с", timerSuffix(29_500))
         assertEquals(" · 1 с", timerSuffix(50))
     }
+
+    @Test
+    fun `language falls back to russian`() {
+        assertEquals(Lang.RU, parseLang(null))
+        assertEquals(Lang.RU, parseLang("ru"))
+        assertEquals(Lang.EN, parseLang("en"))
+        assertEquals(Lang.EN, parseLang("EN"))
+    }
+
+    @Test
+    fun `statuses are available in english`() {
+        val won = GameState(
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            winningPlayer = PlayerSymbol.X,
+            playerNames = mapOf(PlayerSymbol.X to "Аня"),
+        )
+        assertEquals("Аня won!", statusText(won, mySymbol = PlayerSymbol.O, lang = Lang.EN))
+        assertEquals(
+            "Waiting for the opponent…",
+            statusText(GameState(connectionPlayers = listOf(PlayerSymbol.X)), PlayerSymbol.X, Lang.EN),
+        )
+        assertEquals("Your move", statusText(GameState(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O)), PlayerSymbol.X, Lang.EN))
+        assertEquals("Score — X 1 : 2 O", scoreText(GameState(score = mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 2)), Lang.EN))
+        assertEquals("Next round in 5…", restartText(4_500, Lang.EN))
+        assertEquals(" · 30s", timerSuffix(29_500, Lang.EN))
+        assertEquals("Cell occupied", errorText(ErrorReason.CELL_OCCUPIED, Lang.EN))
+        assertEquals("Play again", rematchButtonText(waiting = false, Lang.EN))
+        assertEquals("Copy link", copyLinkText(Lang.EN))
+    }
 }

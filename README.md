@@ -8,7 +8,7 @@ A minimal tic-tac-toe game server: two players connect over WebSocket, every sta
 ./gradlew jvmRun       # builds the JS client, listens on :8080, PORT env overrides
 ```
 
-Then open http://localhost:8080/ to play in the browser (the page is rendered with the Ktor HTML DSL, the client is a Kotlin/JS bundle). Invite friends with a room link: http://localhost:8080/?room=alpha.
+Then open http://localhost:8080/ to play in the browser (the page is rendered with the Ktor HTML DSL, the client is a Kotlin/JS bundle). Invite friends with a room link: http://localhost:8080/?room=alpha. Append `&lang=en` to any link for the English UI — the default is Russian.
 
 ## Protocol
 

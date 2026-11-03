@@ -6,7 +6,12 @@ import com.m4isper.tictactoe.game.GameState
 import com.m4isper.tictactoe.protocol.ClientMessage
 import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
+import com.m4isper.tictactoe.ui.Lang
+import com.m4isper.tictactoe.ui.copiedText
+import com.m4isper.tictactoe.ui.copyLinkText
 import com.m4isper.tictactoe.ui.errorText
+import com.m4isper.tictactoe.ui.parseLang
+import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.restartText
 import com.m4isper.tictactoe.ui.scoreText
 import com.m4isper.tictactoe.ui.statusText
@@ -37,12 +42,14 @@ fun main() {
     val size = params.get("size")
     val win = params.get("win")
     val bot = params.get("bot")
+    val lang = parseLang(params.get("lang"))
     val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
     val query = listOfNotNull(
         room?.let { "room=$it" },
         size?.let { "size=$it" },
         win?.let { "win=$it" },
         bot?.let { "bot=$it" },
+        params.get("lang")?.let { "lang=$it" },
     ).joinToString("&")
     val wsUrl = "$wsProtocol://${window.location.host}/play" + (query.takeIf { it.isNotEmpty() }?.let { "?$it" } ?: "")
     val tokenKey = "tictactoe-token" + (room?.let { ":$it" } ?: "")
@@ -131,7 +138,7 @@ fun main() {
                 val current = lastState ?: return@setInterval
                 val msLeft = roundDeadline - Date.now()
                 if (msLeft <= 0) return@setInterval
-                showStatus(statusText(current, mySymbol) + " · " + restartText(msLeft.toLong()))
+                showStatus(statusText(current, mySymbol, lang) + " · " + restartText(msLeft.toLong(), lang))
             }, 250)
         } else {
             roundDeadline = 0.0
@@ -145,7 +152,7 @@ fun main() {
                 if (current.roundRestartInMs != null) return@setInterval
                 val msLeft = turnDeadline - Date.now()
                 if (msLeft <= 0) return@setInterval
-                showStatus(statusText(current, mySymbol) + timerSuffix(msLeft.toLong()))
+                showStatus(statusText(current, mySymbol, lang) + timerSuffix(msLeft.toLong(), lang))
             }, 250)
         } else {
             turnDeadline = 0.0
@@ -154,10 +161,10 @@ fun main() {
         rematchButton.style.display = if (state.roundRestartInMs != null && mySymbol != null) "block" else "none"
         val myRematch = mySymbol != null && mySymbol in state.rematchPlayers
         rematchButton.disabled = myRematch
-        rematchButton.textContent = if (myRematch) "Ожидание соперника…" else "Играть снова"
+        rematchButton.textContent = rematchButtonText(myRematch, lang)
 
-        showStatus(statusText(state, mySymbol))
-        scoreDiv.textContent = scoreText(state)
+        showStatus(statusText(state, mySymbol, lang))
+        scoreDiv.textContent = scoreText(state, lang)
         playStateSounds(previous, state)
 
         board.innerHTML = ""
@@ -213,7 +220,7 @@ fun main() {
             is ServerEvent.Error -> {
                 pendingReconnectToken = null
                 if (event.reason == ErrorReason.UNKNOWN_TOKEN) localStorage.removeItem(tokenKey)
-                showError(errorText(event.reason))
+                showError(errorText(event.reason, lang))
             }
         }
     }
@@ -245,8 +252,8 @@ fun main() {
     copyLink?.let { button ->
         button.onclick = {
             window.navigator.clipboard?.writeText(window.location.href)
-            button.textContent = "Скопировано!"
-            window.setTimeout({ button.textContent = "Скопировать ссылку" }, 2000)
+            button.textContent = copiedText(lang)
+            window.setTimeout({ button.textContent = copyLinkText(lang) }, 2000)
         }
     }
 
