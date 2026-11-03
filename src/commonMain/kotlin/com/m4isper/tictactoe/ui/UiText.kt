@@ -12,6 +12,7 @@ fun statusText(
 ): String = when (lang) {
     Lang.RU -> when {
         state.winningPlayer != null -> "Победил ${displayName(state, state.winningPlayer)}!"
+        state.isDrawAgreed -> "Ничья по соглашению!"
         state.isBoardFull -> "Ничья!"
         state.connectionPlayers.size < 2 -> "Ожидание соперника…"
         state.playerAtTurn == mySymbol -> "Ваш ход"
@@ -20,6 +21,7 @@ fun statusText(
 
     Lang.EN -> when {
         state.winningPlayer != null -> "${displayName(state, state.winningPlayer)} won!"
+        state.isDrawAgreed -> "Draw by agreement!"
         state.isBoardFull -> "Draw!"
         state.connectionPlayers.size < 2 -> "Waiting for the opponent…"
         state.playerAtTurn == mySymbol -> "Your move"
@@ -107,6 +109,24 @@ fun rematchButtonText(
 ): String = when (lang) {
     Lang.RU -> if (waiting) "Ожидание соперника…" else "Играть снова"
     Lang.EN -> if (waiting) "Waiting for the opponent…" else "Play again"
+}
+
+fun drawButtonText(
+    iOffered: Boolean,
+    opponentOffered: Boolean,
+    lang: Lang = Lang.RU,
+): String = when (lang) {
+    Lang.RU -> when {
+        opponentOffered -> "Принять ничью"
+        iOffered -> "Предложение отправлено…"
+        else -> "Предложить ничью"
+    }
+
+    Lang.EN -> when {
+        opponentOffered -> "Accept draw"
+        iOffered -> "Offer sent…"
+        else -> "Offer a draw"
+    }
 }
 
 fun copyLinkText(lang: Lang = Lang.RU): String = when (lang) {

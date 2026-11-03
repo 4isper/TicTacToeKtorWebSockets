@@ -28,6 +28,7 @@ fun soundCue(
     val movesNow = state.field.sumOf { row -> row.count { it != null } }
     return when {
         state.winningPlayer != null && previous.winningPlayer == null -> SoundCue.WIN
+        state.isDrawAgreed && !previous.isDrawAgreed -> SoundCue.DRAW
         state.isBoardFull && state.winningPlayer == null && !previous.isBoardFull -> SoundCue.DRAW
         movesNow > movesBefore -> SoundCue.MOVE
         else -> SoundCue.NONE

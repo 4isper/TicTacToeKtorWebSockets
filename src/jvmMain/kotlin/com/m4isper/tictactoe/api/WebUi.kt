@@ -4,6 +4,7 @@ import com.m4isper.tictactoe.stats.LeaderboardResponse
 import com.m4isper.tictactoe.stats.Scoreboard
 import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.copyLinkText
+import com.m4isper.tictactoe.ui.drawButtonText
 import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.namePlaceholder
 import com.m4isper.tictactoe.ui.parseLang
@@ -98,7 +99,7 @@ fun Application.webUi(scoreboard: Scoreboard) {
                     borderRadius = 8.px
                     cursor = Cursor.pointer
                 }
-                rule("#rematch") {
+                rule("#rematch, #draw") {
                     display = Display.none
                     margin = Margin(vertical = 4.px)
                     padding = Padding(horizontal = 14.px, vertical = 8.px)
@@ -109,7 +110,7 @@ fun Application.webUi(scoreboard: Scoreboard) {
                     borderRadius = 8.px
                     cursor = Cursor.pointer
                 }
-                rule("#rematch:disabled") {
+                rule("#rematch:disabled, #draw:disabled") {
                     opacity = 0.6
                     cursor = Cursor.default
                 }
@@ -240,6 +241,10 @@ fun Application.webUi(scoreboard: Scoreboard) {
                     button(classes = "secondary") {
                         id = "rematch"
                         +rematchButtonText(waiting = false, lang = pageLang)
+                    }
+                    button(classes = "secondary") {
+                        id = "draw"
+                        +drawButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
                     }
                     div { id = "board" }
                     div { id = "error" }

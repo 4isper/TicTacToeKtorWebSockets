@@ -52,6 +52,19 @@ class ClientLogicTest {
     }
 
     @Test
+    fun `an agreed draw is a draw cue`() {
+        val previous = GameState(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)))
+        val state = previous.copy(isDrawAgreed = true)
+        assertEquals(SoundCue.DRAW, soundCue(previous, state))
+    }
+
+    @Test
+    fun `an agreed draw ends the round`() {
+        assertTrue(GameState(isDrawAgreed = true).isRoundOver)
+        assertFalse(GameState().isRoundOver)
+    }
+
+    @Test
     fun `a new mark is a move cue`() {
         val previous = GameState()
         val state = previous.copy(field = Boards.fieldWith(listOf(Cell(1, 1) to PlayerSymbol.X)))

@@ -12,6 +12,7 @@ import com.m4isper.tictactoe.ui.connectionErrorText
 import com.m4isper.tictactoe.ui.connectionLostText
 import com.m4isper.tictactoe.ui.copiedText
 import com.m4isper.tictactoe.ui.copyLinkText
+import com.m4isper.tictactoe.ui.drawButtonText
 import com.m4isper.tictactoe.ui.errorText
 import com.m4isper.tictactoe.ui.isRoundRestartTransition
 import com.m4isper.tictactoe.ui.isTurnTransition
@@ -44,6 +45,7 @@ fun main() {
     val scoreDiv = document.getElementById("score") as HTMLElement
     val copyLink = document.getElementById("copy-link") as? HTMLButtonElement
     val rematchButton = document.getElementById("rematch") as HTMLButtonElement
+    val drawButton = document.getElementById("draw") as HTMLButtonElement
     val nameInput = document.getElementById("name") as? HTMLInputElement
     val setNameButton = document.getElementById("set-name") as? HTMLButtonElement
 
@@ -97,8 +99,6 @@ fun main() {
     fun showStatus(text: String) {
         status.textContent = text
     }
-
-    fun roundIsOver(s: GameState): Boolean = s.winningPlayer != null || s.isBoardFull
 
     fun resultMark(result: String): String = when (result) {
         "WIN" -> "✓"
@@ -248,10 +248,16 @@ fun main() {
         rematchButton.disabled = myRematch
         rematchButton.textContent = rematchButtonText(myRematch, lang)
 
+        val roundOver = state.isRoundOver
+        drawButton.style.display = if (!roundOver && mySymbol != null && state.connectionPlayers.size >= 2) "block" else "none"
+        val iOffered = mySymbol != null && mySymbol in state.drawPlayers
+        val opponentOffered = state.drawPlayers.any { it != mySymbol }
+        drawButton.textContent = drawButtonText(iOffered, opponentOffered, lang)
+
         showStatus(statusText(state, mySymbol, lang))
         scoreDiv.textContent = scoreText(state, lang)
         playStateSounds(previous, state)
-        if ((previous == null || !roundIsOver(previous)) && roundIsOver(state)) refreshLeaderboard()
+        if ((previous == null || !previous.isRoundOver) && state.isRoundOver) refreshLeaderboard()
 
         board.innerHTML = ""
         val cellPx = (minOf(window.innerWidth, window.innerHeight) * 0.8 / state.field.size)
@@ -364,6 +370,7 @@ fun main() {
     renderSound()
 
     rematchButton.onclick = { send(ClientMessage.RequestRematch) }
+    drawButton.onclick = { send(ClientMessage.RequestDraw) }
 
     if (nameInput != null && setNameButton != null) {
         fun submitName() {

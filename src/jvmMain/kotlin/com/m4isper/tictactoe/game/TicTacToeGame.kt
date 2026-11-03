@@ -184,7 +184,7 @@ class TicTacToeGame(
         synchronized(lock) {
             val current = state.value
             if (playerSockets[player] !== session) return ErrorReason.STALE_SESSION
-            if (current.winningPlayer == null && !current.isBoardFull) return ErrorReason.ROUND_NOT_OVER
+            if (!current.isRoundOver) return ErrorReason.ROUND_NOT_OVER
 
             val updated = if (player in current.rematchPlayers) current.rematchPlayers else current.rematchPlayers + player
             val humans = current.connectionPlayers.filter { it != bot } // the bot never asks
@@ -199,6 +199,7 @@ class TicTacToeGame(
                         winningPlayer = null,
                         winningCells = emptyList(),
                         isBoardFull = false,
+                        isDrawAgreed = false,
                         roundRestartInMs = null,
                         rematchPlayers = emptyList(),
                     ),
@@ -206,6 +207,35 @@ class TicTacToeGame(
             } else {
                 publish(current.copy(rematchPlayers = updated))
             }
+            return null
+        }
+    }
+
+    /** A draw by agreement: the second connected human asking ends the round; asking again withdraws the offer. */
+    fun requestDraw(player: PlayerSymbol, session: WebSocketSession): ErrorReason? {
+        synchronized(lock) {
+            val current = state.value
+            if (playerSockets[player] !== session) return ErrorReason.STALE_SESSION
+            if (current.isRoundOver) return ErrorReason.ROUND_IS_OVER
+            val humans = current.connectionPlayers.filter { it != bot } // the bot never asks
+            if (humans.size < 2) return ErrorReason.NOT_YOUR_TURN // nothing to agree with
+
+            val updated = if (player in current.drawPlayers) current.drawPlayers - player else current.drawPlayers + player
+            if (updated.size < humans.size) {
+                publish(current.copy(drawPlayers = updated))
+                return null
+            }
+
+            // the agreement completes here: one publish, like finishTurn, so the wire never shows both offers
+            roundRestartDeadline = System.currentTimeMillis() + roundRestartDelayMs
+            scheduleRoundRestart()
+            publish(
+                current.copy(
+                    isDrawAgreed = true,
+                    drawPlayers = emptyList(),
+                    rematchPlayers = emptyList(),
+                ),
+            )
             return null
         }
     }
@@ -236,7 +266,7 @@ class TicTacToeGame(
             playerSockets[player] !== session -> ErrorReason.STALE_SESSION
             x !in 0 until size || y !in 0 until size -> ErrorReason.CELL_OUT_OF_BOUNDS
             current.playerAtTurn != player -> ErrorReason.NOT_YOUR_TURN
-            current.winningPlayer != null -> ErrorReason.ROUND_IS_OVER
+            current.isRoundOver -> ErrorReason.ROUND_IS_OVER
             current.field[y][x] != null -> ErrorReason.CELL_OCCUPIED
             else -> null
         }
@@ -256,6 +286,8 @@ class TicTacToeGame(
                         winningPlayer = null,
                         winningCells = emptyList(),
                         isBoardFull = false,
+                        isDrawAgreed = false,
+                        drawPlayers = emptyList(),
                         roundRestartInMs = null,
                         rematchPlayers = emptyList(),
                     ),
@@ -286,12 +318,11 @@ class TicTacToeGame(
         scheduleBotMoveIfNeeded(withTurn)
     }
 
-    private fun roundJustEnded(previous: GameState, next: GameState): Boolean = !(previous.winningPlayer != null || previous.isBoardFull) &&
-        (next.winningPlayer != null || next.isBoardFull)
+    private fun roundJustEnded(previous: GameState, next: GameState): Boolean = !previous.isRoundOver && next.isRoundOver
 
     /** Forfeits the round to the opponent when the current player stalls past the deadline. */
     private fun armTurnTimerLocked(current: GameState) {
-        if (current.winningPlayer != null || current.isBoardFull || current.connectionPlayers.size < 2) {
+        if (current.isRoundOver || current.connectionPlayers.size < 2) {
             turnTimeoutJob?.cancel()
             turnTimeoutJob = null
             turnDeadline = 0
@@ -306,7 +337,7 @@ class TicTacToeGame(
             delay(turnTimeoutMs)
             synchronized(lock) {
                 val snapshot = state.value
-                if (snapshot.winningPlayer != null || snapshot.isBoardFull) return@launch
+                if (snapshot.isRoundOver) return@launch
                 val loser = snapshot.playerAtTurn ?: return@launch
                 if (snapshot.connectionPlayers.size < 2) return@launch
                 if (System.currentTimeMillis() < turnDeadline) return@launch // a newer turn re-armed
@@ -331,7 +362,7 @@ class TicTacToeGame(
     private fun scheduleBotMoveIfNeeded(current: GameState) {
         val symbol = bot ?: return
         val level = botLevel ?: return
-        if (current.winningPlayer != null || current.isBoardFull) return
+        if (current.isRoundOver) return
         if (current.playerAtTurn != symbol) return
         botMoveJob?.cancel()
         botMoveJob = gameScope.launch {
@@ -339,7 +370,7 @@ class TicTacToeGame(
             synchronized(lock) {
                 if (bot != symbol) return@launch
                 val snapshot = state.value
-                if (snapshot.playerAtTurn != symbol || snapshot.winningPlayer != null || snapshot.isBoardFull) {
+                if (snapshot.playerAtTurn != symbol || snapshot.isRoundOver) {
                     return@launch
                 }
                 val move: Cell = BotBrain.chooseMove(snapshot.field, symbol, winLength, level) ?: return@launch

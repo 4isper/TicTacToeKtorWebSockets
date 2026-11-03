@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe.game
 
+import com.m4isper.tictactoe.domain.BotLevel
 import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import io.ktor.websocket.Frame
@@ -14,6 +15,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 class TicTacToeGameTest {
@@ -183,6 +185,67 @@ class TicTacToeGameTest {
         game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
 
         assertEquals(ErrorReason.STALE_SESSION, game.requestRematch(PlayerSymbol.X, FakeSession()))
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `an agreed draw ends the round without a winner`() = runBlocking {
+        val reported = mutableListOf<Pair<Map<PlayerSymbol, String>, PlayerSymbol?>>()
+        val game = TicTacToeGame(roundRestartDelayMs = 60_000, onRoundOver = { names, winner -> reported.add(names to winner) })
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+        game.setName(PlayerSymbol.X, "Аня")
+
+        assertNull(game.requestDraw(PlayerSymbol.X, xSession))
+        assertEquals(listOf(PlayerSymbol.X), game.currentState().drawPlayers)
+
+        assertNull(game.requestDraw(PlayerSymbol.O, oSession))
+        val agreed = game.currentState()
+        assertTrue(agreed.isDrawAgreed)
+        assertNull(agreed.winningPlayer)
+        assertTrue(agreed.roundRestartInMs != null)
+        assertEquals(emptyList(), agreed.drawPlayers)
+        assertEquals(ErrorReason.ROUND_IS_OVER, game.finishTurn(PlayerSymbol.X, xSession, 0, 0)) // nothing left to play
+        assertNull(game.requestRematch(PlayerSymbol.X, xSession)) // rematch still works
+        assertNull(game.requestRematch(PlayerSymbol.O, oSession))
+        assertFalse(game.currentState().isDrawAgreed) // the reset cleared it
+
+        assertEquals(1, reported.size)
+        assertEquals(null, reported.single().second)
+        assertEquals("Аня", reported.single().first[PlayerSymbol.X])
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `a draw offer is withdrawn by asking again`() = runBlocking {
+        val game = TicTacToeGame()
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        assertNull(game.requestDraw(PlayerSymbol.X, xSession))
+        assertEquals(listOf(PlayerSymbol.X), game.currentState().drawPlayers)
+
+        assertNull(game.requestDraw(PlayerSymbol.X, xSession))
+        assertEquals(emptyList(), game.currentState().drawPlayers)
+        assertFalse(game.currentState().isDrawAgreed)
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `a draw offer needs a human opponent to agree with`() = runBlocking {
+        val game = TicTacToeGame(botLevel = BotLevel.NORMAL)
+        val xSession = FakeSession()
+        game.connectPlayer(xSession) // the bot takes the other slot
+        assertTrue(PlayerSymbol.O in game.currentState().connectionPlayers)
+
+        assertEquals(ErrorReason.NOT_YOUR_TURN, game.requestDraw(PlayerSymbol.X, xSession))
 
         game.shutdown()
     }

@@ -95,6 +95,22 @@ class UiTextTest {
     }
 
     @Test
+    fun `draw button follows the offers`() {
+        assertEquals("Предложить ничью", drawButtonText(iOffered = false, opponentOffered = false))
+        assertEquals("Предложение отправлено…", drawButtonText(iOffered = true, opponentOffered = false))
+        assertEquals("Принять ничью", drawButtonText(iOffered = false, opponentOffered = true))
+        assertEquals("Offer a draw", drawButtonText(iOffered = false, opponentOffered = false, Lang.EN))
+        assertEquals("Accept draw", drawButtonText(iOffered = false, opponentOffered = true, Lang.EN))
+    }
+
+    @Test
+    fun `an agreed draw is announced`() {
+        val drawn = GameState(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O), isDrawAgreed = true)
+        assertEquals("Ничья по соглашению!", statusText(drawn, PlayerSymbol.X))
+        assertEquals("Draw by agreement!", statusText(drawn, PlayerSymbol.X, Lang.EN))
+    }
+
+    @Test
     fun `restart countdown rounds up so it never shows zero while waiting`() {
         assertEquals("Новый раунд через 5…", restartText(4_500))
         assertEquals("Новый раунд через 1…", restartText(999))

@@ -900,6 +900,53 @@ class ApplicationTest {
     }
 
     @Test
+    fun `both players asking for a draw ends the round`() = testApplication {
+        application {
+            module()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=dr") {
+            receiveHandshake()
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=dr") {
+                    receiveHandshake()
+                    oReady.complete(Unit)
+                    val offered = receiveState() // X's offer broadcast
+                    assertEquals(listOf(PlayerSymbol.X), offered.drawPlayers)
+                    sendRequestDraw()
+                    val agreed = receiveState()
+                    assertTrue(agreed.isDrawAgreed)
+                    assertNotNull(agreed.roundRestartInMs)
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            skipBroadcast() // [X, O]
+
+            sendRequestDraw()
+            val offered = receiveState()
+            assertEquals(listOf(PlayerSymbol.X), offered.drawPlayers)
+
+            val agreed = receiveState()
+            assertTrue(agreed.isDrawAgreed)
+            assertNull(agreed.winningPlayer)
+            assertNotNull(agreed.roundRestartInMs)
+
+            second.cancel()
+        }
+    }
+
+    @Test
     fun `bot fills the second slot and answers with a move`() = testApplication {
         application {
             module()
@@ -1094,6 +1141,10 @@ private suspend fun WebSocketSession.sendMakeTurn(x: Int, y: Int) {
 
 private suspend fun WebSocketSession.sendRequestRematch() {
     send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.RequestRematch)))
+}
+
+private suspend fun WebSocketSession.sendRequestDraw() {
+    send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.RequestDraw)))
 }
 
 private suspend fun WebSocketSession.sendSetName(name: String) {

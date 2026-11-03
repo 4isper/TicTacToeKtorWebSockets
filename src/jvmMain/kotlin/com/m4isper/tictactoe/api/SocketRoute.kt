@@ -87,6 +87,11 @@ fun Route.socket(lobby: GameLobby) {
                             else -> binding.game.requestRematch(symbol, this)?.let(ServerEvent::Error)
                         }
 
+                        is ClientMessage.RequestDraw -> when (val symbol = binding.symbol) {
+                            null -> ServerEvent.Error(ErrorReason.NOT_YOUR_TURN)
+                            else -> binding.game.requestDraw(symbol, this)?.let(ServerEvent::Error)
+                        }
+
                         is ClientMessage.SetName -> when (val symbol = binding.symbol) {
                             null -> ServerEvent.Error(ErrorReason.NOT_YOUR_TURN)
 

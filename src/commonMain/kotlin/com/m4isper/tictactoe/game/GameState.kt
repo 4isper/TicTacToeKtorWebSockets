@@ -18,7 +18,13 @@ data class GameState(
     val rematchPlayers: List<PlayerSymbol> = emptyList(),
     val playerNames: Map<PlayerSymbol, String> = emptyMap(),
     val turnRemainingMs: Long? = null,
+    val drawPlayers: List<PlayerSymbol> = emptyList(),
+    val isDrawAgreed: Boolean = false,
 ) {
+    /** Nothing left to play: won, drawn out, or given up by agreement. */
+    val isRoundOver: Boolean
+        get() = winningPlayer != null || isBoardFull || isDrawAgreed
+
     companion object {
         fun emptyField(size: Int = GameRules.DEFAULT_BOARD_SIZE): List<List<PlayerSymbol?>> = GameRules.emptyField(size)
     }
