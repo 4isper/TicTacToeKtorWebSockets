@@ -1,11 +1,13 @@
 package com.m4isper.tictactoe.domain
 
 import kotlin.math.abs
+import kotlin.random.Random
 
 /**
  * Picks a move for the bot: immediate wins and blocks first, then a depth-limited
  * negamax with alpha-beta over cells adjacent to the played stones. Deterministic:
- * ties resolve toward the board center.
+ * ties resolve toward the board center. The easy level takes an immediate win and
+ * otherwise moves at random; hard searches deeper than normal.
  */
 object BotBrain {
     private const val WIN_SCORE = 1_000_000
@@ -14,6 +16,8 @@ object BotBrain {
         field: List<List<PlayerSymbol?>>,
         me: PlayerSymbol,
         winLength: Int,
+        level: BotLevel = BotLevel.NORMAL,
+        random: Random = Random.Default,
     ): Cell? {
         val size = field.size
         val candidates = candidateCells(field)
@@ -21,12 +25,13 @@ object BotBrain {
         val opponent = me.other
 
         candidates.firstOrNull { completes(field, it, me, winLength) }?.let { return it }
+        if (level == BotLevel.EASY) return candidates[random.nextInt(candidates.size)] // easy never looks further
         candidates.firstOrNull { completes(field, it, opponent, winLength) }?.let { return it }
 
         val depth = when {
             size <= 3 -> size * size
-            size <= 5 -> 3
-            else -> 2
+            size <= 5 -> if (level == BotLevel.HARD) 5 else 3
+            else -> if (level == BotLevel.HARD) 3 else 2
         }
         var best = candidates.first()
         var bestScore = Int.MIN_VALUE + 1

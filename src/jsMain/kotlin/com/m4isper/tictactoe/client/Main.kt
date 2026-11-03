@@ -72,6 +72,7 @@ fun main() {
         ErrorReason.INVALID_BOARD_SIZE,
         ErrorReason.INVALID_WIN_LENGTH,
         ErrorReason.INVALID_TURN_TIME,
+        ErrorReason.INVALID_BOT_LEVEL,
     )
 
     var socket: WebSocket? = null

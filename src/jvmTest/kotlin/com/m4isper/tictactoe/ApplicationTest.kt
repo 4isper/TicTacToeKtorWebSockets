@@ -921,6 +921,49 @@ class ApplicationTest {
     }
 
     @Test
+    fun `an unknown bot level is refused before joining`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=b9&bot=2") {
+            assertEquals(ErrorReason.INVALID_BOT_LEVEL, (receiveEvent() as ServerEvent.Error).reason)
+        }
+
+        client.webSocket("/play?room=b9&bot=strong") {
+            assertEquals(ErrorReason.INVALID_BOT_LEVEL, (receiveEvent() as ServerEvent.Error).reason)
+        }
+
+        client.webSocket("/play?room=b9&bot=normal") {
+            val (joined, _) = receiveHandshake()
+            assertEquals(PlayerSymbol.X, joined.symbol)
+        }
+    }
+
+    @Test
+    fun `the easy bot fills the second slot and answers with a move`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=vseasy&bot=easy") {
+            val (joined, _) = receiveHandshake()
+            assertEquals(PlayerSymbol.X, joined.symbol)
+
+            sendMakeTurn(0, 0)
+            val botReply = awaitStateWhere { it.field.sumOf { row -> row.count { it != null } } >= 2 }
+            assertEquals(2, botReply.field.sumOf { row -> row.count { it != null } })
+            assertTrue(botReply.field.any { row -> row.contains(PlayerSymbol.O) }) // the bot played
+        }
+    }
+
+    @Test
     fun `a second human displaces the bot`() = testApplication {
         application {
             module()

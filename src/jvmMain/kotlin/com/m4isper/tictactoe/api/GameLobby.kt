@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe.api
 
+import com.m4isper.tictactoe.domain.BotLevel
 import com.m4isper.tictactoe.domain.GameRules
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.game.TicTacToeGame
@@ -8,12 +9,12 @@ import kotlinx.coroutines.*
 import java.util.UUID
 
 class GameLobby(
-    private val newGame: (boardSize: Int, winLength: Int, botEnabled: Boolean, turnSeconds: Int) -> TicTacToeGame =
-        { boardSize, winLength, botEnabled, turnSeconds ->
+    private val newGame: (boardSize: Int, winLength: Int, botLevel: BotLevel?, turnSeconds: Int) -> TicTacToeGame =
+        { boardSize, winLength, botLevel, turnSeconds ->
             TicTacToeGame(
                 boardSize = boardSize,
                 winLength = winLength,
-                botEnabled = botEnabled,
+                botLevel = botLevel,
                 turnTimeoutMs = turnSeconds * 1000L,
             )
         },
@@ -39,15 +40,15 @@ class GameLobby(
         room: String? = null,
         boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
         winLength: Int = boardSize,
-        botEnabled: Boolean = false,
+        botLevel: BotLevel? = null,
         turnSeconds: Int = GameRules.DEFAULT_TURN_SECONDS,
     ): Joined? = synchronized(lock) {
         val game = if (room == null) {
             // pair anonymous joiners only with identical settings, or their size/win/bot would be silently ignored
-            games.firstOrNull { !it.isFull() && it.matches(boardSize, winLength, botEnabled, turnSeconds) }
-                ?: newGame(boardSize, winLength, botEnabled, turnSeconds).also { games.add(it) }
+            games.firstOrNull { !it.isFull() && it.matches(boardSize, winLength, botLevel, turnSeconds) }
+                ?: newGame(boardSize, winLength, botLevel, turnSeconds).also { games.add(it) }
         } else {
-            rooms.getOrPut(room) { newGame(boardSize, winLength, botEnabled, turnSeconds) }
+            rooms.getOrPut(room) { newGame(boardSize, winLength, botLevel, turnSeconds) }
         }
         val symbol = game.connectPlayer(session)
         if (symbol == null && room == null) return null // anonymous match stays players-only

@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe.api
 
+import com.m4isper.tictactoe.domain.BotLevel
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketExtension
@@ -52,8 +53,10 @@ class GameLobbyTest {
     @Test
     fun `bot games never pair with each other`() {
         val lobby = GameLobby()
-        val first = assertNotNull(lobby.join(FakeSession(), boardSize = 3, winLength = 3, botEnabled = true))
-        val second = assertNotNull(lobby.join(FakeSession(), boardSize = 3, winLength = 3, botEnabled = true))
+        val first = assertNotNull(lobby.join(FakeSession(), boardSize = 3, winLength = 3, botLevel = BotLevel.NORMAL))
+        val easy = assertNotNull(lobby.join(FakeSession(), boardSize = 3, winLength = 3, botLevel = BotLevel.EASY))
+        assertNotSame(first.game, easy.game) // a different level is a different game
+        val second = assertNotNull(lobby.join(FakeSession(), boardSize = 3, winLength = 3, botLevel = BotLevel.NORMAL))
         assertNotSame(first.game, second.game)
         assertEquals(2, first.game.currentState().connectionPlayers.size) // the bot fills the second slot
 

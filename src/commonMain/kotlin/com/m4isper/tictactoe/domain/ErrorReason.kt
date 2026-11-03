@@ -49,4 +49,7 @@ enum class ErrorReason {
 
     @SerialName("invalid turn time")
     INVALID_TURN_TIME,
+
+    @SerialName("invalid bot level")
+    INVALID_BOT_LEVEL,
 }

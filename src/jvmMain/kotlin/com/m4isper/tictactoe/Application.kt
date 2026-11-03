@@ -2,6 +2,7 @@ package com.m4isper.tictactoe
 
 import com.m4isper.tictactoe.api.GameLobby
 import com.m4isper.tictactoe.api.webUi
+import com.m4isper.tictactoe.domain.BotLevel
 import com.m4isper.tictactoe.game.TicTacToeGame
 import com.m4isper.tictactoe.plugins.configureMonitoring
 import com.m4isper.tictactoe.plugins.configureRouting
@@ -24,12 +25,12 @@ fun Application.module() {
 
 fun Application.module(
     scoreboard: Scoreboard = defaultScoreboard(),
-    newGame: (boardSize: Int, winLength: Int, botEnabled: Boolean, turnSeconds: Int) -> TicTacToeGame =
-        { boardSize, winLength, botEnabled, turnSeconds ->
+    newGame: (boardSize: Int, winLength: Int, botLevel: BotLevel?, turnSeconds: Int) -> TicTacToeGame =
+        { boardSize, winLength, botLevel, turnSeconds ->
             TicTacToeGame(
                 boardSize = boardSize,
                 winLength = winLength,
-                botEnabled = botEnabled,
+                botLevel = botLevel,
                 turnTimeoutMs = turnSeconds * 1000L,
                 onRoundOver = scoreboard::recordRound,
             )

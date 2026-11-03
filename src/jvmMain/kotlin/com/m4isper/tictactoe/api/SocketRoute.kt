@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe.api
 
+import com.m4isper.tictactoe.domain.BotLevel
 import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.GameRules
 import com.m4isper.tictactoe.protocol.ClientMessage
@@ -42,7 +43,12 @@ fun Route.socket(lobby: GameLobby) {
                 return@webSocket
             }
 
-            val botEnabled = call.request.queryParameters["bot"] == "1"
+            val botParam = call.request.queryParameters["bot"]
+            val botLevel = botParam?.let { parseBotLevel(it) }
+            if (botParam != null && botLevel == null) {
+                sendError(ErrorReason.INVALID_BOT_LEVEL)
+                return@webSocket
+            }
 
             val turnParam = call.request.queryParameters["turn"]
             val turnSeconds = turnParam?.toIntOrNull()
@@ -52,7 +58,7 @@ fun Route.socket(lobby: GameLobby) {
             }
             val turn = turnSeconds ?: GameRules.DEFAULT_TURN_SECONDS
 
-            var binding = lobby.join(this, room, size, winLength ?: size, botEnabled, turn) ?: run {
+            var binding = lobby.join(this, room, size, winLength ?: size, botLevel, turn) ?: run {
                 sendError(ErrorReason.ROOM_IS_FULL)
                 return@webSocket
             }
@@ -121,4 +127,12 @@ fun Route.socket(lobby: GameLobby) {
 
 private suspend fun DefaultWebSocketServerSession.sendError(reason: ErrorReason) {
     send(protocolJson.encodeToString<ServerEvent>(ServerEvent.Error(reason)))
+}
+
+/** `bot=1` stays a synonym of `normal` for older links. */
+private fun parseBotLevel(raw: String): BotLevel? = when (raw) {
+    "1", "normal" -> BotLevel.NORMAL
+    "easy" -> BotLevel.EASY
+    "hard" -> BotLevel.HARD
+    else -> null
 }

@@ -1,6 +1,7 @@
 package com.m4isper.tictactoe.game
 
 import com.m4isper.tictactoe.domain.BotBrain
+import com.m4isper.tictactoe.domain.BotLevel
 import com.m4isper.tictactoe.domain.Cell
 import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.GameRules
@@ -19,7 +20,7 @@ class TicTacToeGame(
     private val roundRestartDelayMs: Long = 5_000L,
     private val boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
     private val winLength: Int = boardSize,
-    private val botEnabled: Boolean = false,
+    private val botLevel: BotLevel? = null,
     private val turnTimeoutMs: Long = 30_000L,
     private val onRoundOver: (playerNames: Map<PlayerSymbol, String>, winner: PlayerSymbol?) -> Unit = { _, _ -> },
 ) {
@@ -214,8 +215,8 @@ class TicTacToeGame(
     }
 
     /** True when an anonymous joiner with these settings can be paired into this game. */
-    fun matches(boardSize: Int, winLength: Int, botEnabled: Boolean, turnSeconds: Int): Boolean = this.boardSize == boardSize && this.winLength == winLength && this.botEnabled == botEnabled &&
-        this.turnTimeoutMs == turnSeconds * 1000L
+    fun matches(boardSize: Int, winLength: Int, botLevel: BotLevel?, turnSeconds: Int): Boolean = this.boardSize == boardSize &&
+        this.winLength == winLength && this.botLevel == botLevel && this.turnTimeoutMs == turnSeconds * 1000L
 
     fun isFull(): Boolean = state.value.connectionPlayers.size >= 2
 
@@ -329,6 +330,7 @@ class TicTacToeGame(
 
     private fun scheduleBotMoveIfNeeded(current: GameState) {
         val symbol = bot ?: return
+        val level = botLevel ?: return
         if (current.winningPlayer != null || current.isBoardFull) return
         if (current.playerAtTurn != symbol) return
         botMoveJob?.cancel()
@@ -340,14 +342,14 @@ class TicTacToeGame(
                 if (snapshot.playerAtTurn != symbol || snapshot.winningPlayer != null || snapshot.isBoardFull) {
                     return@launch
                 }
-                val move: Cell = BotBrain.chooseMove(snapshot.field, symbol, winLength) ?: return@launch
+                val move: Cell = BotBrain.chooseMove(snapshot.field, symbol, winLength, level) ?: return@launch
                 finishTurn(symbol, BotSession, move.x, move.y)
             }
         }
     }
 
     private fun maybeAttachBotLocked() {
-        if (!botEnabled || bot != null) return
+        if (botLevel == null || bot != null) return
         if (state.value.connectionPlayers.size != 1) return
         val symbol = if (PlayerSymbol.X in state.value.connectionPlayers) PlayerSymbol.O else PlayerSymbol.X
         playerSockets[symbol] = BotSession

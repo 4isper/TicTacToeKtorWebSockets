@@ -62,6 +62,7 @@ fun errorText(
         ErrorReason.INVALID_NAME -> "Неверное имя"
         ErrorReason.NAME_TAKEN -> "Это имя уже занято"
         ErrorReason.INVALID_TURN_TIME -> "Неверное время хода"
+        ErrorReason.INVALID_BOT_LEVEL -> "Неверный уровень бота"
     }
 
     Lang.EN -> when (reason) {
@@ -80,6 +81,7 @@ fun errorText(
         ErrorReason.INVALID_NAME -> "Invalid name"
         ErrorReason.NAME_TAKEN -> "Name already taken"
         ErrorReason.INVALID_TURN_TIME -> "Invalid turn time"
+        ErrorReason.INVALID_BOT_LEVEL -> "Invalid bot level"
     }
 }
 
