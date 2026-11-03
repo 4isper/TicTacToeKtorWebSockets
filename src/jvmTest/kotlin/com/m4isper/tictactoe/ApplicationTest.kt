@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe
 
+import com.m4isper.tictactoe.domain.Cell
 import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.game.GameState
@@ -53,6 +54,7 @@ class ApplicationTest {
             val state = texts.single { it.contains("\"type\":\"state\"") }
             assertTrue(state.contains("\"playerAtTurn\":\"X\""), state)
             assertTrue(state.contains("\"winningPlayer\":null"), state)
+            assertTrue(state.contains("\"winningCells\":[]"), state)
             assertTrue(state.contains("\"isBoardFull\":false"), state)
             assertTrue(state.contains("\"score\":{\"X\":0,\"O\":0}"), state)
         }
@@ -479,6 +481,93 @@ class ApplicationTest {
         }
 
         client.webSocket("/play?room=tiny") {
+            val (_, state) = receiveHandshake()
+            assertEquals(3, state.field.size)
+        }
+    }
+
+    @Test
+    fun `four in a row wins on the requested board and reports the run`() = testApplication {
+        application {
+            module()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=w5&size=5&win=4") {
+            receiveHandshake()
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=w5") {
+                    receiveHandshake()
+                    oReady.complete(Unit)
+                    receiveState() // X opens, only then it is O's turn
+                    sendMakeTurn(1, 0)
+                    receiveState()
+                    receiveState()
+                    sendMakeTurn(1, 1)
+                    receiveState()
+                    receiveState()
+                    sendMakeTurn(1, 2)
+                    receiveState()
+                    receiveState()
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            skipBroadcast()
+
+            sendMakeTurn(0, 0)
+            skipBroadcast()
+            skipBroadcast()
+            sendMakeTurn(0, 1)
+            skipBroadcast()
+            skipBroadcast()
+            sendMakeTurn(0, 2)
+            skipBroadcast()
+            skipBroadcast()
+            sendMakeTurn(0, 3)
+
+            val event = receiveEvent()
+            assertTrue(event is ServerEvent.StateChanged, "expected state, got $event")
+            val state = event.state
+            assertEquals(PlayerSymbol.X, state.winningPlayer)
+            assertEquals(listOf(Cell(0, 0), Cell(0, 1), Cell(0, 2), Cell(0, 3)), state.winningCells)
+            assertEquals(mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), state.score)
+
+            second.cancel()
+        }
+    }
+
+    @Test
+    fun `an out of range win length is refused before joining`() = testApplication {
+        application {
+            module()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=w2&win=2") {
+            assertEquals(ErrorReason.INVALID_WIN_LENGTH, (receiveEvent() as ServerEvent.Error).reason)
+        }
+
+        client.webSocket("/play?room=w2&win=6") {
+            assertEquals(ErrorReason.INVALID_WIN_LENGTH, (receiveEvent() as ServerEvent.Error).reason)
+        }
+
+        client.webSocket("/play?room=w2&win=abc") {
+            assertEquals(ErrorReason.INVALID_WIN_LENGTH, (receiveEvent() as ServerEvent.Error).reason)
+        }
+
+        client.webSocket("/play?room=w2") {
             val (_, state) = receiveHandshake()
             assertEquals(3, state.field.size)
         }

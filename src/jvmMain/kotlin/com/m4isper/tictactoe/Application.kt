@@ -14,11 +14,13 @@ fun main(args: Array<String>) {
 }
 
 fun Application.module() {
-    module(newGame = { TicTacToeGame(boardSize = it) })
+    module(newGame = { boardSize, winLength -> TicTacToeGame(boardSize = boardSize, winLength = winLength) })
 }
 
 fun Application.module(
-    newGame: (boardSize: Int) -> TicTacToeGame = { TicTacToeGame(boardSize = it) },
+    newGame: (boardSize: Int, winLength: Int) -> TicTacToeGame = { boardSize, winLength ->
+        TicTacToeGame(boardSize = boardSize, winLength = winLength)
+    },
     reconnectGraceMs: Long = 10_000L,
 ) {
     val lobby = GameLobby(newGame, reconnectGraceMs)

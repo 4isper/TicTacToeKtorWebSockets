@@ -34,4 +34,7 @@ enum class ErrorReason {
 
     @SerialName("invalid board size")
     INVALID_BOARD_SIZE,
+
+    @SerialName("invalid win length")
+    INVALID_WIN_LENGTH,
 }

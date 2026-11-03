@@ -8,7 +8,9 @@ import kotlinx.coroutines.*
 import java.util.UUID
 
 class GameLobby(
-    private val newGame: (boardSize: Int) -> TicTacToeGame = { TicTacToeGame(boardSize = it) },
+    private val newGame: (boardSize: Int, winLength: Int) -> TicTacToeGame = { boardSize, winLength ->
+        TicTacToeGame(boardSize = boardSize, winLength = winLength)
+    },
     private val reconnectGraceMs: Long = 10_000L,
 ) {
     data class Joined(val game: TicTacToeGame, val symbol: PlayerSymbol, val token: String)
@@ -26,11 +28,12 @@ class GameLobby(
         session: WebSocketSession,
         room: String? = null,
         boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
+        winLength: Int = boardSize,
     ): Joined? = synchronized(lock) {
         val game = if (room == null) {
-            games.firstOrNull { !it.isFull() } ?: newGame(boardSize).also { games.add(it) }
+            games.firstOrNull { !it.isFull() } ?: newGame(boardSize, winLength).also { games.add(it) }
         } else {
-            rooms.getOrPut(room) { newGame(boardSize) }
+            rooms.getOrPut(room) { newGame(boardSize, winLength) }
         }
         val symbol = game.connectPlayer(session) ?: return null
         val token = UUID.randomUUID().toString()

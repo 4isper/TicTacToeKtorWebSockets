@@ -32,8 +32,16 @@ fun Route.socket(lobby: GameLobby) {
                 sendError(ErrorReason.INVALID_BOARD_SIZE)
                 return@webSocket
             }
+            val size = boardSize ?: GameRules.DEFAULT_BOARD_SIZE
 
-            var binding = lobby.join(this, room, boardSize ?: GameRules.DEFAULT_BOARD_SIZE) ?: run {
+            val winParam = call.request.queryParameters["win"]
+            val winLength = winParam?.toIntOrNull()
+            if (winParam != null && (winLength == null || winLength !in GameRules.MIN_WIN_LENGTH..size)) {
+                sendError(ErrorReason.INVALID_WIN_LENGTH)
+                return@webSocket
+            }
+
+            var binding = lobby.join(this, room, size, winLength ?: size) ?: run {
                 sendError(ErrorReason.ROOM_IS_FULL)
                 return@webSocket
             }
