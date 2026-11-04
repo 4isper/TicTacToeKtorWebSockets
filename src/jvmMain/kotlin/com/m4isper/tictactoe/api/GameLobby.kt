@@ -36,6 +36,8 @@ class GameLobby(
             )
         },
     private val reconnectGraceMs: Long = 10_000L,
+    private val maxGames: Int = 100,
+    private val maxSpectatorsPerGame: Int = 20,
 ) {
     data class Joined(val game: TicTacToeGame, val symbol: PlayerSymbol?, val token: String)
 
@@ -52,6 +54,11 @@ class GameLobby(
     private val graceJobs = mutableMapOf<String, Job>()
     private val lobbyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    // A claimed name belongs to one reconnect token, so a second session cannot
+    // play (and change the Elo rating) under somebody else's name.
+    private val nameOwners = mutableMapOf<String, String>() // lowercased name -> token
+    private val tokenNames = mutableMapOf<String, String>() // token -> lowercased name
+
     fun join(
         session: WebSocketSession,
         room: String? = null,
@@ -62,25 +69,61 @@ class GameLobby(
         turnSeconds: Int = GameRules.DEFAULT_TURN_SECONDS,
         clockSeconds: Int = 0,
     ): Joined? = synchronized(lock) {
-        val game = if (room == null) {
-            // pair anonymous joiners only with identical settings, or their size/win/bot would be silently ignored
-            games.firstOrNull { !it.isFull() && it.matches(boardSize, winLength, botLevel, turnSeconds, clockSeconds) }
-                ?: newGame(boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds).also { games.add(it) }
-        } else {
-            rooms.getOrPut(room) { newGame(boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds) }
-        }
+        val game = findOrCreateGame(room, boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds)
+            ?: return null
         val symbol = game.connectPlayer(session)
-        if (symbol == null && room == null) return null // anonymous match stays players-only
+        if (symbol == null && (room == null || game.spectatorCount() >= maxSpectatorsPerGame)) return null
         val token = UUID.randomUUID().toString()
         tokens[token] = TokenBinding(game, symbol, session)
         if (symbol == null) game.attachSpectator(session)
         Joined(game, symbol, token)
     }
 
+    /** Null when a new game would push the lobby past its cap. Caller holds [lock]. */
+    private fun findOrCreateGame(
+        room: String?,
+        boardSize: Int,
+        winLength: Int,
+        botLevel: BotLevel?,
+        secondBotLevel: BotLevel?,
+        turnSeconds: Int,
+        clockSeconds: Int,
+    ): TicTacToeGame? {
+        if (room == null) {
+            // pair anonymous joiners only with identical settings, or their size/win/bot would be silently ignored
+            games.firstOrNull { !it.isFull() && it.matches(boardSize, winLength, botLevel, turnSeconds, clockSeconds) }
+                ?.let { return it }
+        } else {
+            rooms[room]?.let { return it }
+        }
+        if (games.size + rooms.size >= maxGames) return null
+        val game = newGame(boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds)
+        if (room == null) games.add(game) else rooms[room] = game
+        return game
+    }
+
+    /** A name stays with the token that claimed it; another live session cannot take it. */
+    fun claimName(token: String, name: String): Boolean = synchronized(lock) {
+        val key = name.lowercase()
+        val owner = nameOwners[key]
+        if (owner != null && owner != token) return false
+        tokenNames[token]?.let { previous ->
+            if (previous != key) nameOwners.remove(previous)
+        }
+        nameOwners[key] = token
+        tokenNames[token] = key
+        true
+    }
+
+    fun releaseName(token: String): Unit = synchronized(lock) {
+        tokenNames.remove(token)?.let { nameOwners.remove(it) }
+    }
+
     fun sessionClosed(token: String, session: WebSocketSession): Unit = synchronized(lock) {
         val binding = tokens[token] ?: return
         if (binding.symbol == null) {
             tokens.remove(token)
+            releaseNameLocked(token)
             binding.game.detachSpectator(session)
             return
         }
@@ -90,6 +133,7 @@ class GameLobby(
             synchronized(lock) {
                 val pending = tokens.remove(token) ?: return@launch
                 val symbol = pending.symbol ?: return@launch
+                releaseNameLocked(token)
                 pending.game.disconnectPlayer(symbol)
                 if (pending.game.isEmpty()) retire(pending.game)
             }
@@ -110,6 +154,7 @@ class GameLobby(
     fun abandonJoin(token: String): Unit = synchronized(lock) {
         val binding = tokens.remove(token) ?: return
         graceJobs.remove(token)?.cancel()
+        releaseNameLocked(token)
         if (binding.symbol == null) {
             binding.game.detachSpectator(binding.session)
             return
@@ -125,7 +170,14 @@ class GameLobby(
         games.clear()
         rooms.clear()
         tokens.clear()
+        nameOwners.clear()
+        tokenNames.clear()
         lobbyScope.cancel()
+    }
+
+    /** Caller already holds [lock]. */
+    private fun releaseNameLocked(token: String) {
+        tokenNames.remove(token)?.let { nameOwners.remove(it) }
     }
 
     /** Every named room that still holds players — the page's room list. */

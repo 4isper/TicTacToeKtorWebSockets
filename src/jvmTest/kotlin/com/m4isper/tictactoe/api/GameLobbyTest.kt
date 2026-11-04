@@ -13,8 +13,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNotSame
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -85,6 +87,37 @@ class GameLobbyTest {
         delay(150)
 
         assertTrue(lobby.roomSnapshots().isEmpty())
+        lobby.shutdownAll()
+    }
+
+    @Test
+    fun `the lobby refuses to grow past its game limit`() {
+        val lobby = GameLobby(maxGames = 1)
+        assertNotNull(lobby.join(FakeSession()))
+        assertNull(lobby.join(FakeSession(), boardSize = 5, winLength = 4)) // a new game would exceed the cap
+        lobby.shutdownAll()
+    }
+
+    @Test
+    fun `a room admits only a bounded number of spectators`() {
+        val lobby = GameLobby(maxSpectatorsPerGame = 1)
+        lobby.join(FakeSession(), room = "alpha")
+        lobby.join(FakeSession(), room = "alpha")
+        assertNotNull(lobby.join(FakeSession(), room = "alpha")) // first spectator
+        assertNull(lobby.join(FakeSession(), room = "alpha")) // second one is refused
+        lobby.shutdownAll()
+    }
+
+    @Test
+    fun `a name cannot be claimed by two live tokens`() {
+        val lobby = GameLobby()
+        val first = assertNotNull(lobby.join(FakeSession()))
+        val second = assertNotNull(lobby.join(FakeSession(), boardSize = 5, winLength = 4))
+        assertTrue(lobby.claimName(first.token, "Аня"))
+        assertFalse(lobby.claimName(second.token, "аня")) // case-insensitive ownership
+        assertTrue(lobby.claimName(first.token, "Аня")) // the owner keeps its own name
+        lobby.releaseName(first.token)
+        assertTrue(lobby.claimName(second.token, "Аня")) // freed on disconnect
         lobby.shutdownAll()
     }
 

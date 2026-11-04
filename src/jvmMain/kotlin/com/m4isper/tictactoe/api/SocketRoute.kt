@@ -118,11 +118,10 @@ private class SessionHandler(
 
             else -> {
                 val name = message.name.trim()
-                if (name.isEmpty() || name.length > MAX_NAME_LENGTH) {
-                    ServerEvent.Error(ErrorReason.INVALID_NAME)
-                } else {
-                    // a null result means accepted — the broadcast carries the new state
-                    binding.game.setName(symbol, name)?.let(ServerEvent::Error)
+                when {
+                    name.isEmpty() || name.length > MAX_NAME_LENGTH -> ServerEvent.Error(ErrorReason.INVALID_NAME)
+                    !lobby.claimName(binding.token, name) -> ServerEvent.Error(ErrorReason.NAME_TAKEN)
+                    else -> binding.game.setName(symbol, name)?.let(ServerEvent::Error)
                 }
             }
         }

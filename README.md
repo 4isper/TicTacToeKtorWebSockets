@@ -17,6 +17,7 @@ Then open http://localhost:8080/ to play in the browser (the page is rendered wi
 - **Themes:** dark by default, automatic light theme via `prefers-color-scheme`, with matching `theme-color` meta tags.
 - **Sound and accessibility:** synthesized Web Audio cues distinguish your own move from the opponent's and mark wins and draws; a mute toggle persists in `localStorage`. Cells carry `aria-label`s, the last move stays marked, and the turn timer shows a progress bar.
 - **Resilient scoreboard:** JSON writes are atomic (temp file + rename). If the file is unreadable, the original is saved as `<name>.corrupt` and a warning is logged before the store starts empty, so the history is not silently lost.
+- **Fair play and bounds:** a name belongs to the reconnect token that claimed it, so another live session cannot take it and change its Elo rating. The lobby caps active games (100) and spectators per room (20); a refused join answers `room is full`. These are light-weight identity guards, not user accounts — there are no passwords or registration.
 - **Checks:** `./gradlew build` runs the full test suite, ktlint via spotless, detekt (including the JVM type-resolution tasks) and the JS production bundle; GitHub Actions runs the same on every push and pull request.
 
 ## Protocol
@@ -43,7 +44,7 @@ Then open http://localhost:8080/ to play in the browser (the page is rendered wi
   {"type":"set_name","name":"Дима"}
   ```
 
-  `x` is the column and `y` is the row (`0`-based, `0..size-1`). A malformed or unknown message is answered with an `error` event and does not close the session. `set_name` trims the name and accepts 1–20 characters (`invalid name` otherwise); the name must also be unique among the connected players of the game, case-insensitively (`name is taken` otherwise). Names travel in every `state` as `playerNames` (`{"X":"Дима"}`), survive round resets and are dropped when a player disconnects.
+  `x` is the column and `y` is the row (`0`-based, `0..size-1`). A malformed or unknown message is answered with an `error` event and does not close the session. `set_name` trims the name and accepts 1–20 characters (`invalid name` otherwise); the name must also be unique among the connected players of the game, case-insensitively, and cannot be claimed by another live session (`name is taken` otherwise). Names travel in every `state` as `playerNames` (`{"X":"Дима"}`), survive round resets and are dropped when a player disconnects.
 - Server → client: a text frame per event, also discriminated by `type`:
 
   ```json
