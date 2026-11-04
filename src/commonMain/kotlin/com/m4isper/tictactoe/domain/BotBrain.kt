@@ -94,7 +94,7 @@ object BotBrain {
         winLength: Int,
     ): Int {
         var score = 0
-        for (window in windows(field, winLength)) {
+        for (window in GameRules.windows(field.size, winLength)) {
             var mine = 0
             var theirs = 0
             for (cell in window) {
@@ -111,29 +111,6 @@ object BotBrain {
     }
 
     private fun weight(count: Int): Int = if (count <= 0) 0 else 1 shl (count * 2)
-
-    private fun windows(
-        field: List<List<PlayerSymbol?>>,
-        winLength: Int,
-    ): List<List<Cell>> {
-        val size = field.size
-        val result = mutableListOf<List<Cell>>()
-        for (y in 0 until size) {
-            for (start in 0..size - winLength) {
-                result.add((start until start + winLength).map { Cell(it, y) })
-            }
-        }
-        for (x in 0 until size) {
-            for (start in 0..size - winLength) {
-                result.add((start until start + winLength).map { Cell(x, it) })
-            }
-        }
-        for (d in 0..size - winLength) {
-            result.add((0 until winLength).map { Cell(d + it, d + it) })
-            result.add((0 until winLength).map { Cell(size - 1 - d - it, d + it) })
-        }
-        return result
-    }
 
     private fun candidateCells(field: List<List<PlayerSymbol?>>): List<Cell> {
         val size = field.size

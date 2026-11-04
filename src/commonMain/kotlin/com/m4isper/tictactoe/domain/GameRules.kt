@@ -15,26 +15,41 @@ object GameRules {
 
     fun isBoardFull(field: List<List<PlayerSymbol?>>): Boolean = field.all { row -> row.all { it != null } }
 
+    /** Every segment of exactly winLength cells: rows, columns and all diagonals in both directions. */
+    fun windows(size: Int, winLength: Int): List<List<Cell>> {
+        if (winLength !in 1..size) return emptyList()
+        val lines = mutableListOf<List<Cell>>()
+        for (y in 0 until size) lines.add((0 until size).map { x -> Cell(x, y) })
+        for (x in 0 until size) lines.add((0 until size).map { y -> Cell(x, y) })
+        for (startX in 0 until size) lines.add(diagonal(size, startX, 0, 1))
+        for (startY in 1 until size) lines.add(diagonal(size, 0, startY, 1))
+        for (startX in 0 until size) lines.add(diagonal(size, startX, 0, -1))
+        for (startY in 1 until size) lines.add(diagonal(size, size - 1, startY, -1))
+        return lines.filter { it.size >= winLength }.flatMap { line ->
+            (0..line.size - winLength).map { start -> line.subList(start, start + winLength) }
+        }
+    }
+
+    private fun diagonal(size: Int, startX: Int, startY: Int, dx: Int): List<Cell> {
+        val cells = mutableListOf<Cell>()
+        var x = startX
+        var y = startY
+        while (x in 0 until size && y in 0 until size) {
+            cells.add(Cell(x, y))
+            x += dx
+            y++
+        }
+        return cells
+    }
+
     fun win(
         field: List<List<PlayerSymbol?>>,
         winLength: Int = DEFAULT_BOARD_SIZE,
     ): Win? {
-        if (winLength < 1) return null
-        val size = field.size
-        val lines: List<List<Pair<Cell, PlayerSymbol?>>> =
-            field.mapIndexed { y, row -> row.mapIndexed { x, symbol -> Cell(x, y) to symbol } } +
-                (0 until size).map { x -> field.mapIndexed { y, row -> Cell(x, y) to row[x] } } +
-                listOf(
-                    (0 until size).map { d -> Cell(d, d) to field[d][d] },
-                    (0 until size).map { d -> Cell(size - 1 - d, d) to field[d][size - 1 - d] },
-                )
-        for (line in lines) {
-            for (start in 0..line.size - winLength) {
-                val window = line.subList(start, start + winLength)
-                val player = window.first().second ?: continue
-                if (window.all { it.second == player }) {
-                    return Win(player = player, cells = window.map { it.first })
-                }
+        for (window in windows(field.size, winLength)) {
+            val player = field[window.first().y][window.first().x] ?: continue
+            if (window.all { field[it.y][it.x] == player }) {
+                return Win(player = player, cells = window)
             }
         }
         return null

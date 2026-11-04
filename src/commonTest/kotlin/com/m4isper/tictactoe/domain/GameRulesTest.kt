@@ -63,6 +63,46 @@ class GameRulesTest {
     }
 
     @Test
+    fun `an offset diagonal of four wins on a five by five`() {
+        val field = GameRules.emptyField(size = 5).mapIndexed { row, cells ->
+            cells.mapIndexed { col, _ -> if (col - row == 1 && row <= 3) PlayerSymbol.X else null }
+        }
+        val win = GameRules.win(field, winLength = 4)
+        assertEquals(PlayerSymbol.X, win?.player)
+        assertEquals(listOf(Cell(1, 0), Cell(2, 1), Cell(3, 2), Cell(4, 3)), win?.cells)
+    }
+
+    @Test
+    fun `an offset anti diagonal of four wins on a five by five`() {
+        val field = GameRules.emptyField(size = 5).mapIndexed { row, cells ->
+            cells.mapIndexed { col, _ -> if (col + row == 3 && row <= 3) PlayerSymbol.O else null }
+        }
+        val win = GameRules.win(field, winLength = 4)
+        assertEquals(PlayerSymbol.O, win?.player)
+        assertEquals(listOf(Cell(3, 0), Cell(2, 1), Cell(1, 2), Cell(0, 3)), win?.cells)
+    }
+
+    @Test
+    fun `a short offset diagonal of three wins on a five by five`() {
+        val field = GameRules.emptyField(size = 5).mapIndexed { row, cells ->
+            cells.mapIndexed { col, _ -> if (col - row == 2 && row <= 2) PlayerSymbol.X else null }
+        }
+        val win = GameRules.win(field, winLength = 3)
+        assertEquals(PlayerSymbol.X, win?.player)
+        assertEquals(listOf(Cell(2, 0), Cell(3, 1), Cell(4, 2)), win?.cells)
+    }
+
+    @Test
+    fun `windows are unique and exactly winLength long`() {
+        listOf(3 to 3, 5 to 3, 5 to 4, 10 to 5).forEach { (size, winLength) ->
+            val windows = GameRules.windows(size, winLength)
+            assertTrue(windows.isNotEmpty(), "no windows for $size/$winLength")
+            assertTrue(windows.all { it.size == winLength }, "wrong window size for $size/$winLength")
+            assertEquals(windows.size, windows.toSet().size, "duplicate windows for $size/$winLength")
+        }
+    }
+
+    @Test
     fun `a shorter run does not win`() {
         val field = GameRules.emptyField().mapIndexed { row, cells ->
             cells.mapIndexed { col, _ -> if (col == 0 && row <= 1) PlayerSymbol.O else null }

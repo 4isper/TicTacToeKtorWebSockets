@@ -57,6 +57,14 @@ class BotBrainTest {
     }
 
     @Test
+    fun `bot blocks an offset diagonal threat`() {
+        val field = GameRules.emptyField(size = 5).mapIndexed { row, cells ->
+            cells.mapIndexed { col, _ -> if (col - row == 1 && row <= 2) PlayerSymbol.O else null }
+        }
+        assertEquals(Cell(4, 3), BotBrain.chooseMove(field, PlayerSymbol.X, winLength = 4))
+    }
+
+    @Test
     fun `bot blocks a row fork`() {
         val field = GameRules.emptyField().mapIndexed { row, cells ->
             cells.mapIndexed { col, _ ->
