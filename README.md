@@ -58,6 +58,9 @@ The build is multiplatform: `commonMain` holds the domain rules and the wire pro
 ./gradlew jvmTest          # integration (websocket flow) + engine tests
 ./gradlew spotlessApply    # format with ktlint
 ./gradlew build            # tests + spotlessCheck + detekt (fails on violations)
+./gradlew detektBaseline   # refresh config/detekt-baseline.xml
 ```
+
+detekt checks every Kotlin source in `src/`. Findings that predate the check are pinned in `config/detekt-baseline.xml`; any new violation fails the build. Regenerate the baseline only when you deliberately accept a finding.
 
 CI runs `./gradlew build` on every push and pull request (GitHub Actions).

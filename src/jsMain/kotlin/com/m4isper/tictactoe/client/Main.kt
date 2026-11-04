@@ -293,7 +293,7 @@ fun main() {
                     profileDiv.appendChild(replayDiv)
                 }
             }.catch { /* the profile is decorative */ }
-        } catch (t: Throwable) {
+        } catch (ignored: Throwable) {
             // decorative as well
         }
     }
@@ -315,7 +315,7 @@ fun main() {
                     }
                 }
             }.catch { /* the leaderboard is decorative */ }
-        } catch (t: Throwable) {
+        } catch (ignored: Throwable) {
             // decorative as well
         }
     }
@@ -353,7 +353,7 @@ fun main() {
                     }
                 }
             }.catch { /* the room list is decorative */ }
-        } catch (t: Throwable) {
+        } catch (ignored: Throwable) {
             // decorative as well
         }
     }
@@ -365,7 +365,7 @@ fun main() {
         if (audioCtx != null) return
         try {
             audioCtx = js("new (window.AudioContext || window.webkitAudioContext)()")
-        } catch (t: Throwable) {
+        } catch (ignored: Throwable) {
             audioCtx = null
         }
     }
@@ -384,7 +384,7 @@ fun main() {
             gain.connect(ctx.destination)
             osc.start()
             osc.stop(ctx.currentTime + durationMs / 1000.0)
-        } catch (t: Throwable) {
+        } catch (ignored: Throwable) {
             // sound is decorative; never break the game over it
         }
     }

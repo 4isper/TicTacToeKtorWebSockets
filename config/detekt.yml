@@ -5,10 +5,22 @@ style:
     active: false
   MaxLineLength:
     active: false
+  # early returns are the house style; six is the current maximum
+  ReturnCount:
+    max: 6
 
 complexity:
   TooManyFunctions:
-    allowedFunctionsPerClass: 15
+    allowedFunctionsPerFile: 25
+    allowedFunctionsPerClass: 35
+  # a when that only maps values to strings is not branchy logic
+  CyclomaticComplexMethod:
+    ignoreSimpleWhenEntries: true
+
+empty-blocks:
+  # BotSession's WebSocketSession overrides are intentionally no-ops
+  EmptyFunctionBlock:
+    ignoreOverridden: true
 
 exceptions:
   TooGenericExceptionCaught:

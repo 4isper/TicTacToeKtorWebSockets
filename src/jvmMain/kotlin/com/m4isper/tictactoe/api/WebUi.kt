@@ -38,6 +38,7 @@ import kotlinx.html.p
 import kotlinx.html.script
 import kotlinx.html.title
 import kotlinx.html.ul
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.awt.BasicStroke
@@ -63,11 +64,11 @@ private data class WebManifestIcon(val src: String, val sizes: String, val type:
 @Serializable
 private data class WebManifest(
     val name: String,
-    val short_name: String,
-    val start_url: String = "/",
+    @SerialName("short_name") val shortName: String,
+    @SerialName("start_url") val startUrl: String = "/",
     val display: String = "standalone",
-    val background_color: String = "#14141f",
-    val theme_color: String = "#14141f",
+    @SerialName("background_color") val backgroundColor: String = "#14141f",
+    @SerialName("theme_color") val themeColor: String = "#14141f",
     val icons: List<WebManifestIcon>,
 )
 
@@ -153,7 +154,7 @@ fun Application.webUi(
                     Lang.RU -> "Крестики-нолики"
                     Lang.EN -> "Tic-tac-toe"
                 },
-                short_name = when (lang) {
+                shortName = when (lang) {
                     Lang.RU -> "Крестики"
                     Lang.EN -> "Tic-tac-toe"
                 },
