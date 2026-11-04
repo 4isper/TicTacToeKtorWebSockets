@@ -220,37 +220,44 @@ class TicTacToeGame(
                 if (player == PlayerSymbol.X) clockX = (clockX - spent).coerceAtLeast(0) else clockO = (clockO - spent).coerceAtLeast(0)
             }
 
-            val newField = current.field.mapIndexed { row, cells ->
-                cells.mapIndexed { col, cell -> if (row == y && col == x) player else cell }
-            }
-            val isBoardFull = GameRules.isBoardFull(newField)
-            val win = GameRules.win(newField, winLength)
-            val newScore = if (win != null) {
-                current.score + (win.player to (current.score[win.player] ?: 0) + 1)
-            } else {
-                current.score
-            }
-
-            if (win != null || isBoardFull) {
+            val next = applyMove(current, player, x, y)
+            val roundEnded = next.winningPlayer != null || next.isBoardFull
+            if (roundEnded) {
                 roundRestartDeadline = System.currentTimeMillis() + roundRestartDelayMs
             }
-
-            publish(
-                current.copy(
-                    playerAtTurn = player.other,
-                    field = newField,
-                    isBoardFull = isBoardFull,
-                    winningPlayer = win?.player,
-                    winningCells = win?.cells.orEmpty(),
-                    score = newScore,
-                    undoOfferBy = null, // the position moved on: a stale takeback offer dies
-                ),
-            )
-            if (win != null || isBoardFull) {
+            publish(next)
+            if (roundEnded) {
                 scheduleRoundRestart()
             }
             return null
         }
+    }
+
+    /** Pure: the position after a legal move, with the winner and score worked out. */
+    private fun applyMove(
+        current: GameState,
+        player: PlayerSymbol,
+        x: Int,
+        y: Int,
+    ): GameState {
+        val newField = current.field.mapIndexed { row, cells ->
+            cells.mapIndexed { col, cell -> if (row == y && col == x) player else cell }
+        }
+        val win = GameRules.win(newField, winLength)
+        val newScore = if (win != null) {
+            current.score + (win.player to (current.score[win.player] ?: 0) + 1)
+        } else {
+            current.score
+        }
+        return current.copy(
+            playerAtTurn = player.other,
+            field = newField,
+            isBoardFull = GameRules.isBoardFull(newField),
+            winningPlayer = win?.player,
+            winningCells = win?.cells.orEmpty(),
+            score = newScore,
+            undoOfferBy = null, // the position moved on: a stale takeback offer dies
+        )
     }
 
     fun requestRematch(player: PlayerSymbol, session: WebSocketSession): ErrorReason? {
