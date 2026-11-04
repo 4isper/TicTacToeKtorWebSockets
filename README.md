@@ -1,6 +1,6 @@
 # TicTacToe (Ktor WebSockets)
 
-A minimal tic-tac-toe game server: two players connect over WebSocket, every state change is broadcast to both as JSON. Built with Kotlin and Ktor.
+A two-player tic-tac-toe game over WebSockets, built with Kotlin Multiplatform and Ktor. The Ktor server and the browser client share the same domain rules and JSON wire protocol, so every state change is broadcast to both players and to spectators from one source of truth. Beyond a bare board there are rooms and invite links, configurable boards and clocks, practice bots, Elo-rated profiles, shareable replays and an installable PWA.
 
 ## Run
 
@@ -9,6 +9,15 @@ A minimal tic-tac-toe game server: two players connect over WebSocket, every sta
 ```
 
 Then open http://localhost:8080/ to play in the browser (the page is rendered with the Ktor HTML DSL, the client is a Kotlin/JS bundle). Invite friends with a room link: http://localhost:8080/?room=alpha. Append `&lang=en` to any link for the English UI — the default is Russian. Round results persist to `data/scoreboard.json` (override the path with the `SCOREBOARD_FILE` env var; point it at a `.db`/`.sqlite` path to switch to the SQLite store).
+
+## Features
+
+- **One codebase, two targets:** `commonMain` holds the rules, the bot brain, Elo and the wire protocol; `jvmMain` is the Ktor server, `jsMain` the browser client. Both sides compile from the same types.
+- **Installable PWA:** `/manifest.webmanifest` with an SVG icon and generated 192/512 PNG icons, a `/sw.js` service worker and an `/offline` fallback page. Offline support is best-effort — playing still needs the server.
+- **Themes:** dark by default, automatic light theme via `prefers-color-scheme`, with matching `theme-color` meta tags.
+- **Sound and accessibility:** synthesized Web Audio cues distinguish your own move from the opponent's and mark wins and draws; a mute toggle persists in `localStorage`. Cells carry `aria-label`s, the last move stays marked, and the turn timer shows a progress bar.
+- **Resilient scoreboard:** JSON writes are atomic (temp file + rename). If the file is unreadable, the original is saved as `<name>.corrupt` and a warning is logged before the store starts empty, so the history is not silently lost.
+- **Checks:** `./gradlew build` runs the full test suite, ktlint via spotless, detekt (including the JVM type-resolution tasks) and the JS production bundle; GitHub Actions runs the same on every push and pull request.
 
 ## Protocol
 
@@ -62,5 +71,7 @@ The build is multiplatform: `commonMain` holds the domain rules and the wire pro
 ```
 
 detekt checks every Kotlin source in `src/`, and `check` also runs the JVM type-resolution analysis (`detektMainJvm` / `detektTestJvm`) for rules that need type information. Findings that predate the check are pinned in `config/detekt-baseline.xml`; any new violation fails the build. Regenerate the baseline only when you deliberately accept a finding.
+
+The `commonTest` suite runs on the JVM. Browser tests (`jsBrowserTest`) are deliberately disabled in `build.gradle.kts`: they need a Karma/Chrome runner and npm packages from the Kotlin karma fork, which an offline build cannot resolve. Re-enable them only with network access and a headless browser available.
 
 CI runs `./gradlew build` on every push and pull request (GitHub Actions).

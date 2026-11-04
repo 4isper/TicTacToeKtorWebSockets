@@ -20,6 +20,9 @@ kotlin {
             commonWebpackConfig {
                 outputFileName = "app.js"
             }
+            // commonTest is exercised on the JVM. Browser tests need a Karma/Chrome
+            // runner plus npm packages from the Kotlin karma fork, which an offline
+            // build cannot resolve; enabling this also makes CI depend on a browser.
             testTask {
                 enabled = false
             }
