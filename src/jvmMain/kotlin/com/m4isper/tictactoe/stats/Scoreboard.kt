@@ -170,7 +170,7 @@ class Scoreboard(private val store: ScoreStore) {
                 store.addResult(
                     name,
                     RoundResult.DRAW,
-                    opponent = named.filter { it != name }.firstOrNull(),
+                    opponent = named.firstOrNull { it != name },
                     moves = moves,
                     boardSize = boardSize,
                     rating = next,

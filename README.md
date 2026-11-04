@@ -61,6 +61,6 @@ The build is multiplatform: `commonMain` holds the domain rules and the wire pro
 ./gradlew detektBaseline   # refresh config/detekt-baseline.xml
 ```
 
-detekt checks every Kotlin source in `src/`. Findings that predate the check are pinned in `config/detekt-baseline.xml`; any new violation fails the build. Regenerate the baseline only when you deliberately accept a finding.
+detekt checks every Kotlin source in `src/`, and `check` also runs the JVM type-resolution analysis (`detektMainJvm` / `detektTestJvm`) for rules that need type information. Findings that predate the check are pinned in `config/detekt-baseline.xml`; any new violation fails the build. Regenerate the baseline only when you deliberately accept a finding.
 
 CI runs `./gradlew build` on every push and pull request (GitHub Actions).

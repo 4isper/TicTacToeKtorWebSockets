@@ -389,7 +389,7 @@ class ApplicationTest {
 
             val oReady = CompletableDeferred<Unit>()
             val scope = CoroutineScope(coroutineContext)
-            val second = scope.launch {
+            scope.launch {
                 oClient.webSocket("/play") {
                     receiveHandshake()
                     oReady.complete(Unit)
@@ -1256,7 +1256,7 @@ class ApplicationTest {
 
             val both = receiveState() // the broadcast that O has joined
             assertEquals(300_000, both.clocks[PlayerSymbol.X]) // the budget rides the state
-            assertTrue(both.clocks[PlayerSymbol.O]!! <= 300_000)
+            assertTrue(both.clocks.getValue(PlayerSymbol.O) <= 300_000)
 
             second.cancel()
         }

@@ -11,7 +11,7 @@ import java.sql.Types
  * SQLite store: one file, one connection, one writer at a time — plenty for this scale.
  * Point `SCOREBOARD_FILE` at a `.db`/`.sqlite` path to use it instead of the JSON store.
  */
-class SqliteScoreStore(private val file: File) : ScoreStore {
+class SqliteScoreStore(file: File) : ScoreStore {
     private val json = Json { ignoreUnknownKeys = true }
     private val connection = DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}")
 

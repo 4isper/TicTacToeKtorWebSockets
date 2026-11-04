@@ -13,9 +13,18 @@ complexity:
   TooManyFunctions:
     allowedFunctionsPerFile: 25
     allowedFunctionsPerClass: 35
+  # the game's settings are passed as parameters, not wrapped in a config object
+  LongParameterList:
+    allowedFunctionParameters: 8
+    allowedConstructorParameters: 8
   # a when that only maps values to strings is not branchy logic
   CyclomaticComplexMethod:
     ignoreSimpleWhenEntries: true
+
+coroutines:
+  # no DI container here: each game/lobby scope owns its dispatcher
+  InjectDispatcher:
+    active: false
 
 empty-blocks:
   # BotSession's WebSocketSession overrides are intentionally no-ops

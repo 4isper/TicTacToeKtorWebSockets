@@ -89,7 +89,8 @@ class GameLobby(
             delay(reconnectGraceMs)
             synchronized(lock) {
                 val pending = tokens.remove(token) ?: return@launch
-                pending.game.disconnectPlayer(pending.symbol!!)
+                val symbol = pending.symbol ?: return@launch
+                pending.game.disconnectPlayer(symbol)
                 if (pending.game.isEmpty()) retire(pending.game)
             }
         }

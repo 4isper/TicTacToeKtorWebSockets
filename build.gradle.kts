@@ -82,6 +82,8 @@ detekt {
 
 tasks.named("check") {
     dependsOn(tasks.spotlessCheck, tasks.detekt)
+    // type-resolution rules only run in the compilation tasks
+    dependsOn("detektMainJvm", "detektTestJvm")
 }
 
 tasks.configureEach {

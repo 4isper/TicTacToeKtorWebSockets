@@ -222,7 +222,7 @@ class TicTacToeGame(
                     field = newField,
                     isBoardFull = isBoardFull,
                     winningPlayer = win?.player,
-                    winningCells = win?.cells ?: emptyList(),
+                    winningCells = win?.cells.orEmpty(),
                     score = newScore,
                     undoOfferBy = null, // the position moved on: a stale takeback offer dies
                 ),

@@ -38,8 +38,8 @@ class ScoreboardTest {
         board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), winner = null)
 
         val top = board.top(limit = 10).associateBy { it.name }
-        val anya = top["Аня"]!!.stats
-        val boris = top["Боря"]!!.stats
+        val anya = top.getValue("Аня").stats
+        val boris = top.getValue("Боря").stats
         assertEquals(PlayerStats(wins = 1, losses = 0, draws = 1, rating = anya.rating, history = anya.history), anya)
         assertEquals(PlayerStats(wins = 0, losses = 1, draws = 1, rating = boris.rating, history = boris.history), boris)
         assertEquals(RoundResult.DRAW, anya.history[0].result) // newest first

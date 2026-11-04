@@ -531,7 +531,7 @@ class TicTacToeGameTest {
         assertNull(game.finishTurn(PlayerSymbol.X, xSession, 0, 0))
 
         val afterX = game.currentState()
-        assertTrue(afterX.clocks[PlayerSymbol.X]!! in 55_000..60_000, "X clock was ${afterX.clocks[PlayerSymbol.X]}")
+        assertTrue(afterX.clocks.getValue(PlayerSymbol.X) in 55_000..60_000, "X clock was ${afterX.clocks[PlayerSymbol.X]}")
         assertEquals(60_000, afterX.clocks[PlayerSymbol.O]) // O has not thought yet
 
         // the round ends, the clocks come back full
