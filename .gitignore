@@ -36,3 +36,12 @@ out/
 .vscode/
 ### macOS ###
 .DS_Store
+
+### Kotlin ###
+.kotlin/
+
+### WorkBuddy AI (local agent memory) ###
+.workbuddy-ai/
+
+data/
+scoreboard.json
