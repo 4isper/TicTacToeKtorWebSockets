@@ -22,6 +22,9 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.css.*
 import kotlinx.css.properties.*
+import kotlinx.html.BODY
+import kotlinx.html.HEAD
+import kotlinx.html.HTML
 import kotlinx.html.InputType
 import kotlinx.html.body
 import kotlinx.html.button
@@ -123,389 +126,439 @@ fun Application.webUi(
 ) {
     routing {
         staticFiles("/static", File(CLIENT_DIST))
+        apiRoutes(scoreboard, lobby)
+        assetRoutes()
+        pageRoute()
+    }
+}
 
-        get("/leaderboard") {
-            call.respondText(
-                apiJson.encodeToString(LeaderboardResponse(scoreboard.top(limit = 10))),
-                ContentType.Application.Json,
-            )
+private fun Route.apiRoutes(
+    scoreboard: Scoreboard,
+    lobby: GameLobby,
+) {
+    get("/leaderboard") {
+        call.respondText(
+            apiJson.encodeToString(LeaderboardResponse(scoreboard.top(limit = 10))),
+            ContentType.Application.Json,
+        )
+    }
+
+    get("/player") {
+        val profile = scoreboard.profile(call.request.queryParameters["name"])
+        if (profile == null) {
+            call.respond(HttpStatusCode.NotFound)
+        } else {
+            call.respondText(apiJson.encodeToString(profile), ContentType.Application.Json)
         }
+    }
 
-        get("/player") {
-            val profile = scoreboard.profile(call.request.queryParameters["name"])
-            if (profile == null) {
-                call.respond(HttpStatusCode.NotFound)
-            } else {
-                call.respondText(apiJson.encodeToString(profile), ContentType.Application.Json)
-            }
+    get("/rooms") {
+        call.respondText(
+            apiJson.encodeToString(RoomsResponse(lobby.roomSnapshots())),
+            ContentType.Application.Json,
+        )
+    }
+}
+
+private fun Route.assetRoutes() {
+    get("/manifest.webmanifest") {
+        val lang = parseLang(call.request.queryParameters["lang"])
+        val manifest = WebManifest(
+            name = when (lang) {
+                Lang.RU -> "Крестики-нолики"
+                Lang.EN -> "Tic-tac-toe"
+            },
+            shortName = when (lang) {
+                Lang.RU -> "Крестики"
+                Lang.EN -> "Tic-tac-toe"
+            },
+            icons = listOf(
+                WebManifestIcon("/icon.svg", "any"),
+                WebManifestIcon("/icon-192.png", "192x192", "image/png"),
+                WebManifestIcon("/icon-512.png", "512x512", "image/png"),
+            ),
+        )
+        call.respondText(apiJson.encodeToString(manifest), ContentType.Application.Json)
+    }
+
+    get("/icon.svg") {
+        call.respondText(ICON_SVG, ContentType.Image.SVG)
+    }
+
+    get("/icon-192.png") {
+        call.respondBytes(iconPng(192), ContentType.Image.PNG)
+    }
+
+    get("/icon-512.png") {
+        call.respondBytes(iconPng(512), ContentType.Image.PNG)
+    }
+
+    get("/sw.js") {
+        call.respondText(SERVICE_WORKER_JS, ContentType.Text.JavaScript)
+    }
+
+    get("/offline") {
+        call.respondText(OFFLINE_HTML, ContentType.Text.Html)
+    }
+
+    get("/styles.css") {
+        call.respondCss { styles() }
+    }
+}
+
+private fun Route.pageRoute() {
+    get("/") {
+        val room = call.request.queryParameters["room"]
+        val pageLang = parseLang(call.request.queryParameters["lang"])
+        call.respondHtml { page(pageLang, room) }
+    }
+}
+
+private fun CssBuilder.styles() {
+    themeStyles()
+    layoutStyles()
+    boardStyles()
+    effectStyles()
+}
+
+private fun CssBuilder.themeStyles() {
+    rule(":root") {
+        put("--bg", "#14141f")
+        put("--panel", "#1f1f33")
+        put("--text", "#e8e8f0")
+        put("--muted", "#9a9ab8")
+        put("--accent", "#7aa2f7")
+        put("--win", "#2e7d4f")
+        put("--danger", "#ff7b7b")
+        put("--placeholder", "#6a6a85")
+    }
+    rule("@media (prefers-color-scheme: light)") {
+        rule(":root") {
+            put("--bg", "#f4f4f8")
+            put("--panel", "#ffffff")
+            put("--text", "#1a1a24")
+            put("--muted", "#6a6a85")
+            put("--accent", "#4a6fd4")
+            put("--win", "#2e7d4f")
+            put("--danger", "#c0392b")
+            put("--placeholder", "#9a9ab8")
         }
+    }
+    rule("body") {
+        fontFamily = "system-ui, sans-serif"
+        display = Display.flex
+        flexDirection = FlexDirection.column
+        alignItems = Align.center
+        backgroundColor = Color("var(--bg)")
+        color = Color("var(--text)")
+    }
+    rule("#status") {
+        fontSize = 22.px
+        minHeight = 30.px
+    }
+    rule("#error") {
+        color = Color("var(--danger)")
+        minHeight = 24.px
+    }
+    rule("#score") {
+        fontSize = 18.px
+        minHeight = 24.px
+        color = Color("var(--muted)")
+    }
+    rule("#clocks") {
+        display = Display.none
+        fontSize = 20.px
+        color = Color("var(--accent)")
+    }
+    rule("#copy-link") {
+        margin = Margin(vertical = 8.px)
+        padding = Padding(horizontal = 14.px, vertical = 8.px)
+        fontSize = 15.px
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        borderWidth = 0.px
+        borderRadius = 8.px
+        cursor = Cursor.pointer
+    }
+}
 
-        get("/rooms") {
-            call.respondText(
-                apiJson.encodeToString(RoomsResponse(lobby.roomSnapshots())),
-                ContentType.Application.Json,
-            )
+private fun CssBuilder.layoutStyles() {
+    rule("#rematch, #draw") {
+        display = Display.none
+        margin = Margin(vertical = 4.px)
+        padding = Padding(horizontal = 14.px, vertical = 8.px)
+        fontSize = 15.px
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        borderWidth = 0.px
+        borderRadius = 8.px
+        cursor = Cursor.pointer
+    }
+    rule("#rematch:disabled, #draw:disabled") {
+        opacity = 0.6
+        cursor = Cursor.default
+    }
+    rule(".name-row") {
+        display = Display.flex
+        gap = 4.px
+        margin = Margin(vertical = 4.px)
+    }
+    rule("#name") {
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        borderWidth = 0.px
+        borderRadius = 8.px
+        padding = Padding(horizontal = 10.px, vertical = 8.px)
+        fontSize = 15.px
+    }
+    rule("#name::placeholder") {
+        color = Color("var(--placeholder)")
+    }
+    rule("#set-name") {
+        padding = Padding(horizontal = 14.px, vertical = 8.px)
+        fontSize = 15.px
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        borderWidth = 0.px
+        borderRadius = 8.px
+        cursor = Cursor.pointer
+    }
+    rule("#turn-bar") {
+        display = Display.none
+        height = 6.px
+        backgroundColor = Color("var(--panel)")
+        borderRadius = 3.px
+        margin = Margin(vertical = 6.px)
+        overflow = Overflow.hidden
+    }
+    rule("#turn-bar-fill") {
+        width = 100.pct
+        height = 100.pct
+        backgroundColor = Color("var(--accent)")
+        transition += Transition("width", 250.ms, Timing.linear)
+    }
+}
+
+private fun CssBuilder.boardStyles() {
+    rule(".row") {
+        display = Display.flex
+        gap = 4.px
+    }
+    rule(".cell") {
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        borderRadius = 8.px
+        borderWidth = 0.px
+        cursor = Cursor.pointer
+    }
+    rule(".cell:disabled") {
+        cursor = Cursor.default
+        opacity = 0.85
+    }
+    rule(".cell.pop") {
+        animation += Animation("cell-pop", 180.ms, Timing.easeOut)
+    }
+    rule(".cell.last-move") {
+        boxSizing = BoxSizing.borderBox
+        borderWidth = 2.px
+        borderStyle = BorderStyle.solid
+        borderColor = Color("var(--accent)")
+    }
+    rule(".cell.winning") {
+        backgroundColor = Color("var(--win)")
+        animation += Animation("win-pulse", 1200.ms, Timing.easeInOut, iterationCount = IterationCount.infinite)
+    }
+    rule(".replay-controls") {
+        display = Display.flex
+        alignItems = Align.center
+        gap = 4.px
+        margin = Margin(vertical = 4.px)
+    }
+    rule(".mini-cell") {
+        width = 26.px
+        height = 26.px
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        fontSize = 13.px
+        lineHeight = LineHeight("26px")
+        textAlign = TextAlign.center
+    }
+}
+
+private fun CssBuilder.effectStyles() {
+    rule("#board") {
+        position = Position.relative
+    }
+    rule("#reactions") {
+        display = Display.flex
+        gap = 8.px
+        margin = Margin(vertical = 6.px)
+    }
+    rule(".reaction") {
+        backgroundColor = Color("var(--panel)")
+        borderWidth = 0.px
+        borderRadius = 8.px
+        padding = Padding(horizontal = 10.px, vertical = 4.px)
+        fontSize = 18.px
+        cursor = Cursor.pointer
+    }
+    rule(".reaction-bubble") {
+        position = Position.absolute
+        bottom = 20.pct
+        fontSize = 30.px
+        pointerEvents = PointerEvents.none
+        animation += Animation("reaction-float", 2000.ms, Timing.easeOut, fillMode = FillMode.forwards)
+    }
+    rule("@keyframes reaction-float") {
+        rule("from") {
+            opacity = 1
+            transform { translateY(0.px) }
         }
-
-        get("/manifest.webmanifest") {
-            val lang = parseLang(call.request.queryParameters["lang"])
-            val manifest = WebManifest(
-                name = when (lang) {
-                    Lang.RU -> "Крестики-нолики"
-                    Lang.EN -> "Tic-tac-toe"
-                },
-                shortName = when (lang) {
-                    Lang.RU -> "Крестики"
-                    Lang.EN -> "Tic-tac-toe"
-                },
-                icons = listOf(
-                    WebManifestIcon("/icon.svg", "any"),
-                    WebManifestIcon("/icon-192.png", "192x192", "image/png"),
-                    WebManifestIcon("/icon-512.png", "512x512", "image/png"),
-                ),
-            )
-            call.respondText(apiJson.encodeToString(manifest), ContentType.Application.Json)
+        rule("to") {
+            opacity = 0
+            transform { translateY((-60).px) }
         }
-
-        get("/icon.svg") {
-            call.respondText(ICON_SVG, ContentType.Image.SVG)
+    }
+    rule("@keyframes cell-pop") {
+        rule("from") {
+            opacity = 0
+            transform { scale(0.4) }
         }
-
-        get("/icon-192.png") {
-            call.respondBytes(iconPng(192), ContentType.Image.PNG)
+        rule("to") {
+            opacity = 1
+            transform { scale(1) }
         }
-
-        get("/icon-512.png") {
-            call.respondBytes(iconPng(512), ContentType.Image.PNG)
+    }
+    rule("@keyframes win-pulse") {
+        rule("from") {
+            opacity = 1
         }
-
-        get("/sw.js") {
-            call.respondText(SERVICE_WORKER_JS, ContentType.Text.JavaScript)
+        rule("to") {
+            opacity = 0.65
         }
+    }
+}
 
-        get("/offline") {
-            call.respondText(OFFLINE_HTML, ContentType.Text.Html)
+private fun HTML.page(pageLang: Lang, room: String?) {
+    lang = when (pageLang) {
+        Lang.RU -> "ru"
+        Lang.EN -> "en"
+    }
+    head { pageHead(pageLang) }
+    body {
+        pageHeading(pageLang, room)
+        controls(pageLang)
+        boardArea()
+        panels(pageLang)
+        script(src = "/static/app.js") {}
+    }
+}
+
+private fun HEAD.pageHead(pageLang: Lang) {
+    meta { charset = "utf-8" }
+    meta(name = "viewport", content = "width=device-width, initial-scale=1")
+    meta(name = "theme-color", content = "#f4f4f8") {
+        attributes["media"] = "(prefers-color-scheme: light)"
+    }
+    meta(name = "theme-color", content = "#14141f")
+    link(rel = "manifest", href = "/manifest.webmanifest")
+    link(rel = "icon", href = "/icon.svg")
+    title {
+        +"${when (pageLang) {
+            Lang.RU -> "Крестики-нолики"
+            Lang.EN -> "Tic-tac-toe"
+        }}"
+    }
+    link(rel = "stylesheet", href = "/styles.css")
+}
+
+private fun BODY.pageHeading(pageLang: Lang, room: String?) {
+    h1 {
+        +"${when (pageLang) {
+            Lang.RU -> "Крестики-нолики"
+            Lang.EN -> "Tic-tac-toe"
+        }}"
+    }
+    room?.let {
+        p {
+            +"${when (pageLang) {
+                Lang.RU -> "Комната: $it"
+                Lang.EN -> "Room: $it"
+            }}"
         }
-
-        get("/styles.css") {
-            call.respondCss {
-                rule(":root") {
-                    put("--bg", "#14141f")
-                    put("--panel", "#1f1f33")
-                    put("--text", "#e8e8f0")
-                    put("--muted", "#9a9ab8")
-                    put("--accent", "#7aa2f7")
-                    put("--win", "#2e7d4f")
-                    put("--danger", "#ff7b7b")
-                    put("--placeholder", "#6a6a85")
-                }
-                rule("@media (prefers-color-scheme: light)") {
-                    rule(":root") {
-                        put("--bg", "#f4f4f8")
-                        put("--panel", "#ffffff")
-                        put("--text", "#1a1a24")
-                        put("--muted", "#6a6a85")
-                        put("--accent", "#4a6fd4")
-                        put("--win", "#2e7d4f")
-                        put("--danger", "#c0392b")
-                        put("--placeholder", "#9a9ab8")
-                    }
-                }
-                rule("body") {
-                    fontFamily = "system-ui, sans-serif"
-                    display = Display.flex
-                    flexDirection = FlexDirection.column
-                    alignItems = Align.center
-                    backgroundColor = Color("var(--bg)")
-                    color = Color("var(--text)")
-                }
-                rule("#status") {
-                    fontSize = 22.px
-                    minHeight = 30.px
-                }
-                rule("#error") {
-                    color = Color("var(--danger)")
-                    minHeight = 24.px
-                }
-                rule("#score") {
-                    fontSize = 18.px
-                    minHeight = 24.px
-                    color = Color("var(--muted)")
-                }
-                rule("#clocks") {
-                    display = Display.none
-                    fontSize = 20.px
-                    color = Color("var(--accent)")
-                }
-                rule("#copy-link") {
-                    margin = Margin(vertical = 8.px)
-                    padding = Padding(horizontal = 14.px, vertical = 8.px)
-                    fontSize = 15.px
-                    backgroundColor = Color("var(--panel)")
-                    color = Color("var(--text)")
-                    borderWidth = 0.px
-                    borderRadius = 8.px
-                    cursor = Cursor.pointer
-                }
-                rule("#rematch, #draw") {
-                    display = Display.none
-                    margin = Margin(vertical = 4.px)
-                    padding = Padding(horizontal = 14.px, vertical = 8.px)
-                    fontSize = 15.px
-                    backgroundColor = Color("var(--panel)")
-                    color = Color("var(--text)")
-                    borderWidth = 0.px
-                    borderRadius = 8.px
-                    cursor = Cursor.pointer
-                }
-                rule("#rematch:disabled, #draw:disabled") {
-                    opacity = 0.6
-                    cursor = Cursor.default
-                }
-                rule(".name-row") {
-                    display = Display.flex
-                    gap = 4.px
-                    margin = Margin(vertical = 4.px)
-                }
-                rule("#name") {
-                    backgroundColor = Color("var(--panel)")
-                    color = Color("var(--text)")
-                    borderWidth = 0.px
-                    borderRadius = 8.px
-                    padding = Padding(horizontal = 10.px, vertical = 8.px)
-                    fontSize = 15.px
-                }
-                rule("#name::placeholder") {
-                    color = Color("var(--placeholder)")
-                }
-                rule("#set-name") {
-                    padding = Padding(horizontal = 14.px, vertical = 8.px)
-                    fontSize = 15.px
-                    backgroundColor = Color("var(--panel)")
-                    color = Color("var(--text)")
-                    borderWidth = 0.px
-                    borderRadius = 8.px
-                    cursor = Cursor.pointer
-                }
-                rule("#turn-bar") {
-                    display = Display.none
-                    height = 6.px
-                    backgroundColor = Color("var(--panel)")
-                    borderRadius = 3.px
-                    margin = Margin(vertical = 6.px)
-                    overflow = Overflow.hidden
-                }
-                rule("#turn-bar-fill") {
-                    width = 100.pct
-                    height = 100.pct
-                    backgroundColor = Color("var(--accent)")
-                    transition += Transition("width", 250.ms, Timing.linear)
-                }
-                rule(".row") {
-                    display = Display.flex
-                    gap = 4.px
-                }
-                rule(".cell") {
-                    backgroundColor = Color("var(--panel)")
-                    color = Color("var(--text)")
-                    borderRadius = 8.px
-                    borderWidth = 0.px
-                    cursor = Cursor.pointer
-                }
-                rule(".cell:disabled") {
-                    cursor = Cursor.default
-                    opacity = 0.85
-                }
-                rule(".cell.pop") {
-                    animation += Animation("cell-pop", 180.ms, Timing.easeOut)
-                }
-                rule(".cell.last-move") {
-                    boxSizing = BoxSizing.borderBox
-                    borderWidth = 2.px
-                    borderStyle = BorderStyle.solid
-                    borderColor = Color("var(--accent)")
-                }
-                rule(".cell.winning") {
-                    backgroundColor = Color("var(--win)")
-                    animation += Animation("win-pulse", 1200.ms, Timing.easeInOut, iterationCount = IterationCount.infinite)
-                }
-                rule(".replay-controls") {
-                    display = Display.flex
-                    alignItems = Align.center
-                    gap = 4.px
-                    margin = Margin(vertical = 4.px)
-                }
-                rule(".mini-cell") {
-                    width = 26.px
-                    height = 26.px
-                    backgroundColor = Color("var(--panel)")
-                    color = Color("var(--text)")
-                    fontSize = 13.px
-                    lineHeight = LineHeight("26px")
-                    textAlign = TextAlign.center
-                }
-                rule("#board") {
-                    position = Position.relative
-                }
-                rule("#reactions") {
-                    display = Display.flex
-                    gap = 8.px
-                    margin = Margin(vertical = 6.px)
-                }
-                rule(".reaction") {
-                    backgroundColor = Color("var(--panel)")
-                    borderWidth = 0.px
-                    borderRadius = 8.px
-                    padding = Padding(horizontal = 10.px, vertical = 4.px)
-                    fontSize = 18.px
-                    cursor = Cursor.pointer
-                }
-                rule(".reaction-bubble") {
-                    position = Position.absolute
-                    bottom = 20.pct
-                    fontSize = 30.px
-                    pointerEvents = PointerEvents.none
-                    animation += Animation("reaction-float", 2000.ms, Timing.easeOut, fillMode = FillMode.forwards)
-                }
-                rule("@keyframes reaction-float") {
-                    rule("from") {
-                        opacity = 1
-                        transform { translateY(0.px) }
-                    }
-                    rule("to") {
-                        opacity = 0
-                        transform { translateY((-60).px) }
-                    }
-                }
-                rule("@keyframes cell-pop") {
-                    rule("from") {
-                        opacity = 0
-                        transform { scale(0.4) }
-                    }
-                    rule("to") {
-                        opacity = 1
-                        transform { scale(1) }
-                    }
-                }
-                rule("@keyframes win-pulse") {
-                    rule("from") {
-                        opacity = 1
-                    }
-                    rule("to") {
-                        opacity = 0.65
-                    }
-                }
-            }
+        button(classes = "secondary") {
+            id = "copy-link"
+            +copyLinkText(pageLang)
         }
+    }
+}
 
-        get("/") {
-            val room = call.request.queryParameters["room"]
-            val pageLang = parseLang(call.request.queryParameters["lang"])
-            call.respondHtml {
-                lang = when (pageLang) {
-                    Lang.RU -> "ru"
-                    Lang.EN -> "en"
-                }
-                head {
-                    meta { charset = "utf-8" }
-                    meta(name = "viewport", content = "width=device-width, initial-scale=1")
-                    meta(name = "theme-color", content = "#f4f4f8") {
-                        attributes["media"] = "(prefers-color-scheme: light)"
-                    }
-                    meta(name = "theme-color", content = "#14141f")
-                    link(rel = "manifest", href = "/manifest.webmanifest")
-                    link(rel = "icon", href = "/icon.svg")
-                    title {
-                        +"${when (pageLang) {
-                            Lang.RU -> "Крестики-нолики"
-                            Lang.EN -> "Tic-tac-toe"
-                        }}"
-                    }
-                    link(rel = "stylesheet", href = "/styles.css")
-                }
-                body {
-                    h1 {
-                        +"${when (pageLang) {
-                            Lang.RU -> "Крестики-нолики"
-                            Lang.EN -> "Tic-tac-toe"
-                        }}"
-                    }
-                    room?.let {
-                        p {
-                            +"${when (pageLang) {
-                                Lang.RU -> "Комната: $it"
-                                Lang.EN -> "Room: $it"
-                            }}"
-                        }
-                        button(classes = "secondary") {
-                            id = "copy-link"
-                            +copyLinkText(pageLang)
-                        }
-                    }
-                    div { id = "status" }
-                    div { id = "score" }
-                    div { id = "clocks" }
-                    div(classes = "name-row") {
-                        input(InputType.text) {
-                            id = "name"
-                            placeholder = namePlaceholder(pageLang)
-                            maxLength = "20"
-                        }
-                        button(classes = "secondary") {
-                            id = "set-name"
-                            +"ОК"
-                        }
-                        button(classes = "secondary") {
-                            id = "sound"
-                            title = soundTitle(muted = false, lang = pageLang)
-                            +soundIcon(muted = false)
-                        }
-                    }
-                    button(classes = "secondary") {
-                        id = "rematch"
-                        +rematchButtonText(waiting = false, lang = pageLang)
-                    }
-                    button(classes = "secondary") {
-                        id = "draw"
-                        +drawButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
-                    }
-                    button(classes = "secondary") {
-                        id = "undo"
-                        +undoButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
-                    }
-                    div {
-                        id = "turn-bar"
-                        div { id = "turn-bar-fill" }
-                    }
-                    div { id = "board" }
-                    div { id = "error" }
-                    div {
-                        id = "shared-replay"
-                        attributes["style"] = "display:none"
-                    }
-                    div {
-                        id = "reactions"
-                        REACTION_EMOJIS.forEach { emoji ->
-                            button(classes = "reaction") {
-                                attributes["aria-label"] = emoji
-                                +emoji
-                            }
-                        }
-                    }
-                    div {
-                        id = "rooms"
-                        h2 { +roomsTitle(pageLang) }
-                        ul { id = "rooms-rows" }
-                    }
-                    div {
-                        id = "leaderboard"
-                        h2 { +leaderboardTitle(pageLang) }
-                        ul { id = "leaderboard-rows" }
-                    }
-                    div { id = "profile" }
-                    script(src = "/static/app.js") {}
-                }
+private fun BODY.controls(pageLang: Lang) {
+    div { id = "status" }
+    div { id = "score" }
+    div { id = "clocks" }
+    div(classes = "name-row") {
+        input(InputType.text) {
+            id = "name"
+            placeholder = namePlaceholder(pageLang)
+            maxLength = "20"
+        }
+        button(classes = "secondary") {
+            id = "set-name"
+            +"ОК"
+        }
+        button(classes = "secondary") {
+            id = "sound"
+            title = soundTitle(muted = false, lang = pageLang)
+            +soundIcon(muted = false)
+        }
+    }
+    button(classes = "secondary") {
+        id = "rematch"
+        +rematchButtonText(waiting = false, lang = pageLang)
+    }
+    button(classes = "secondary") {
+        id = "draw"
+        +drawButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
+    }
+    button(classes = "secondary") {
+        id = "undo"
+        +undoButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
+    }
+}
+
+private fun BODY.boardArea() {
+    div {
+        id = "turn-bar"
+        div { id = "turn-bar-fill" }
+    }
+    div { id = "board" }
+    div { id = "error" }
+    div {
+        id = "shared-replay"
+        attributes["style"] = "display:none"
+    }
+}
+
+private fun BODY.panels(pageLang: Lang) {
+    div {
+        id = "reactions"
+        REACTION_EMOJIS.forEach { emoji ->
+            button(classes = "reaction") {
+                attributes["aria-label"] = emoji
+                +emoji
             }
         }
     }
+    div {
+        id = "rooms"
+        h2 { +roomsTitle(pageLang) }
+        ul { id = "rooms-rows" }
+    }
+    div {
+        id = "leaderboard"
+        h2 { +leaderboardTitle(pageLang) }
+        ul { id = "leaderboard-rows" }
+    }
+    div { id = "profile" }
 }
