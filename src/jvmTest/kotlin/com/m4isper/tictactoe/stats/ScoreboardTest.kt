@@ -1,8 +1,12 @@
 package com.m4isper.tictactoe.stats
 
 import com.m4isper.tictactoe.domain.Cell
+import com.m4isper.tictactoe.domain.Elo
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import java.nio.file.Files
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -134,6 +138,43 @@ class ScoreboardTest {
         assertEquals(listOf(Cell(0, 0), Cell(1, 0), Cell(0, 1)), record.moves)
         assertEquals(5, record.boardSize)
         assertEquals(Cell(0, 0), board.profile("Боря")!!.stats.history.single().moves.first()) // the loser keeps it too
+    }
+
+    @Test
+    fun `concurrent rounds do not lose a rating update`() {
+        val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
+        val workers = 8
+        val roundsPerWorker = 10
+        val rounds = workers * roundsPerWorker
+        val names = mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря")
+        val start = CountDownLatch(1)
+        val done = CountDownLatch(workers)
+        val pool = Executors.newFixedThreadPool(workers)
+        try {
+            repeat(workers) {
+                pool.execute {
+                    start.await()
+                    repeat(roundsPerWorker) { board.recordRound(names, winner = PlayerSymbol.X) }
+                    done.countDown()
+                }
+            }
+            start.countDown()
+            assertTrue(done.await(30, TimeUnit.SECONDS), "the writers did not finish")
+        } finally {
+            pool.shutdownNow()
+        }
+
+        var x = Elo.DEFAULT
+        var o = Elo.DEFAULT
+        repeat(rounds) {
+            val nextX = Elo.next(x, o, 1.0)
+            val nextO = Elo.next(o, x, 0.0)
+            x = nextX
+            o = nextO
+        }
+        assertEquals(rounds, board.profile("Аня")!!.stats.wins)
+        assertEquals(x, board.profile("Аня")!!.stats.rating, "a concurrent round overwrote another round's rating")
+        assertEquals(o, board.profile("Боря")!!.stats.rating)
     }
 
     @Test
