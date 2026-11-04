@@ -3,6 +3,7 @@ package com.m4isper.tictactoe.stats
 import com.m4isper.tictactoe.domain.Cell
 import com.m4isper.tictactoe.domain.Elo
 import com.m4isper.tictactoe.domain.PlayerSymbol
+import java.io.File
 import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -175,6 +176,24 @@ class ScoreboardTest {
         assertEquals(rounds, board.profile("Аня")!!.stats.wins)
         assertEquals(x, board.profile("Аня")!!.stats.rating, "a concurrent round overwrote another round's rating")
         assertEquals(o, board.profile("Боря")!!.stats.rating)
+    }
+
+    @Test
+    fun `a corrupt scoreboard is backed up before it is replaced`() {
+        val file = Files.createTempFile("scoreboard", ".json").toFile()
+        val backup = File(file.parentFile, "${file.name}.corrupt")
+        try {
+            file.writeText("{ this is not json")
+            val store = JsonScoreStore(file)
+            store.addResult("Аня", RoundResult.WIN)
+
+            assertTrue(backup.exists(), "the corrupt scoreboard was lost without a backup")
+            assertEquals("{ this is not json", backup.readText())
+            assertEquals(1, store.loadAll().getValue("Аня").wins)
+        } finally {
+            file.delete()
+            backup.delete()
+        }
     }
 
     @Test

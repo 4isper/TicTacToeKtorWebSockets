@@ -6,6 +6,7 @@ import com.m4isper.tictactoe.domain.PlayerSymbol
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import org.slf4j.LoggerFactory
 import java.io.File
 
 @Serializable
@@ -94,6 +95,7 @@ internal fun statsAfter(
 
 /** JSON-file store with an atomic write (temp file + rename) so a crash mid-write keeps the old data. */
 class JsonScoreStore(private val file: File) : ScoreStore {
+    private val logger = LoggerFactory.getLogger(JsonScoreStore::class.java)
     private val json = Json {
         prettyPrint = true
         ignoreUnknownKeys = true
@@ -105,7 +107,15 @@ class JsonScoreStore(private val file: File) : ScoreStore {
         players = synchronized(lock) {
             if (file.exists()) {
                 runCatching { json.decodeFromString<StoredScores>(file.readText()).players }
-                    .getOrElse { emptyMap() }
+                    .getOrElse { error ->
+                        // The first write replaces the file, so keep the unreadable
+                        // original instead of silently losing the whole history.
+                        val backup = File(file.parentFile, "${file.name}.corrupt")
+                        runCatching { file.copyTo(backup, overwrite = true) }
+                            .onFailure { logger.error("Could not back up the corrupt scoreboard {}", file, it) }
+                        logger.warn("Scoreboard {} is corrupt; starting empty, original kept at {}", file, backup, error)
+                        emptyMap()
+                    }
                     .toMutableMap()
             } else {
                 mutableMapOf()
