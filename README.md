@@ -67,10 +67,9 @@ The build is multiplatform: `commonMain` holds the domain rules and the wire pro
 ./gradlew jvmTest          # integration (websocket flow) + engine tests
 ./gradlew spotlessApply    # format with ktlint
 ./gradlew build            # tests + spotlessCheck + detekt (fails on violations)
-./gradlew detektBaseline   # refresh config/detekt-baseline.xml
 ```
 
-detekt checks every Kotlin source in `src/`, and `check` also runs the JVM type-resolution analysis (`detektMainJvm` / `detektTestJvm`) for rules that need type information. Findings that predate the check are pinned in `config/detekt-baseline.xml`; any new violation fails the build. Regenerate the baseline only when you deliberately accept a finding.
+detekt checks every Kotlin source in `src/`, and `check` also runs the JVM type-resolution analysis (`detektMainJvm` / `detektTestJvm`) for rules that need type information. Every violation fails the build — there is no baseline to hide behind.
 
 The `commonTest` suite runs on the JVM. Browser tests (`jsBrowserTest`) are deliberately disabled in `build.gradle.kts`: they need a Karma/Chrome runner and npm packages from the Kotlin karma fork, which an offline build cannot resolve. Re-enable them only with network access and a headless browser available.
 
