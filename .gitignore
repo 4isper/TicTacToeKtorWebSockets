@@ -40,5 +40,8 @@ out/
 ### Kotlin ###
 .kotlin/
 
+### WorkBuddy AI (local agent memory) ###
+.workbuddy-ai/
+
 data/
 scoreboard.json
