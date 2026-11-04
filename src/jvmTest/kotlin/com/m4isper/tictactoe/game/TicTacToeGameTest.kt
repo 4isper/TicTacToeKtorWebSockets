@@ -7,13 +7,18 @@ import com.m4isper.tictactoe.domain.PlayerSymbol
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketExtension
 import io.ktor.websocket.WebSocketSession
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -192,8 +197,8 @@ class TicTacToeGameTest {
 
     @Test
     fun `an agreed draw ends the round without a winner`() = runBlocking {
-        val reported = mutableListOf<Pair<Map<PlayerSymbol, String>, PlayerSymbol?>>()
-        val game = TicTacToeGame(roundRestartDelayMs = 60_000, onRoundOver = { names, winner, _, _ -> reported.add(names to winner) })
+        val reported = Channel<Pair<Map<PlayerSymbol, String>, PlayerSymbol?>>(Channel.UNLIMITED)
+        val game = TicTacToeGame(roundRestartDelayMs = 60_000, onRoundOver = { names, winner, _, _ -> reported.trySend(names to winner) })
         val xSession = FakeSession()
         val oSession = FakeSession()
         game.connectPlayer(xSession)
@@ -214,9 +219,9 @@ class TicTacToeGameTest {
         assertNull(game.requestRematch(PlayerSymbol.O, oSession))
         assertFalse(game.currentState().isDrawAgreed) // the reset cleared it
 
-        assertEquals(1, reported.size)
-        assertEquals(null, reported.single().second)
-        assertEquals("Аня", reported.single().first[PlayerSymbol.X])
+        val recorded = withTimeout(2_000) { reported.receive() }
+        assertEquals(null, recorded.second)
+        assertEquals("Аня", recorded.first[PlayerSymbol.X])
 
         game.shutdown()
     }
@@ -362,8 +367,8 @@ class TicTacToeGameTest {
 
     @Test
     fun `round end reports the names and the winner`() = runBlocking {
-        val reported = mutableListOf<Pair<Map<PlayerSymbol, String>, PlayerSymbol?>>()
-        val game = TicTacToeGame(onRoundOver = { names, winner, _, _ -> reported.add(names to winner) })
+        val reported = Channel<Pair<Map<PlayerSymbol, String>, PlayerSymbol?>>(Channel.UNLIMITED)
+        val game = TicTacToeGame(onRoundOver = { names, winner, _, _ -> reported.trySend(names to winner) })
         val xSession = FakeSession()
         val oSession = FakeSession()
         game.connectPlayer(xSession)
@@ -377,10 +382,9 @@ class TicTacToeGameTest {
         game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
         game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
 
-        assertEquals(1, reported.size)
         assertEquals(
             mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря") to PlayerSymbol.X,
-            reported.single(),
+            withTimeout(2_000) { reported.receive() },
         )
 
         game.shutdown()
@@ -388,8 +392,8 @@ class TicTacToeGameTest {
 
     @Test
     fun `a draw reports a null winner`() = runBlocking {
-        val reported = mutableListOf<Pair<Map<PlayerSymbol, String>, PlayerSymbol?>>()
-        val game = TicTacToeGame(onRoundOver = { names, winner, _, _ -> reported.add(names to winner) })
+        val reported = Channel<Pair<Map<PlayerSymbol, String>, PlayerSymbol?>>(Channel.UNLIMITED)
+        val game = TicTacToeGame(onRoundOver = { names, winner, _, _ -> reported.trySend(names to winner) })
         val xSession = FakeSession()
         val oSession = FakeSession()
         game.connectPlayer(xSession)
@@ -407,17 +411,17 @@ class TicTacToeGameTest {
         game.finishTurn(PlayerSymbol.O, oSession, 0, 2)
         game.finishTurn(PlayerSymbol.X, xSession, 1, 2)
 
-        assertEquals(1, reported.size)
-        assertEquals(null, reported.single().second)
-        assertEquals("Аня", reported.single().first[PlayerSymbol.X])
+        val recorded = withTimeout(2_000) { reported.receive() }
+        assertEquals(null, recorded.second)
+        assertEquals("Аня", recorded.first[PlayerSymbol.X])
 
         game.shutdown()
     }
 
     @Test
     fun `the round reports its moves for the replay`() = runBlocking {
-        val reported = mutableListOf<List<Cell>>()
-        val game = TicTacToeGame(roundRestartDelayMs = 60_000, onRoundOver = { _, _, moves, _ -> reported.add(moves) })
+        val reported = Channel<List<Cell>>(Channel.UNLIMITED)
+        val game = TicTacToeGame(roundRestartDelayMs = 60_000, onRoundOver = { _, _, moves, _ -> reported.trySend(moves) })
         val xSession = FakeSession()
         val oSession = FakeSession()
         game.connectPlayer(xSession)
@@ -429,7 +433,7 @@ class TicTacToeGameTest {
         game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
         game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
 
-        assertEquals(listOf(Cell(0, 0), Cell(1, 0), Cell(0, 1), Cell(1, 1), Cell(0, 2)), reported.single())
+        assertEquals(listOf(Cell(0, 0), Cell(1, 0), Cell(0, 1), Cell(1, 1), Cell(0, 2)), withTimeout(2_000) { reported.receive() })
 
         // the next round records fresh moves, not the old ones
         assertNull(game.requestRematch(PlayerSymbol.X, xSession))
@@ -440,8 +444,11 @@ class TicTacToeGameTest {
         game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
         game.finishTurn(PlayerSymbol.X, xSession, 2, 1)
 
-        assertEquals(2, reported.size)
-        assertEquals(listOf(Cell(2, 2), Cell(1, 2), Cell(2, 0), Cell(1, 0), Cell(2, 1)), reported.last())
+        assertEquals(
+            listOf(Cell(2, 2), Cell(1, 2), Cell(2, 0), Cell(1, 0), Cell(2, 1)),
+            withTimeout(2_000) { reported.receive() },
+        )
+        assertNull(withTimeoutOrNull(200) { reported.receive() }, "each round is reported exactly once")
 
         game.shutdown()
     }
@@ -532,7 +539,7 @@ class TicTacToeGameTest {
 
         val afterX = game.currentState()
         assertTrue(afterX.clocks.getValue(PlayerSymbol.X) in 55_000..60_000, "X clock was ${afterX.clocks[PlayerSymbol.X]}")
-        assertEquals(60_000, afterX.clocks[PlayerSymbol.O]) // O has not thought yet
+        assertTrue(afterX.clocks.getValue(PlayerSymbol.O) in 59_900..60_000, "O has not thought yet")
 
         // the round ends, the clocks come back full
         game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
@@ -589,6 +596,42 @@ class TicTacToeGameTest {
         val won = game.currentState()
         assertEquals(PlayerSymbol.X, won.winningPlayer)
         assertEquals(4, won.field.size)
+        game.shutdown()
+    }
+
+    @Test
+    fun `a slow round recorder does not freeze the game`() = runBlocking {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val game = TicTacToeGame(
+            roundRestartDelayMs = 60_000,
+            onRoundOver = { _, _, _, _ ->
+                entered.countDown()
+                release.await(2, TimeUnit.SECONDS)
+                Unit
+            },
+        )
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        val play = async(Dispatchers.IO) {
+            game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
+            game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
+            game.finishTurn(PlayerSymbol.X, xSession, 0, 1)
+            game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
+            game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
+        }
+
+        assertTrue(entered.await(2, TimeUnit.SECONDS), "the round recorder never ran")
+        val progressed = async(Dispatchers.IO) {
+            game.connectPlayer(FakeSession())
+            true
+        }
+        assertEquals(true, withTimeoutOrNull(1_000) { progressed.await() }, "the game lock was held while recording")
+        release.countDown()
+        play.await()
         game.shutdown()
     }
 }

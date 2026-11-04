@@ -29,8 +29,20 @@ class TicTacToeGame(
 ) {
     private val logger = LoggerFactory.getLogger(TicTacToeGame::class.java)
 
+    private data class CompletedRound(
+        val playerNames: Map<PlayerSymbol, String>,
+        val winner: PlayerSymbol?,
+        val moves: List<Cell>,
+        val boardSize: Int,
+    )
+
     private val state = MutableStateFlow(GameState(field = GameRules.emptyField(boardSize)))
     private val stateChanges = Channel<GameState>(Channel.UNLIMITED)
+
+    // Recording a round writes to disk/SQLite. Keep that off the game lock: one
+    // consumer preserves the order of rounds without stalling moves or broadcasts.
+    private val completedRounds = Channel<CompletedRound>(Channel.UNLIMITED)
+    private val resultsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Any()
 
     private val playerSockets = ConcurrentHashMap<PlayerSymbol, WebSocketSession>()
@@ -58,6 +70,13 @@ class TicTacToeGame(
     init {
         gameScope.launch {
             for (change in stateChanges) broadcast(change)
+        }
+        resultsScope.launch {
+            for (round in completedRounds) {
+                runCatching { onRoundOver(round.playerNames, round.winner, round.moves, round.boardSize) }
+                    .onFailure { logger.warn("Failed to record a finished round", it) }
+            }
+            resultsScope.cancel()
         }
     }
 
@@ -336,6 +355,8 @@ class TicTacToeGame(
 
     fun shutdown() {
         gameScope.cancel()
+        // close rather than cancel: the recorder still drains the rounds already won
+        completedRounds.close()
     }
 
     /** True when an anonymous joiner with these settings can be paired into this game. */
@@ -425,7 +446,9 @@ class TicTacToeGame(
         state.value = withClocks
         stateChanges.trySend(withClocks)
         if (roundJustEnded(previous, withClocks)) {
-            onRoundOver(withClocks.playerNames, withClocks.winningPlayer, roundMoves.toList(), boardSize)
+            completedRounds.trySend(
+                CompletedRound(withClocks.playerNames, withClocks.winningPlayer, roundMoves.toList(), boardSize),
+            )
         }
         scheduleBotMoveIfNeeded(withClocks)
     }
