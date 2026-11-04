@@ -73,6 +73,11 @@ spotless {
 detekt {
     buildUponDefaultConfig = true
     config.setFrom(file("config/detekt.yml"))
+    // detekt 2.x registers one task per KMP source set; the plain `detekt` task that
+    // `check` depends on has no sources of its own, so give it the whole source tree.
+    source.setFrom(files("src"))
+    // Existing findings are pinned here; anything new still fails the build.
+    baseline.set(file("config/detekt-baseline.xml"))
 }
 
 tasks.named("check") {

@@ -1,0 +1,36 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ConstructorParameterNaming:WebUi.kt:WebManifest$val background_color: String = "#14141f"</ID>
+    <ID>ConstructorParameterNaming:WebUi.kt:WebManifest$val short_name: String</ID>
+    <ID>ConstructorParameterNaming:WebUi.kt:WebManifest$val start_url: String = "/"</ID>
+    <ID>ConstructorParameterNaming:WebUi.kt:WebManifest$val theme_color: String = "#14141f"</ID>
+    <ID>CyclomaticComplexMethod:Main.kt:fun main</ID>
+    <ID>CyclomaticComplexMethod:Scoreboard.kt:Scoreboard$fun recordRound</ID>
+    <ID>CyclomaticComplexMethod:SocketRoute.kt:fun Route.socket</ID>
+    <ID>CyclomaticComplexMethod:TicTacToeGame.kt:TicTacToeGame$fun finishTurn: ErrorReason?</ID>
+    <ID>CyclomaticComplexMethod:UiText.kt:fun errorText: String</ID>
+    <ID>CyclomaticComplexMethod:UiText.kt:fun statusText: String</ID>
+    <ID>CyclomaticComplexMethod:WebUi.kt:fun Application.webUi</ID>
+    <ID>EmptyFunctionBlock:BotSession.kt:BotSession${}</ID>
+    <ID>LargeClass:ApplicationTest.kt:ApplicationTest</ID>
+    <ID>LongMethod:Main.kt:fun main</ID>
+    <ID>LongMethod:Main.kt:fun showState</ID>
+    <ID>LongMethod:SocketRoute.kt:fun Route.socket</ID>
+    <ID>LongMethod:WebUi.kt:fun Application.webUi</ID>
+    <ID>MatchingDeclarationName:ReplayShare.kt:SharedReplay</ID>
+    <ID>ReturnCount:BotBrain.kt:BotBrain$fun chooseMove: Cell?</ID>
+    <ID>ReturnCount:BotBrain.kt:BotBrain$private fun negamax: Int</ID>
+    <ID>ReturnCount:GameRules.kt:GameRules$fun win: Win?</ID>
+    <ID>ReturnCount:Scoreboard.kt:Scoreboard$fun profile: PlayerProfile?</ID>
+    <ID>ReturnCount:TicTacToeGame.kt:TicTacToeGame$fun requestDraw: ErrorReason?</ID>
+    <ID>ReturnCount:TicTacToeGame.kt:TicTacToeGame$fun requestRematch: ErrorReason?</ID>
+    <ID>ReturnCount:TicTacToeGame.kt:TicTacToeGame$fun requestUndo: ErrorReason?</ID>
+    <ID>ReturnCount:TicTacToeGame.kt:TicTacToeGame$private fun scheduleBotMoveIfNeeded</ID>
+    <ID>ReturnCount:TicTacToeGame.kt:TicTacToeGame$suspend fun react: ErrorReason?</ID>
+    <ID>SwallowedException:Main.kt:t: Throwable</ID>
+    <ID>TooManyFunctions:TicTacToeGame.kt:TicTacToeGame</ID>
+    <ID>TooManyFunctions:UiText.kt:com.m4isper.tictactoe.ui.UiText.kt</ID>
+  </CurrentIssues>
+</SmellBaseline>
