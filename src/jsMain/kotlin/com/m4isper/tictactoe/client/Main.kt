@@ -57,30 +57,34 @@ fun main() {
         // no service worker support: the page still works
     }
 
-    val status = document.getElementById("status") as HTMLElement
-    val board = document.getElementById("board") as HTMLElement
-    val errorBox = document.getElementById("error") as HTMLElement
-    val scoreDiv = document.getElementById("score") as HTMLElement
-    val clocksDiv = document.getElementById("clocks") as HTMLElement
-    val copyLink = document.getElementById("copy-link") as? HTMLButtonElement
-    val rematchButton = document.getElementById("rematch") as HTMLButtonElement
-    val drawButton = document.getElementById("draw") as HTMLButtonElement
-    val undoButton = document.getElementById("undo") as HTMLButtonElement
-    val turnBar = document.getElementById("turn-bar") as HTMLElement
-    val turnBarFill = document.getElementById("turn-bar-fill") as HTMLElement
-    val nameInput = document.getElementById("name") as? HTMLInputElement
-    val setNameButton = document.getElementById("set-name") as? HTMLButtonElement
+    GameClient().start()
+}
 
-    val params = URLSearchParams(window.location.search)
-    val room = params.get("room")
-    val size = params.get("size")
-    val win = params.get("win")
-    val bot = params.get("bot")
-    val turn = params.get("turn")
-    val clock = params.get("clock")
-    val lang = parseLang(params.get("lang"))
-    val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
-    val query = listOfNotNull(
+private class GameClient {
+    private val status = document.getElementById("status") as HTMLElement
+    private val board = document.getElementById("board") as HTMLElement
+    private val errorBox = document.getElementById("error") as HTMLElement
+    private val scoreDiv = document.getElementById("score") as HTMLElement
+    private val clocksDiv = document.getElementById("clocks") as HTMLElement
+    private val copyLink = document.getElementById("copy-link") as? HTMLButtonElement
+    private val rematchButton = document.getElementById("rematch") as HTMLButtonElement
+    private val drawButton = document.getElementById("draw") as HTMLButtonElement
+    private val undoButton = document.getElementById("undo") as HTMLButtonElement
+    private val turnBar = document.getElementById("turn-bar") as HTMLElement
+    private val turnBarFill = document.getElementById("turn-bar-fill") as HTMLElement
+    private val nameInput = document.getElementById("name") as? HTMLInputElement
+    private val setNameButton = document.getElementById("set-name") as? HTMLButtonElement
+
+    private val params = URLSearchParams(window.location.search)
+    private val room = params.get("room")
+    private val size = params.get("size")
+    private val win = params.get("win")
+    private val bot = params.get("bot")
+    private val turn = params.get("turn")
+    private val clock = params.get("clock")
+    private val lang = parseLang(params.get("lang"))
+    private val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
+    private val query = listOfNotNull(
         room?.let { "room=$it" },
         size?.let { "size=$it" },
         win?.let { "win=$it" },
@@ -89,10 +93,11 @@ fun main() {
         clock?.let { "clock=$it" },
         params.get("lang")?.let { "lang=$it" },
     ).joinToString("&")
-    val wsUrl = "$wsProtocol://${window.location.host}/play" + (query.takeIf { it.isNotEmpty() }?.let { "?$it" } ?: "")
-    val tokenKey = "tictactoe-token" + (room?.let { ":$it" } ?: "")
+    private val wsUrl = "$wsProtocol://${window.location.host}/play" + (query.takeIf { it.isNotEmpty() }?.let { "?$it" } ?: "")
+    private val tokenKey = "tictactoe-token" + (room?.let { ":$it" } ?: "")
+
     // answered before the game even started: the server closes the socket, so retrying cannot fix them
-    val fatalReasons = setOf(
+    private val fatalReasons = setOf(
         ErrorReason.ROOM_IS_FULL,
         ErrorReason.INVALID_ROOM_NAME,
         ErrorReason.INVALID_BOARD_SIZE,
@@ -102,40 +107,40 @@ fun main() {
         ErrorReason.INVALID_CLOCK,
     )
 
-    var socket: WebSocket? = null
-    var mySymbol: PlayerSymbol? = null
-    var pendingReconnectToken: String? = null
-    var retry = 0
-    var fatal = false
-    var lastState: GameState? = null
-    var roundDeadline = 0.0
-    var turnDeadline = 0.0
-    var turnTotalMs = 0.0
-    var clocksSnapshot: Map<PlayerSymbol, Long> = emptyMap()
-    var clocksBase = 0.0
-    var countdownTimer: Int? = null
-    var muted = localStorage.getItem("tictactoe-muted") == "1"
+    private var socket: WebSocket? = null
+    private var mySymbol: PlayerSymbol? = null
+    private var pendingReconnectToken: String? = null
+    private var retry = 0
+    private var fatal = false
+    private var lastState: GameState? = null
+    private var roundDeadline = 0.0
+    private var turnDeadline = 0.0
+    private var turnTotalMs = 0.0
+    private var clocksSnapshot: Map<PlayerSymbol, Long> = emptyMap()
+    private var clocksBase = 0.0
+    private var countdownTimer: Int? = null
+    private var muted = localStorage.getItem("tictactoe-muted") == "1"
 
-    fun send(message: ClientMessage) {
+    private fun send(message: ClientMessage) {
         socket?.send(protocolJson.encodeToString<ClientMessage>(message))
     }
 
-    fun showError(message: String) {
+    private fun showError(message: String) {
         errorBox.textContent = message
     }
 
-    fun showStatus(text: String) {
+    private fun showStatus(text: String) {
         status.textContent = text
     }
 
-    fun resultMark(result: String): String = when (result) {
+    private fun resultMark(result: String): String = when (result) {
         "WIN" -> "✓"
         "LOSS" -> "✗"
         else -> "="
     }
 
     /** The stepper + mini board every replay view shares; a link button carries the whole game in the URL. */
-    fun mountReplay(
+    private fun mountReplay(
         container: HTMLElement,
         boardSize: Int,
         moves: List<Cell>,
@@ -198,7 +203,7 @@ fun main() {
         render()
     }
 
-    fun showReplay(record: dynamic, container: HTMLElement) {
+    private fun showReplay(record: dynamic, container: HTMLElement) {
         val boardSize = ((record.boardSize ?: js("3")) as Double).toInt()
         val moves = ((record.moves ?: js("[]")) as Array<dynamic>).map { m ->
             Cell((m.x as Double).toInt(), (m.y as Double).toInt())
@@ -208,7 +213,7 @@ fun main() {
     }
 
     /** A shared link opens nothing but the replay: the board stays idle while the game plays out. */
-    fun showSharedReplay(replay: SharedReplay) {
+    private fun showSharedReplay(replay: SharedReplay) {
         val host = document.getElementById("shared-replay") as HTMLElement
         host.innerHTML = ""
         host.style.display = "block"
@@ -251,7 +256,7 @@ fun main() {
         host.appendChild(back)
     }
 
-    fun showReaction(emoji: String) {
+    private fun showReaction(emoji: String) {
         val bubble = document.createElement("span") as HTMLElement
         bubble.className = "reaction-bubble"
         bubble.textContent = emoji
@@ -260,7 +265,7 @@ fun main() {
         window.setTimeout({ bubble.remove() }, 2_000)
     }
 
-    fun showProfile(name: String) {
+    private fun showProfile(name: String) {
         try {
             val encoded = js("encodeURIComponent(name)")
             window.asDynamic().fetch("/player?name=" + encoded).then { response: dynamic ->
@@ -298,7 +303,7 @@ fun main() {
         }
     }
 
-    fun refreshLeaderboard() {
+    private fun refreshLeaderboard() {
         try {
             window.asDynamic().fetch("/leaderboard").then { response: dynamic ->
                 response.json().then { data: dynamic ->
@@ -320,7 +325,7 @@ fun main() {
         }
     }
 
-    fun refreshRooms() {
+    private fun refreshRooms() {
         try {
             window.asDynamic().fetch("/rooms").then { response: dynamic ->
                 response.json().then { data: dynamic ->
@@ -359,9 +364,9 @@ fun main() {
     }
 
     // -- sound: tiny synthesized cues, never a game breaker --
-    var audioCtx: dynamic = null
+    private var audioCtx: dynamic = null
 
-    fun ensureAudio() {
+    private fun ensureAudio() {
         if (audioCtx != null) return
         try {
             audioCtx = js("new (window.AudioContext || window.webkitAudioContext)()")
@@ -370,7 +375,7 @@ fun main() {
         }
     }
 
-    fun beep(freq: Double, durationMs: Int, type: String = "sine") {
+    private fun beep(freq: Double, durationMs: Int, type: String = "sine") {
         if (muted) return
         try {
             ensureAudio()
@@ -389,7 +394,7 @@ fun main() {
         }
     }
 
-    fun playStateSounds(previous: GameState?, state: GameState) {
+    private fun playStateSounds(previous: GameState?, state: GameState) {
         when (soundCue(previous, state, mySymbol)) {
             SoundCue.WIN -> {
                 beep(523.0, 120)
@@ -412,7 +417,7 @@ fun main() {
     }
 
     /** The chess clocks tick locally between server states; the player on turn is the one draining. */
-    fun renderClocks() {
+    private fun renderClocks() {
         val current = lastState ?: return
         fun side(sym: PlayerSymbol): String {
             var ms = clocksSnapshot[sym] ?: 0L
@@ -422,13 +427,24 @@ fun main() {
         clocksDiv.textContent = "${side(PlayerSymbol.X)} : ${side(PlayerSymbol.O)}"
     }
 
-    fun showState(event: ServerEvent.StateChanged) {
+    private fun showState(event: ServerEvent.StateChanged) {
         val state = event.state
         val previous = lastState
         lastState = state
+        updateCountdowns(previous, state)
+        updateActionButtons(state)
+        updateStatus(previous, state)
+        renderBoard(previous, state)
+    }
 
+    private fun updateCountdowns(previous: GameState?, state: GameState) {
         countdownTimer?.let { window.clearInterval(it) }
         countdownTimer = null
+        restartCountdown(previous, state)
+        turnCountdown(previous, state)
+    }
+
+    private fun restartCountdown(previous: GameState?, state: GameState) {
         if (state.roundRestartInMs != null) {
             if (isRoundRestartTransition(previous, state) || roundDeadline == 0.0) {
                 roundDeadline = Date.now() + state.roundRestartInMs
@@ -442,6 +458,9 @@ fun main() {
         } else {
             roundDeadline = 0.0
         }
+    }
+
+    private fun turnCountdown(previous: GameState?, state: GameState) {
         if (state.roundRestartInMs == null && state.turnRemainingMs != null) {
             if (isTurnTransition(previous, state) || turnDeadline == 0.0) {
                 turnDeadline = Date.now() + state.turnRemainingMs
@@ -462,25 +481,40 @@ fun main() {
             turnDeadline = 0.0
             turnBar.style.display = "none"
         }
+    }
 
+    private fun updateActionButtons(state: GameState) {
+        updateRematchButton(state)
+        updateDrawButton(state)
+        updateUndoButton(state)
+    }
+
+    private fun updateRematchButton(state: GameState) {
         rematchButton.style.display = if (state.roundRestartInMs != null && mySymbol != null) "block" else "none"
         val myRematch = mySymbol != null && mySymbol in state.rematchPlayers
         rematchButton.disabled = myRematch
         rematchButton.textContent = rematchButtonText(myRematch, lang)
+    }
 
+    private fun updateDrawButton(state: GameState) {
         val roundOver = state.isRoundOver
         drawButton.style.display = if (!roundOver && mySymbol != null && state.connectionPlayers.size >= 2) "block" else "none"
         val iOffered = mySymbol != null && mySymbol in state.drawPlayers
         val opponentOffered = state.drawPlayers.any { it != mySymbol }
         drawButton.textContent = drawButtonText(iOffered, opponentOffered, lang)
+    }
 
+    private fun updateUndoButton(state: GameState) {
+        val roundOver = state.isRoundOver
         val undoVisible = !roundOver && mySymbol != null && state.connectionPlayers.size >= 2 &&
             (state.undoOfferBy != null || state.playerAtTurn != mySymbol)
         undoButton.style.display = if (undoVisible) "block" else "none"
         val iOfferedUndo = mySymbol != null && state.undoOfferBy == mySymbol
         val opponentOfferedUndo = state.undoOfferBy != null && state.undoOfferBy != mySymbol
         undoButton.textContent = undoButtonText(iOfferedUndo, opponentOfferedUndo, lang)
+    }
 
+    private fun updateStatus(previous: GameState?, state: GameState) {
         showStatus(statusText(state, mySymbol, lang))
         scoreDiv.textContent = scoreText(state, lang)
         if (state.clocks.isNotEmpty()) {
@@ -494,7 +528,9 @@ fun main() {
         }
         playStateSounds(previous, state)
         if ((previous == null || !previous.isRoundOver) && state.isRoundOver) refreshLeaderboard()
+    }
 
+    private fun renderBoard(previous: GameState?, state: GameState) {
         board.innerHTML = ""
         val cellPx = (minOf(window.innerWidth, window.innerHeight) * 0.8 / state.field.size)
             .toInt()
@@ -533,7 +569,7 @@ fun main() {
         }
     }
 
-    fun handleMessage(text: String) {
+    private fun handleMessage(text: String) {
         when (val event = protocolJson.decodeFromString<ServerEvent>(text)) {
             is ServerEvent.Joined -> {
                 mySymbol = event.symbol
@@ -558,7 +594,7 @@ fun main() {
         }
     }
 
-    fun connect() {
+    private fun connect() {
         socket = WebSocket(wsUrl)
         socket?.onopen = {
             retry = 0
@@ -587,59 +623,61 @@ fun main() {
         }
     }
 
-    copyLink?.let { button ->
-        button.onclick = {
-            window.navigator.clipboard?.writeText(window.location.href)
-            button.textContent = copiedText(lang)
-            window.setTimeout({ button.textContent = copyLinkText(lang) }, 2000)
-        }
-    }
+    private val soundButton = document.getElementById("sound") as HTMLButtonElement
 
-    val soundButton = document.getElementById("sound") as HTMLButtonElement
-
-    fun renderSound() {
+    private fun renderSound() {
         soundButton.textContent = soundIcon(muted)
         soundButton.title = soundTitle(muted, lang)
     }
 
-    soundButton.onclick = {
-        muted = !muted
-        localStorage.setItem("tictactoe-muted", if (muted) "1" else "0")
+    fun start() {
+        copyLink?.let { button ->
+            button.onclick = {
+                window.navigator.clipboard?.writeText(window.location.href)
+                button.textContent = copiedText(lang)
+                window.setTimeout({ button.textContent = copyLinkText(lang) }, 2000)
+            }
+        }
+
+        soundButton.onclick = {
+            muted = !muted
+            localStorage.setItem("tictactoe-muted", if (muted) "1" else "0")
+            renderSound()
+        }
         renderSound()
-    }
-    renderSound()
 
-    rematchButton.onclick = { send(ClientMessage.RequestRematch) }
-    drawButton.onclick = { send(ClientMessage.RequestDraw) }
-    undoButton.onclick = { send(ClientMessage.RequestUndo) }
+        rematchButton.onclick = { send(ClientMessage.RequestRematch) }
+        drawButton.onclick = { send(ClientMessage.RequestDraw) }
+        undoButton.onclick = { send(ClientMessage.RequestUndo) }
 
-    document.querySelectorAll("#reactions button").asDynamic().forEach { node: dynamic ->
-        (node as? HTMLButtonElement)?.let { button ->
-            button.onclick = { send(ClientMessage.React(button.textContent ?: "")) }
+        document.querySelectorAll("#reactions button").asDynamic().forEach { node: dynamic ->
+            (node as? HTMLButtonElement)?.let { button ->
+                button.onclick = { send(ClientMessage.React(button.textContent ?: "")) }
+            }
         }
-    }
 
-    if (nameInput != null && setNameButton != null) {
-        fun submitName() {
-            val name = nameInput.value.trim()
-            if (name.isNotEmpty()) send(ClientMessage.SetName(name))
-            nameInput.value = ""
+        if (nameInput != null && setNameButton != null) {
+            fun submitName() {
+                val name = nameInput.value.trim()
+                if (name.isNotEmpty()) send(ClientMessage.SetName(name))
+                nameInput.value = ""
+            }
+            setNameButton.onclick = { submitName() }
+            nameInput.onkeydown = { event ->
+                if (event.asDynamic().key == "Enter") submitName()
+            }
         }
-        setNameButton.onclick = { submitName() }
-        nameInput.onkeydown = { event ->
-            if (event.asDynamic().key == "Enter") submitName()
+
+        refreshLeaderboard()
+        window.setInterval({ refreshLeaderboard() }, 30_000) // the table also moves while nobody finishes a round
+        refreshRooms()
+        window.setInterval({ refreshRooms() }, 5_000)
+
+        val sharedReplay = replayFromFragment(window.location.hash.removePrefix("#"))
+        if (sharedReplay != null) {
+            showSharedReplay(sharedReplay) // the link carries the whole game: no connection needed
+        } else {
+            connect()
         }
-    }
-
-    refreshLeaderboard()
-    window.setInterval({ refreshLeaderboard() }, 30_000) // the table also moves while nobody finishes a round
-    refreshRooms()
-    window.setInterval({ refreshRooms() }, 5_000)
-
-    val sharedReplay = replayFromFragment(window.location.hash.removePrefix("#"))
-    if (sharedReplay != null) {
-        showSharedReplay(sharedReplay) // the link carries the whole game: no connection needed
-    } else {
-        connect()
     }
 }
