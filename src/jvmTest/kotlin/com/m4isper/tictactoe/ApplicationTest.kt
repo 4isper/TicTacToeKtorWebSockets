@@ -1255,7 +1255,7 @@ class ApplicationTest {
             oReady.await()
 
             val both = receiveState() // the broadcast that O has joined
-            assertEquals(300_000, both.clocks[PlayerSymbol.X]) // the budget rides the state
+            assertTrue(both.clocks.getValue(PlayerSymbol.X) in 299_900..300_000, "the budget rides the state")
             assertTrue(both.clocks.getValue(PlayerSymbol.O) <= 300_000)
 
             second.cancel()

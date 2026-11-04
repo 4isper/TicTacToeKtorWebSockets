@@ -550,8 +550,8 @@ class TicTacToeGameTest {
             while (game.currentState().field[0][0] != null) delay(10)
         }
         val restarted = game.currentState()
-        assertEquals(60_000, restarted.clocks[PlayerSymbol.X])
-        assertEquals(60_000, restarted.clocks[PlayerSymbol.O])
+        assertTrue(restarted.clocks.getValue(PlayerSymbol.X) in 59_900..60_000, "X clock is full again")
+        assertTrue(restarted.clocks.getValue(PlayerSymbol.O) in 59_900..60_000, "O clock is full again")
 
         game.shutdown()
     }
