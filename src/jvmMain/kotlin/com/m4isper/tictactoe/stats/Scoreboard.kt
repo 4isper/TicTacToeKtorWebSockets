@@ -170,13 +170,16 @@ class Scoreboard(private val store: ScoreStore) {
         val oName = playerNames[PlayerSymbol.O]
         val xRating = xName?.let { all[it]?.rating } ?: Elo.DEFAULT
         val oRating = oName?.let { all[it]?.rating } ?: Elo.DEFAULT
+        // a round against a bot (an unnamed side) is practice: it lands in the
+        // history, but the rating stays where it was
+        val rated = xName != null && oName != null
         val (xScore, oScore) = when (winner) {
             PlayerSymbol.X -> 1.0 to 0.0
             PlayerSymbol.O -> 0.0 to 1.0
             null -> 0.5 to 0.5
         }
-        val xNext = Elo.next(xRating, oRating, xScore)
-        val oNext = Elo.next(oRating, xRating, oScore)
+        val xNext = if (rated) Elo.next(xRating, oRating, xScore) else null
+        val oNext = if (rated) Elo.next(oRating, xRating, oScore) else null
 
         if (winner == null) {
             val named = playerNames.values.toList()

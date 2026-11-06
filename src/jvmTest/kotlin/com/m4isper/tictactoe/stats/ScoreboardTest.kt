@@ -80,12 +80,17 @@ class ScoreboardTest {
     }
 
     @Test
-    fun `an unnamed opponent is treated as a default rated player`() {
+    fun `a round against an unnamed opponent is practice and keeps the rating`() {
         val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
 
         board.recordRound(mapOf(PlayerSymbol.X to "Аня"), winner = PlayerSymbol.X)
+        board.recordRound(mapOf(PlayerSymbol.X to "Аня"), winner = null)
 
-        assertEquals(1016, board.profile("Аня")!!.stats.rating) // the unnamed side counts as 1000
+        val stats = board.profile("Аня")!!.stats
+        assertEquals(Elo.DEFAULT, stats.rating) // a bot is not a rated opponent
+        assertEquals(1, stats.wins)
+        assertEquals(1, stats.draws)
+        assertEquals(null, stats.history.single { it.result == RoundResult.WIN }.ratingAfter)
     }
 
     @Test
