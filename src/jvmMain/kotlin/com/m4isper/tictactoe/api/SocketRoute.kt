@@ -20,17 +20,6 @@ private const val MAX_NAME_LENGTH = 20
 private const val MESSAGE_WINDOW_MS = 1_000L
 private const val MESSAGES_PER_WINDOW = 20
 
-private data class JoinSettings(
-    val room: String?,
-    val size: Int,
-    val winLength: Int,
-    val botLevel: BotLevel?,
-    val secondBotLevel: BotLevel?,
-    val turnSeconds: Int,
-    val clockSeconds: Int,
-    val seriesTarget: Int,
-)
-
 private data class BotLevels(val first: BotLevel?, val second: BotLevel?)
 
 private data class BoardSettings(val size: Int, val win: Int)
@@ -41,17 +30,7 @@ fun Route.socket(lobby: GameLobby) {
     route("/play") {
         webSocket {
             val settings = parseSettings() ?: return@webSocket
-            val joined = lobby.join(
-                this,
-                settings.room,
-                settings.size,
-                settings.winLength,
-                settings.botLevel,
-                settings.secondBotLevel,
-                settings.turnSeconds,
-                settings.clockSeconds,
-                settings.seriesTarget,
-            ) ?: run {
+            val joined = lobby.join(this, settings) ?: run {
                 sendError(ErrorReason.ROOM_IS_FULL)
                 return@webSocket
             }
@@ -176,7 +155,17 @@ private suspend fun DefaultWebSocketServerSession.parseSettings(): JoinSettings?
     val bots = botLevels() ?: return null
     val time = timeSettings() ?: return null
     val seriesTarget = intParam("wins", 1..GameRules.MAX_SERIES_WINS, 0, ErrorReason.INVALID_WINS) ?: return null
-    return JoinSettings(room, board.size, board.win, bots.first, bots.second, time.turn, time.clock, seriesTarget)
+    return JoinSettings(
+        room = room,
+        size = board.size,
+        winLength = board.win,
+        botLevel = bots.first,
+        secondBotLevel = bots.second,
+        turnSeconds = time.turn,
+        clockSeconds = time.clock,
+        seriesTarget = seriesTarget,
+        spectate = params["spectate"] == "1",
+    )
 }
 
 private suspend fun DefaultWebSocketServerSession.boardSettings(): BoardSettings? {

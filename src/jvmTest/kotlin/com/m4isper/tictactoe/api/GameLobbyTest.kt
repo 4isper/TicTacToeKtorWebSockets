@@ -37,19 +37,19 @@ class GameLobbyTest {
     @Test
     fun `anonymous matching pairs only identical settings`() {
         val lobby = GameLobby()
-        val first = assertNotNull(lobby.join(FakeSession(), boardSize = 5, winLength = 4))
-        val otherSize = assertNotNull(lobby.join(FakeSession(), boardSize = 3, winLength = 3))
-        val otherWin = assertNotNull(lobby.join(FakeSession(), boardSize = 5, winLength = 5))
-        val otherTurn = assertNotNull(lobby.join(FakeSession(), boardSize = 5, winLength = 4, turnSeconds = 60))
+        val first = assertNotNull(lobby.join(FakeSession(), JoinSettings(size = 5, winLength = 4)))
+        val otherSize = assertNotNull(lobby.join(FakeSession(), JoinSettings(size = 3)))
+        val otherWin = assertNotNull(lobby.join(FakeSession(), JoinSettings(size = 5)))
+        val otherTurn = assertNotNull(lobby.join(FakeSession(), JoinSettings(size = 5, winLength = 4, turnSeconds = 60)))
         assertNotSame(first.game, otherSize.game) // their settings would otherwise be silently ignored
         assertNotSame(first.game, otherWin.game)
         assertNotSame(first.game, otherTurn.game)
 
-        val partner = assertNotNull(lobby.join(FakeSession(), boardSize = 5, winLength = 4))
+        val partner = assertNotNull(lobby.join(FakeSession(), JoinSettings(size = 5, winLength = 4)))
         assertSame(first.game, partner.game)
         assertEquals(PlayerSymbol.O, partner.symbol) // paired into the matching game
 
-        val third = assertNotNull(lobby.join(FakeSession(), boardSize = 5, winLength = 4))
+        val third = assertNotNull(lobby.join(FakeSession(), JoinSettings(size = 5, winLength = 4)))
         assertNotSame(first.game, third.game) // the full pair stays closed
 
         lobby.shutdownAll()
@@ -58,11 +58,11 @@ class GameLobbyTest {
     @Test
     fun `room snapshots list live named rooms with their settings`() {
         val lobby = GameLobby()
-        lobby.join(FakeSession(), room = "alpha", boardSize = 5, winLength = 4, botLevel = BotLevel.HARD, turnSeconds = 60)
-        lobby.join(FakeSession(), room = "alpha") // the second player
-        lobby.join(FakeSession(), room = "alpha") // a spectator
-        lobby.join(FakeSession(), room = "beta")
-        lobby.join(FakeSession()) // anonymous: never listed
+        lobby.join(FakeSession(), JoinSettings(room = "alpha", size = 5, winLength = 4, botLevel = BotLevel.HARD, turnSeconds = 60))
+        lobby.join(FakeSession(), JoinSettings(room = "alpha")) // the second player
+        lobby.join(FakeSession(), JoinSettings(room = "alpha")) // a spectator
+        lobby.join(FakeSession(), JoinSettings(room = "beta"))
+        lobby.join(FakeSession(), JoinSettings()) // anonymous: never listed
 
         val rooms = lobby.roomSnapshots()
         assertEquals(listOf("alpha", "beta"), rooms.map { it.name })
@@ -81,7 +81,7 @@ class GameLobbyTest {
     fun `an emptied room disappears from the snapshots`() = runBlocking {
         val lobby = GameLobby(reconnectGraceMs = 50)
         val session = FakeSession()
-        val first = assertNotNull(lobby.join(session, room = "alpha"))
+        val first = assertNotNull(lobby.join(session, JoinSettings(room = "alpha")))
 
         lobby.sessionClosed(first.token, session)
         delay(150)
@@ -93,26 +93,26 @@ class GameLobbyTest {
     @Test
     fun `the lobby refuses to grow past its game limit`() {
         val lobby = GameLobby(maxGames = 1)
-        assertNotNull(lobby.join(FakeSession()))
-        assertNull(lobby.join(FakeSession(), boardSize = 5, winLength = 4)) // a new game would exceed the cap
+        assertNotNull(lobby.join(FakeSession(), JoinSettings()))
+        assertNull(lobby.join(FakeSession(), JoinSettings(size = 5, winLength = 4))) // a new game would exceed the cap
         lobby.shutdownAll()
     }
 
     @Test
     fun `a room admits only a bounded number of spectators`() {
         val lobby = GameLobby(maxSpectatorsPerGame = 1)
-        lobby.join(FakeSession(), room = "alpha")
-        lobby.join(FakeSession(), room = "alpha")
-        assertNotNull(lobby.join(FakeSession(), room = "alpha")) // first spectator
-        assertNull(lobby.join(FakeSession(), room = "alpha")) // second one is refused
+        lobby.join(FakeSession(), JoinSettings(room = "alpha"))
+        lobby.join(FakeSession(), JoinSettings(room = "alpha"))
+        assertNotNull(lobby.join(FakeSession(), JoinSettings(room = "alpha"))) // first spectator
+        assertNull(lobby.join(FakeSession(), JoinSettings(room = "alpha"))) // second one is refused
         lobby.shutdownAll()
     }
 
     @Test
     fun `a name cannot be claimed by two live tokens`() {
         val lobby = GameLobby()
-        val first = assertNotNull(lobby.join(FakeSession()))
-        val second = assertNotNull(lobby.join(FakeSession(), boardSize = 5, winLength = 4))
+        val first = assertNotNull(lobby.join(FakeSession(), JoinSettings()))
+        val second = assertNotNull(lobby.join(FakeSession(), JoinSettings(size = 5, winLength = 4)))
         assertTrue(lobby.claimName(first.token, "Аня"))
         assertFalse(lobby.claimName(second.token, "аня")) // case-insensitive ownership
         assertTrue(lobby.claimName(first.token, "Аня")) // the owner keeps its own name
@@ -124,12 +124,48 @@ class GameLobbyTest {
     @Test
     fun `bot games never pair with each other`() {
         val lobby = GameLobby()
-        val first = assertNotNull(lobby.join(FakeSession(), boardSize = 3, winLength = 3, botLevel = BotLevel.NORMAL))
-        val easy = assertNotNull(lobby.join(FakeSession(), boardSize = 3, winLength = 3, botLevel = BotLevel.EASY))
+        val first = assertNotNull(lobby.join(FakeSession(), JoinSettings(size = 3, botLevel = BotLevel.NORMAL)))
+        val easy = assertNotNull(lobby.join(FakeSession(), JoinSettings(size = 3, botLevel = BotLevel.EASY)))
         assertNotSame(first.game, easy.game) // a different level is a different game
-        val second = assertNotNull(lobby.join(FakeSession(), boardSize = 3, winLength = 3, botLevel = BotLevel.NORMAL))
+        val second = assertNotNull(lobby.join(FakeSession(), JoinSettings(size = 3, botLevel = BotLevel.NORMAL)))
         assertNotSame(first.game, second.game)
         assertEquals(2, first.game.currentState().connectionPlayers.size) // the bot fills the second slot
+
+        lobby.shutdownAll()
+    }
+
+    @Test
+    fun `a spectate join watches an empty room instead of taking a slot`() {
+        val lobby = GameLobby()
+        val spectator = assertNotNull(lobby.join(FakeSession(), JoinSettings(room = "alpha", spectate = true)))
+        assertNull(spectator.symbol) // a watcher, not the X player
+        assertEquals(emptyList(), spectator.game.currentState().connectionPlayers)
+
+        val player = assertNotNull(lobby.join(FakeSession(), JoinSettings(room = "alpha")))
+        assertEquals(PlayerSymbol.X, player.symbol) // the first player slot was free for them
+
+        lobby.shutdownAll()
+    }
+
+    @Test
+    fun `a spectator does not hold the room it opened`() {
+        val lobby = GameLobby()
+        val session = FakeSession()
+        val spectator = assertNotNull(lobby.join(session, JoinSettings(room = "alpha", spectate = true)))
+
+        lobby.sessionClosed(spectator.token, session)
+
+        val player = assertNotNull(lobby.join(FakeSession(), JoinSettings(room = "alpha")))
+        assertNotSame(spectator.game, player.game) // the abandoned room was retired, not kept alive
+
+        lobby.shutdownAll()
+    }
+
+    @Test
+    fun `a spectate flag without a room is ignored`() {
+        val lobby = GameLobby()
+        val joined = assertNotNull(lobby.join(FakeSession(), JoinSettings(spectate = true)))
+        assertEquals(PlayerSymbol.X, joined.symbol) // anonymous matchmaking still plays
 
         lobby.shutdownAll()
     }

@@ -100,6 +100,7 @@ private class GameClient {
     private val turn = params.get("turn")
     private val clock = params.get("clock")
     private val wins = params.get("wins")
+    private val spectate = params.get("spectate")
 
     // an explicit lang parameter wins; otherwise the browser's own preference decides
     private val lang = params.get("lang")?.let(::parseLang) ?: detectLang(window.navigator.language)
@@ -125,6 +126,7 @@ private class GameClient {
             "turn" to turn,
             "clock" to clock,
             "wins" to wins,
+            "spectate" to spectate,
             "lang" to params.get("lang"),
         ),
     )

@@ -24,6 +24,20 @@ data class RoomInfo(
 @Serializable
 data class RoomsResponse(val rooms: List<RoomInfo> = emptyList())
 
+/** Everything one connection asks of the lobby: which room, what board and clocks, and whether to only watch. */
+data class JoinSettings(
+    val room: String? = null,
+    val size: Int = GameRules.DEFAULT_BOARD_SIZE,
+    val winLength: Int = GameRules.DEFAULT_BOARD_SIZE,
+    val botLevel: BotLevel? = null,
+    val secondBotLevel: BotLevel? = null,
+    val turnSeconds: Int = GameRules.DEFAULT_TURN_SECONDS,
+    val clockSeconds: Int = 0,
+    val seriesTarget: Int = 0,
+    /** Only meaningful with a room: attach as a spectator instead of claiming the first free slot. */
+    val spectate: Boolean = false,
+)
+
 class GameLobby(
     private val newGame: (
         boardSize: Int,
@@ -71,19 +85,12 @@ class GameLobby(
 
     fun join(
         session: WebSocketSession,
-        room: String? = null,
-        boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
-        winLength: Int = boardSize,
-        botLevel: BotLevel? = null,
-        secondBotLevel: BotLevel? = null,
-        turnSeconds: Int = GameRules.DEFAULT_TURN_SECONDS,
-        clockSeconds: Int = 0,
-        seriesTarget: Int = 0,
+        settings: JoinSettings,
     ): Joined? = synchronized(lock) {
-        val game = findOrCreateGame(room, boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds, seriesTarget)
-            ?: return null
-        val symbol = game.connectPlayer(session)
-        if (symbol == null && (room == null || game.spectatorCount() >= maxSpectatorsPerGame)) return null
+        val game = findOrCreateGame(settings) ?: return null
+        val spectating = settings.spectate && settings.room != null
+        val symbol = if (spectating) null else game.connectPlayer(session)
+        if (symbol == null && (settings.room == null || game.spectatorCount() >= maxSpectatorsPerGame)) return null
         val token = UUID.randomUUID().toString()
         tokens[token] = TokenBinding(game, symbol, session)
         if (symbol == null) game.attachSpectator(session)
@@ -91,27 +98,18 @@ class GameLobby(
     }
 
     /** Null when a new game would push the lobby past its cap. Caller holds [lock]. */
-    private fun findOrCreateGame(
-        room: String?,
-        boardSize: Int,
-        winLength: Int,
-        botLevel: BotLevel?,
-        secondBotLevel: BotLevel?,
-        turnSeconds: Int,
-        clockSeconds: Int,
-        seriesTarget: Int,
-    ): TicTacToeGame? {
-        if (room == null) {
+    private fun findOrCreateGame(settings: JoinSettings): TicTacToeGame? {
+        if (settings.room == null) {
             // pair anonymous joiners only with identical settings, or their size/win/bot would be silently ignored
             games.firstOrNull {
-                !it.isFull() && it.matches(boardSize, winLength, botLevel, turnSeconds, clockSeconds, seriesTarget)
+                !it.isFull() && it.matches(settings.size, settings.winLength, settings.botLevel, settings.turnSeconds, settings.clockSeconds, settings.seriesTarget)
             }?.let { return it }
         } else {
-            rooms[room]?.let { return it }
+            rooms[settings.room]?.let { return it }
         }
         if (games.size + rooms.size >= maxGames) return null
-        val game = newGame(boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds, seriesTarget)
-        if (room == null) games.add(game) else rooms[room] = game
+        val game = newGame(settings.size, settings.winLength, settings.botLevel, settings.secondBotLevel, settings.turnSeconds, settings.clockSeconds, settings.seriesTarget)
+        if (settings.room == null) games.add(game) else rooms[settings.room] = game
         return game
     }
 
@@ -138,6 +136,7 @@ class GameLobby(
             tokens.remove(token)
             releaseNameLocked(token)
             binding.game.detachSpectator(session)
+            retireIfAbandoned(binding.game)
             return
         }
         if (!binding.game.detachSession(binding.symbol, session)) return
@@ -170,10 +169,17 @@ class GameLobby(
         releaseNameLocked(token)
         if (binding.symbol == null) {
             binding.game.detachSpectator(binding.session)
+            retireIfAbandoned(binding.game)
             return
         }
         binding.game.disconnectPlayer(binding.symbol)
         if (binding.game.isEmpty()) retire(binding.game)
+    }
+
+    /** A game nobody plays and nobody waits in — a spectator-only room — is retired. Caller holds [lock]. */
+    private fun retireIfAbandoned(game: TicTacToeGame) {
+        val aSlotIsOnGrace = graceJobs.keys.any { tokens[it]?.game === game }
+        if (game.isEmpty() && !aSlotIsOnGrace) retire(game)
     }
 
     fun shutdownAll(): Unit = synchronized(lock) {

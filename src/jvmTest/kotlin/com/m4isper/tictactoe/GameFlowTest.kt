@@ -470,6 +470,28 @@ class GameFlowTest {
     }
 
     @Test
+    fun `spectate watches an empty room and the first player still gets X`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=early&spectate=1") {
+            val (joined, state) = receiveHandshake()
+            assertNull(joined.symbol) // a deliberate watcher
+            assertEquals(emptyList(), state.connectionPlayers) // nobody is playing yet
+        }
+
+        client.webSocket("/play?room=early") {
+            val (joined, state) = receiveHandshake()
+            assertEquals(PlayerSymbol.X, joined.symbol) // the slot was never taken by the spectator
+            assertEquals(listOf(PlayerSymbol.X), state.connectionPlayers)
+        }
+    }
+
+    @Test
     fun `players name themselves and invalid names are refused`() = testApplication {
         application {
             testModule()
