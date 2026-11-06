@@ -2,15 +2,21 @@ package com.m4isper.tictactoe.domain
 
 import kotlin.math.abs
 import kotlin.random.Random
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 
 /**
  * Picks a move for the bot: immediate wins and blocks first, then a depth-limited
  * negamax with alpha-beta over cells adjacent to the played stones. Deterministic:
  * ties resolve toward the board center. The easy level takes an immediate win and
- * otherwise moves at random; hard searches deeper than normal.
+ * otherwise moves at random; normal searches at a fixed depth, hard keeps deepening
+ * while its time budget lasts and plays the best move of the deepest finished pass.
  */
 object BotBrain {
     private const val WIN_SCORE = 1_000_000
+
+    /** How long hard may search; an iteration that outlives the budget is discarded, not played. */
+    private val HARD_SEARCH_BUDGET = 900.milliseconds
 
     fun chooseMove(
         field: List<List<PlayerSymbol?>>,
@@ -28,34 +34,82 @@ object BotBrain {
         if (level == BotLevel.EASY) return candidates[random.nextInt(candidates.size)] // easy never looks further
         candidates.firstOrNull { completes(field, it, opponent, winLength) }?.let { return it }
 
-        val depth = when {
-            size <= 3 -> size * size
-            size <= 5 -> if (level == BotLevel.HARD) 5 else 3
-            else -> if (level == BotLevel.HARD) 3 else 2
+        if (level == BotLevel.NORMAL) {
+            return bestAtDepth(field, candidates, me, winLength, normalDepth(size), search = null).cell
         }
+        return deepBest(field, candidates, me, winLength)
+    }
+
+    /** The fixed depth normal plays at: perfect on 3×3, shallower on bigger boards. */
+    private fun normalDepth(size: Int): Int = when {
+        size <= 3 -> size * size
+        size <= 5 -> 3
+        else -> 2
+    }
+
+    /** Hard: deepen from 2 plies upward until the budget runs out or the search proves a win. */
+    private fun deepBest(
+        field: List<List<PlayerSymbol?>>,
+        candidates: List<Cell>,
+        me: PlayerSymbol,
+        winLength: Int,
+    ): Cell {
+        val deadline = TimeSource.Monotonic.markNow() + HARD_SEARCH_BUDGET
+        var best = bestAtDepth(field, candidates, me, winLength, depth = 2, search = null)
+        var nextDepth = 3
+        var proven = false
+        while (nextDepth <= field.size * field.size && !proven) {
+            val search = Search(deadline)
+            val deeper = bestAtDepth(field, candidates, me, winLength, nextDepth, search)
+            if (search.aborted) break // a partial pass proves nothing: keep the previous depth's move
+            best = deeper
+            proven = best.score >= WIN_SCORE // a proven win needs no deeper look
+            nextDepth++
+        }
+        return best.cell
+    }
+
+    private const val BETA_CEILING = Int.MAX_VALUE
+
+    private data class RankedMove(val cell: Cell, val score: Int)
+
+    /** The live budget of one deep pass; an aborted pass is discarded by its caller. */
+    private class Search(val deadline: TimeSource.Monotonic.ValueTimeMark) {
+        var aborted = false
+    }
+
+    /** The best move at an exact depth, ties resolving toward the board center like the candidates are ordered. */
+    private fun bestAtDepth(
+        field: List<List<PlayerSymbol?>>,
+        candidates: List<Cell>,
+        me: PlayerSymbol,
+        winLength: Int,
+        depth: Int,
+        search: Search?,
+    ): RankedMove {
         var best = candidates.first()
         var bestScore = Int.MIN_VALUE + 1
         var alpha = Int.MIN_VALUE + 1
         for (cell in candidates) {
             val score = -negamax(
                 field = applyMove(field, cell, me),
-                toMove = opponent,
+                toMove = me.other,
                 root = me,
                 winLength = winLength,
                 depth = depth - 1,
                 alphaIn = -BETA_CEILING,
                 betaIn = -alpha,
+                search = search,
             )
+            if (search?.aborted == true) return RankedMove(best, bestScore) // throwaway: the caller keeps the last full pass
             if (score > bestScore) {
                 bestScore = score
                 best = cell
             }
             if (score > alpha) alpha = score
         }
-        return best
+        return RankedMove(best, bestScore)
     }
-
-    private const val BETA_CEILING = Int.MAX_VALUE
 
     private fun negamax(
         field: List<List<PlayerSymbol?>>,
@@ -65,7 +119,13 @@ object BotBrain {
         depth: Int,
         alphaIn: Int,
         betaIn: Int,
+        search: Search?,
     ): Int {
+        // out of budget, or a sibling subtree already killed this pass: unwind without wasting time
+        if (search != null && (search.aborted || TimeSource.Monotonic.markNow() > search.deadline)) {
+            search.aborted = true
+            return 0
+        }
         var alpha = alphaIn
         val beta = betaIn
         val win = GameRules.win(field, winLength)
@@ -81,7 +141,9 @@ object BotBrain {
                 depth = depth - 1,
                 alphaIn = -beta,
                 betaIn = -alpha,
+                search = search,
             )
+            if (search?.aborted == true) return 0
             if (score >= beta) return score
             if (score > alpha) alpha = score
         }
