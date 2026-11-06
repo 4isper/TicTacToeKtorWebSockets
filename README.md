@@ -44,7 +44,7 @@ Then open http://localhost:8080/ to play in the browser (the page is rendered wi
   {"type":"set_name","name":"Дима"}
   ```
 
-  `x` is the column and `y` is the row (`0`-based, `0..size-1`). A malformed or unknown message is answered with an `error` event and does not close the session. `set_name` trims the name and accepts 1–20 characters (`invalid name` otherwise); the name must also be unique among the connected players of the game, case-insensitively, and cannot be claimed by another live session (`name is taken` otherwise). Names travel in every `state` as `playerNames` (`{"X":"Дима"}`), survive round resets and are dropped when a player disconnects.
+  `x` is the column and `y` is the row (`0`-based, `0..size-1`). A malformed or unknown message is answered with an `error` event and does not close the session. `set_name` trims the name and accepts 1–20 characters (`invalid name` otherwise); the name must also be unique among the connected players of the game, case-insensitively, and cannot be claimed by another live session (`name is taken` otherwise). Names travel in every `state` as `playerNames` (`{"X":"Дима"}`), survive round resets and are dropped when a player disconnects. The browser client remembers the last accepted name in `localStorage` and re-applies it automatically after a reload.
 - Server → client: a text frame per event, also discriminated by `type`:
 
   ```json
