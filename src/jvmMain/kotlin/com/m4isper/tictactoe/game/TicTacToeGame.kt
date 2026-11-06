@@ -52,6 +52,7 @@ class TicTacToeGame(
     private var roundRestartJob: Job? = null
     private var roundRestartDeadline = 0L
     private var bot: PlayerSymbol? = null
+    private var roundStarter: PlayerSymbol = PlayerSymbol.X
     private var botMoveJob: Job? = null
     private var turnTimeoutJob: Job? = null
     private var turnDeadline = 0L
@@ -272,22 +273,7 @@ class TicTacToeGame(
                 roundRestartJob?.cancel()
                 roundRestartJob = null
                 roundRestartDeadline = 0
-                roundMoves.clear()
-                resetClocksLocked()
-                publish(
-                    current.copy(
-                        playerAtTurn = PlayerSymbol.X,
-                        field = GameRules.emptyField(boardSize),
-                        winningPlayer = null,
-                        winningCells = emptyList(),
-                        isBoardFull = false,
-                        isDrawAgreed = false,
-                        drawPlayers = emptyList(),
-                        undoOfferBy = null,
-                        roundRestartInMs = null,
-                        rematchPlayers = emptyList(),
-                    ),
-                )
+                beginFreshRoundLocked()
             } else {
                 publish(current.copy(rematchPlayers = updated))
             }
@@ -402,24 +388,30 @@ class TicTacToeGame(
             synchronized(lock) {
                 roundRestartJob = null
                 roundRestartDeadline = 0
-                roundMoves.clear()
-                resetClocksLocked()
-                publish(
-                    state.value.copy(
-                        playerAtTurn = PlayerSymbol.X,
-                        field = GameRules.emptyField(boardSize),
-                        winningPlayer = null,
-                        winningCells = emptyList(),
-                        isBoardFull = false,
-                        isDrawAgreed = false,
-                        drawPlayers = emptyList(),
-                        undoOfferBy = null,
-                        roundRestartInMs = null,
-                        rematchPlayers = emptyList(),
-                    ),
-                )
+                beginFreshRoundLocked()
             }
         }
+    }
+
+    /** Starts the next round from an empty board; the opening turn alternates between rounds. */
+    private fun beginFreshRoundLocked() {
+        roundStarter = roundStarter.other
+        roundMoves.clear()
+        resetClocksLocked()
+        publish(
+            state.value.copy(
+                playerAtTurn = roundStarter,
+                field = GameRules.emptyField(boardSize),
+                winningPlayer = null,
+                winningCells = emptyList(),
+                isBoardFull = false,
+                isDrawAgreed = false,
+                drawPlayers = emptyList(),
+                undoOfferBy = null,
+                roundRestartInMs = null,
+                rematchPlayers = emptyList(),
+            ),
+        )
     }
 
     private fun publish(next: GameState) {

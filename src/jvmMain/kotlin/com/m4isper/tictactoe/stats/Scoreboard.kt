@@ -164,22 +164,10 @@ class Scoreboard(private val store: ScoreStore) {
         moves: List<Cell> = emptyList(),
         boardSize: Int = 3,
     ): Unit = synchronized(lock) {
-        // both ratings are read before either is written, so the exchange is fair
         val all = store.loadAll()
         val xName = playerNames[PlayerSymbol.X]
         val oName = playerNames[PlayerSymbol.O]
-        val xRating = xName?.let { all[it]?.rating } ?: Elo.DEFAULT
-        val oRating = oName?.let { all[it]?.rating } ?: Elo.DEFAULT
-        // a round against a bot (an unnamed side) is practice: it lands in the
-        // history, but the rating stays where it was
-        val rated = xName != null && oName != null
-        val (xScore, oScore) = when (winner) {
-            PlayerSymbol.X -> 1.0 to 0.0
-            PlayerSymbol.O -> 0.0 to 1.0
-            null -> 0.5 to 0.5
-        }
-        val xNext = if (rated) Elo.next(xRating, oRating, xScore) else null
-        val oNext = if (rated) Elo.next(oRating, xRating, oScore) else null
+        val (xNext, oNext) = nextRatings(all, xName, oName, winner)
 
         if (winner == null) {
             val named = playerNames.values.toList()
@@ -203,6 +191,28 @@ class Scoreboard(private val store: ScoreStore) {
             winnerName?.let { store.addResult(it, RoundResult.WIN, loserName, moves = moves, boardSize = boardSize, rating = winnerNext, ratingAfter = winnerNext) }
             loserName?.let { store.addResult(it, RoundResult.LOSS, winnerName, moves = moves, boardSize = boardSize, rating = loserNext, ratingAfter = loserNext) }
         }
+    }
+
+    /**
+     * The next rating for each side, read before either is written so the exchange is fair.
+     * A round against a bot (an unnamed side) is practice: the ratings come back null and
+     * [statsAfter] keeps the players where they were.
+     */
+    private fun nextRatings(
+        all: Map<String, PlayerStats>,
+        xName: String?,
+        oName: String?,
+        winner: PlayerSymbol?,
+    ): Pair<Int?, Int?> {
+        if (xName == null || oName == null) return null to null
+        val xRating = all[xName]?.rating ?: Elo.DEFAULT
+        val oRating = all[oName]?.rating ?: Elo.DEFAULT
+        val (xScore, oScore) = when (winner) {
+            PlayerSymbol.X -> 1.0 to 0.0
+            PlayerSymbol.O -> 0.0 to 1.0
+            null -> 0.5 to 0.5
+        }
+        return Elo.next(xRating, oRating, xScore) to Elo.next(oRating, xRating, oScore)
     }
 
     fun profile(name: String?): PlayerProfile? = synchronized(lock) {

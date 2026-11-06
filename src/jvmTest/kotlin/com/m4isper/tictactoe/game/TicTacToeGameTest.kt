@@ -116,11 +116,13 @@ class TicTacToeGameTest {
         val restarted = game.currentState()
         assertNull(restarted.winningPlayer)
         assertEquals(mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), restarted.score)
+        assertEquals(PlayerSymbol.O, restarted.playerAtTurn) // the opening alternates between rounds
 
+        game.finishTurn(PlayerSymbol.O, oSession, 2, 0)
         game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
-        game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 2, 1)
         game.finishTurn(PlayerSymbol.X, xSession, 0, 1)
-        game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 0) // O must not finish its own column first
         game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
 
         assertEquals(mapOf(PlayerSymbol.X to 2, PlayerSymbol.O to 0), game.currentState().score)
@@ -435,17 +437,18 @@ class TicTacToeGameTest {
 
         assertEquals(listOf(Cell(0, 0), Cell(1, 0), Cell(0, 1), Cell(1, 1), Cell(0, 2)), withTimeout(2_000) { reported.receive() })
 
-        // the next round records fresh moves, not the old ones
+        // the next round records fresh moves, not the old ones; O opens now
         assertNull(game.requestRematch(PlayerSymbol.X, xSession))
         assertNull(game.requestRematch(PlayerSymbol.O, oSession))
-        game.finishTurn(PlayerSymbol.X, xSession, 2, 2)
         game.finishTurn(PlayerSymbol.O, oSession, 1, 2)
-        game.finishTurn(PlayerSymbol.X, xSession, 2, 0)
+        game.finishTurn(PlayerSymbol.X, xSession, 2, 2)
         game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
+        game.finishTurn(PlayerSymbol.X, xSession, 2, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 0, 0) // O must not finish its own column first
         game.finishTurn(PlayerSymbol.X, xSession, 2, 1)
 
         assertEquals(
-            listOf(Cell(2, 2), Cell(1, 2), Cell(2, 0), Cell(1, 0), Cell(2, 1)),
+            listOf(Cell(1, 2), Cell(2, 2), Cell(1, 0), Cell(2, 0), Cell(0, 0), Cell(2, 1)),
             withTimeout(2_000) { reported.receive() },
         )
         assertNull(withTimeoutOrNull(200) { reported.receive() }, "each round is reported exactly once")

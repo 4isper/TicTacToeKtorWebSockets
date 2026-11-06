@@ -277,6 +277,101 @@ class GameFlowTest {
         }
     }
 
+    /** O's side of `the opening turn alternates between rounds`: mirrors the rematches, wins round 2. */
+    private suspend fun WebSocketSession.playAlternatingOSide() {
+        // round 1: O answers X's column
+        receiveState()
+        sendMakeTurn(1, 0)
+        receiveState()
+        receiveState()
+        sendMakeTurn(1, 1)
+        receiveState()
+        receiveState()
+        // X asks first, O mirrors: the reset must hand the opening to O
+        receiveState()
+        sendRequestRematch()
+        assertEquals(PlayerSymbol.O, receiveState().playerAtTurn)
+
+        // round 2: O opens and wins with its own column
+        sendMakeTurn(1, 0)
+        receiveState()
+        receiveState()
+        sendMakeTurn(1, 1)
+        receiveState()
+        receiveState()
+        sendMakeTurn(1, 2)
+        assertEquals(PlayerSymbol.O, receiveState().winningPlayer)
+        // O asks first, X mirrors: the opening returns to X
+        receiveState()
+        sendRequestRematch()
+        assertEquals(PlayerSymbol.X, receiveState().playerAtTurn)
+        awaitCancellation()
+    }
+
+    @Test
+    fun `the opening turn alternates between rounds`() = testApplication {
+        application {
+            testModule()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=alt") {
+            receiveHandshake()
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=alt") {
+                    receiveHandshake()
+                    oReady.complete(Unit)
+                    playAlternatingOSide()
+                }
+            }
+            oReady.await()
+
+            skipBroadcast()
+
+            // round 1: X opens and wins with the first column
+            sendMakeTurn(0, 0)
+            skipBroadcast()
+            skipBroadcast()
+            sendMakeTurn(0, 1)
+            skipBroadcast()
+            skipBroadcast()
+            sendMakeTurn(0, 2)
+            val win = receiveState()
+            assertEquals(PlayerSymbol.X, win.winningPlayer)
+
+            sendRequestRematch()
+            skipBroadcast() // the offer broadcast
+            val reset = receiveState()
+            assertEquals(PlayerSymbol.O, reset.playerAtTurn)
+            assertNull(reset.field[0][0]) // a fresh board
+
+            // round 2: O opens, X answers; O makes the last move this time
+            receiveState()
+            sendMakeTurn(2, 0)
+            skipBroadcast()
+            skipBroadcast()
+            sendMakeTurn(2, 1)
+            skipBroadcast()
+            val loss = receiveState()
+            assertEquals(PlayerSymbol.O, loss.winningPlayer)
+
+            sendRequestRematch()
+            skipBroadcast()
+            val reset2 = receiveState()
+            assertEquals(PlayerSymbol.X, reset2.playerAtTurn)
+            assertEquals(mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 1), reset2.score)
+
+            second.cancel()
+        }
+    }
+
     @Test
     fun `a third connection to a named room watches as a spectator`() = testApplication {
         application {
