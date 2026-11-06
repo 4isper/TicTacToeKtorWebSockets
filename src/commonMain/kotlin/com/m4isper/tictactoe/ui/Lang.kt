@@ -12,7 +12,7 @@ fun parseLang(raw: String?): Lang = if (raw.equals("en", ignoreCase = true)) Lan
  * the first recognized tag wins, anything unrecognized is skipped, RU by default.
  */
 fun detectLang(raw: String?): Lang {
-    val tags = raw?.lowercase()?.split(",") ?: emptyList()
+    val tags = raw?.lowercase()?.split(",").orEmpty()
     for (tag in tags) {
         when (tag.substringBefore(";").trim().take(2)) {
             "en" -> return Lang.EN

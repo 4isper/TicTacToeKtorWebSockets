@@ -27,6 +27,7 @@ import com.m4isper.tictactoe.ui.isTurnTransition
 import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.newMoveCells
 import com.m4isper.tictactoe.ui.noRoomsText
+import com.m4isper.tictactoe.ui.opponentLostText
 import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.parseTheme
 import com.m4isper.tictactoe.ui.rematchButtonText
@@ -90,6 +91,11 @@ private class GameClient {
 
     // an explicit lang parameter wins; otherwise the browser's own preference decides
     private val lang = params.get("lang")?.let(::parseLang) ?: detectLang(window.navigator.language)
+    private val preferences = Preferences(
+        document.getElementById("sound") as HTMLButtonElement,
+        document.getElementById("theme") as HTMLButtonElement,
+        lang,
+    )
     private val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
     private val query = listOfNotNull(
         room?.let { "room=$it" },
@@ -127,8 +133,10 @@ private class GameClient {
     private var clocksSnapshot: Map<PlayerSymbol, Long> = emptyMap()
     private var clocksBase = 0.0
     private var countdownTimer: Int? = null
-    private var muted = localStorage.getItem("tictactoe-muted") == "1"
-    private var theme = parseTheme(localStorage.getItem("tictactoe-theme"))
+    private var opponentLostTimer: Int? = null
+
+    // mirrors the server's reconnectGraceMs: how long a dropped player's slot is held
+    private val reconnectGraceSeconds = 10
 
     private fun send(message: ClientMessage) {
         socket?.send(protocolJson.encodeToString<ClientMessage>(message))
@@ -385,7 +393,7 @@ private class GameClient {
     }
 
     private fun beep(freq: Double, durationMs: Int, type: String = "sine") {
-        if (muted) return
+        if (preferences.muted) return
         try {
             ensureAudio()
             val ctx = audioCtx ?: return
@@ -453,6 +461,15 @@ private class GameClient {
         turnCountdown(previous, state)
     }
 
+    /** The connection is gone: no deadline survives it, so the countdowns stop writing the status line. */
+    private fun stopCountdowns() {
+        countdownTimer?.let { window.clearInterval(it) }
+        countdownTimer = null
+        roundDeadline = 0.0
+        turnDeadline = 0.0
+        turnBar.style.display = "none"
+    }
+
     private fun restartCountdown(previous: GameState?, state: GameState) {
         if (state.roundRestartInMs != null) {
             if (isRoundRestartTransition(previous, state) || roundDeadline == 0.0) {
@@ -462,7 +479,9 @@ private class GameClient {
                 val current = lastState ?: return@setInterval
                 val msLeft = roundDeadline - Date.now()
                 if (msLeft <= 0) return@setInterval
-                showStatus(statusText(current, mySymbol, lang) + " · " + restartText(msLeft.toLong(), lang))
+                if (opponentLostTimer == null) {
+                    showStatus(statusText(current, mySymbol, lang) + " · " + restartText(msLeft.toLong(), lang))
+                }
             }, 250)
         } else {
             roundDeadline = 0.0
@@ -484,7 +503,10 @@ private class GameClient {
                 if (msLeft <= 0) return@setInterval
                 turnBarFill.style.width = "${(msLeft / turnTotalMs * 100).coerceIn(0.0, 100.0)}%"
                 if (clocksSnapshot.isNotEmpty()) renderClocks()
-                showStatus(statusText(current, mySymbol, lang) + timerSuffix(msLeft.toLong(), lang))
+                // the away-plate owns the status line while the opponent is gone
+                if (opponentLostTimer == null) {
+                    showStatus(statusText(current, mySymbol, lang) + timerSuffix(msLeft.toLong(), lang))
+                }
             }, 250)
         } else {
             turnDeadline = 0.0
@@ -496,6 +518,27 @@ private class GameClient {
         updateRematchButton(state)
         updateDrawButton(state)
         updateUndoButton(state)
+    }
+
+    /** The away-plate: a countdown while the reconnect grace lasts, then plain waiting until the state changes. */
+    private fun startOpponentLostPlate() {
+        if (opponentLostTimer != null) return
+        var secondsLeft = reconnectGraceSeconds
+        showStatus(opponentLostText(secondsLeft, lang))
+        opponentLostTimer = window.setInterval({
+            secondsLeft -= 1
+            if (secondsLeft > 0) {
+                showStatus(opponentLostText(secondsLeft, lang))
+            } else {
+                stopOpponentLostPlate()
+                showStatus(opponentLostText(null, lang))
+            }
+        }, 1000)
+    }
+
+    private fun stopOpponentLostPlate() {
+        opponentLostTimer?.let { window.clearInterval(it) }
+        opponentLostTimer = null
     }
 
     private fun updateRematchButton(state: GameState) {
@@ -524,7 +567,12 @@ private class GameClient {
     }
 
     private fun updateStatus(previous: GameState?, state: GameState) {
-        showStatus(statusText(state, mySymbol, lang))
+        if (mySymbol != null && state.awayPlayers.isNotEmpty()) {
+            startOpponentLostPlate()
+        } else {
+            stopOpponentLostPlate()
+            showStatus(statusText(state, mySymbol, lang))
+        }
         scoreDiv.textContent = scoreText(state, lang)
         if (state.clocks.isNotEmpty()) {
             clocksSnapshot = state.clocks
@@ -623,6 +671,8 @@ private class GameClient {
             handleMessage(event.data.toString())
         }
         socket?.onclose = {
+            stopOpponentLostPlate()
+            stopCountdowns()
             if (fatal) {
                 // the join was rejected: the reason is in the error box, there is nothing to reconnect to
                 showStatus("")
@@ -637,25 +687,6 @@ private class GameClient {
         }
     }
 
-    private val soundButton = document.getElementById("sound") as HTMLButtonElement
-    private val themeButton = document.getElementById("theme") as HTMLButtonElement
-
-    private fun renderSound() {
-        soundButton.textContent = soundIcon(muted)
-        soundButton.title = soundTitle(muted, lang)
-    }
-
-    private fun renderTheme() {
-        val root = document.documentElement as HTMLElement
-        if (theme == ThemeMode.AUTO) {
-            root.removeAttribute("data-theme")
-        } else {
-            root.setAttribute("data-theme", theme.name.lowercase())
-        }
-        themeButton.textContent = themeIcon(theme)
-        themeButton.title = themeTitle(theme, lang)
-    }
-
     fun start() {
         copyLink?.let { button ->
             button.onclick = {
@@ -664,24 +695,6 @@ private class GameClient {
                 window.setTimeout({ button.textContent = copyLinkText(lang) }, 2000)
             }
         }
-
-        soundButton.onclick = {
-            muted = !muted
-            localStorage.setItem("tictactoe-muted", if (muted) "1" else "0")
-            renderSound()
-        }
-        renderSound()
-
-        themeButton.onclick = {
-            theme = when (theme) {
-                ThemeMode.AUTO -> ThemeMode.LIGHT
-                ThemeMode.LIGHT -> ThemeMode.DARK
-                ThemeMode.DARK -> ThemeMode.AUTO
-            }
-            localStorage.setItem("tictactoe-theme", theme.name.lowercase())
-            renderTheme()
-        }
-        renderTheme()
 
         rematchButton.onclick = { send(ClientMessage.RequestRematch) }
         drawButton.onclick = { send(ClientMessage.RequestDraw) }
@@ -717,5 +730,57 @@ private class GameClient {
         } else {
             connect()
         }
+    }
+}
+
+/** The sound and theme toggles: their icons, hints and localStorage persistence. */
+private class Preferences(
+    private val soundButton: HTMLButtonElement,
+    private val themeButton: HTMLButtonElement,
+    private val lang: Lang,
+) {
+    var muted = localStorage.getItem(MUTED_KEY) == "1"
+        private set
+    var theme = parseTheme(localStorage.getItem(THEME_KEY))
+        private set
+
+    init {
+        soundButton.onclick = {
+            muted = !muted
+            localStorage.setItem(MUTED_KEY, if (muted) "1" else "0")
+            renderSound()
+        }
+        themeButton.onclick = {
+            theme = when (theme) {
+                ThemeMode.AUTO -> ThemeMode.LIGHT
+                ThemeMode.LIGHT -> ThemeMode.DARK
+                ThemeMode.DARK -> ThemeMode.AUTO
+            }
+            localStorage.setItem(THEME_KEY, theme.name.lowercase())
+            renderTheme()
+        }
+        renderSound()
+        renderTheme()
+    }
+
+    private fun renderSound() {
+        soundButton.textContent = soundIcon(muted)
+        soundButton.title = soundTitle(muted, lang)
+    }
+
+    private fun renderTheme() {
+        val root = document.documentElement as HTMLElement
+        if (theme == ThemeMode.AUTO) {
+            root.removeAttribute("data-theme")
+        } else {
+            root.setAttribute("data-theme", theme.name.lowercase())
+        }
+        themeButton.textContent = themeIcon(theme)
+        themeButton.title = themeTitle(theme, lang)
+    }
+
+    private companion object {
+        const val MUTED_KEY = "tictactoe-muted"
+        const val THEME_KEY = "tictactoe-theme"
     }
 }

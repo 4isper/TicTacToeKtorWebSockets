@@ -99,19 +99,24 @@ class TicTacToeGame(
     }
 
     fun detachSession(player: PlayerSymbol, session: WebSocketSession): Boolean = synchronized(lock) {
-        if (playerSockets[player] === session) {
+        if (playerSockets[player] !== session) {
+            false
+        } else {
             playerSockets.remove(player)
             lastReactionAt.remove(session)
+            // the slot is held for the reconnect grace: everyone sees the player went away
+            publish(state.value.copy(awayPlayers = state.value.awayPlayers + player))
             true
-        } else {
-            false
         }
     }
 
     fun reattachSession(player: PlayerSymbol, session: WebSocketSession): Unit = synchronized(lock) {
         playerSockets[player] = session
-        if (player !in state.value.connectionPlayers) {
-            publish(state.value.copy(connectionPlayers = state.value.connectionPlayers + player))
+        val current = state.value
+        val connections = if (player in current.connectionPlayers) current.connectionPlayers else current.connectionPlayers + player
+        val away = current.awayPlayers - player
+        if (connections != current.connectionPlayers || away != current.awayPlayers) {
+            publish(current.copy(connectionPlayers = connections, awayPlayers = away))
         }
     }
 
@@ -121,6 +126,7 @@ class TicTacToeGame(
             state.value.copy(
                 connectionPlayers = state.value.connectionPlayers - player,
                 playerNames = state.value.playerNames - player,
+                awayPlayers = state.value.awayPlayers - player,
             ),
         )
         maybeAttachBotLocked()

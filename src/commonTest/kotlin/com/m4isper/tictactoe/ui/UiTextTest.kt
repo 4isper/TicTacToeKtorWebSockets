@@ -97,6 +97,15 @@ class UiTextTest {
     }
 
     @Test
+    fun `the opponent-lost plate counts down and then just waits`() {
+        assertEquals("Соперник отключился — вернётся за 10 с…", opponentLostText(10))
+        assertEquals("Соперник отключился — вернётся за 1 с…", opponentLostText(1))
+        assertEquals("Соперник отключился, ждём…", opponentLostText(null))
+        assertEquals("The opponent dropped — back in 10s…", opponentLostText(10, Lang.EN))
+        assertEquals("The opponent dropped, waiting…", opponentLostText(null, Lang.EN))
+    }
+
+    @Test
     fun `draw button follows the offers`() {
         assertEquals("Предложить ничью", drawButtonText(iOffered = false, opponentOffered = false))
         assertEquals("Предложение отправлено…", drawButtonText(iOffered = true, opponentOffered = false))

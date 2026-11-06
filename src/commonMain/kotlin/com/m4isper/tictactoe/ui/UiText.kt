@@ -224,29 +224,24 @@ fun soundTitle(muted: Boolean, lang: Lang = Lang.RU): String = when (lang) {
     Lang.EN -> if (muted) "Unmute" else "Mute"
 }
 
-fun themeIcon(theme: ThemeMode): String = when (theme) {
-    ThemeMode.AUTO -> "🌓"
-    ThemeMode.LIGHT -> "☀️"
-    ThemeMode.DARK -> "🌙"
-}
-
-fun themeTitle(theme: ThemeMode, lang: Lang = Lang.RU): String = when (lang) {
-    Lang.RU -> when (theme) {
-        ThemeMode.AUTO -> "Тема: как в системе — включить светлую"
-        ThemeMode.LIGHT -> "Тема: светлая — включить тёмную"
-        ThemeMode.DARK -> "Тема: тёмная — вернуть как в системе"
-    }
-
-    Lang.EN -> when (theme) {
-        ThemeMode.AUTO -> "Theme: follow the system — switch to light"
-        ThemeMode.LIGHT -> "Theme: light — switch to dark"
-        ThemeMode.DARK -> "Theme: dark — follow the system"
-    }
-}
-
 fun connectionLostText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> "Соединение потеряно, переподключение…"
     Lang.EN -> "Connection lost, reconnecting…"
+}
+
+/** The plate shown while the opponent is away: a countdown while the reconnect grace lasts, then plain waiting. */
+fun opponentLostText(secondsLeft: Int?, lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> if (secondsLeft == null) {
+        "Соперник отключился, ждём…"
+    } else {
+        "Соперник отключился — вернётся за $secondsLeft с…"
+    }
+
+    Lang.EN -> if (secondsLeft == null) {
+        "The opponent dropped, waiting…"
+    } else {
+        "The opponent dropped — back in ${secondsLeft}s…"
+    }
 }
 
 fun connectionErrorText(lang: Lang = Lang.RU): String = when (lang) {

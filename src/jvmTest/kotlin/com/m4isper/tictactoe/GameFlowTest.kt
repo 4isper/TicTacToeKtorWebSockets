@@ -373,6 +373,43 @@ class GameFlowTest {
     }
 
     @Test
+    fun `a dropped player is marked away until the grace expires`() = testApplication {
+        application {
+            testModule(reconnectGraceMs = 300)
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=away") {
+            receiveHandshake()
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=away") {
+                    receiveHandshake()
+                    oReady.complete(Unit)
+                } // the block ends: the socket drops into the reconnect grace
+            }
+            oReady.await()
+
+            // the drop is announced at once, while the slot is still held
+            val away = awaitStateWhere { it.awayPlayers.isNotEmpty() }
+            assertEquals(listOf(PlayerSymbol.O), away.awayPlayers)
+            assertEquals(listOf(PlayerSymbol.X, PlayerSymbol.O), away.connectionPlayers)
+
+            // after the grace the slot is freed and the away mark is gone
+            val freed = awaitStateWhere { it.connectionPlayers == listOf(PlayerSymbol.X) }
+            assertTrue(freed.awayPlayers.isEmpty())
+
+            second.cancel()
+        }
+    }
+
+    @Test
     fun `a third connection to a named room watches as a spectator`() = testApplication {
         application {
             testModule()
