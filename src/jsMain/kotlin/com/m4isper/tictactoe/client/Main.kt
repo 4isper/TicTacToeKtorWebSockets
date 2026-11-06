@@ -12,6 +12,7 @@ import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.SharedReplay
 import com.m4isper.tictactoe.ui.SoundCue
 import com.m4isper.tictactoe.ui.ThemeMode
+import com.m4isper.tictactoe.ui.autoplayText
 import com.m4isper.tictactoe.ui.botLabel
 import com.m4isper.tictactoe.ui.cellAriaText
 import com.m4isper.tictactoe.ui.clockText
@@ -60,6 +61,7 @@ import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.WebSocket
+import org.w3c.dom.events.Event
 import org.w3c.dom.url.URLSearchParams
 import kotlin.js.Date
 
@@ -841,62 +843,7 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
         boardSize: Int,
         moves: List<Cell>,
     ) {
-        var index = moves.size // start at the final position
-
-        val controls = document.createElement("div") as HTMLElement
-        val prev = document.createElement("button") as HTMLButtonElement
-        val next = document.createElement("button") as HTMLButtonElement
-        val share = document.createElement("button") as HTMLButtonElement
-        val label = document.createElement("span")
-        prev.textContent = "‹"
-        next.textContent = "›"
-        share.textContent = "🔗"
-        share.title = copyLinkText(lang)
-        controls.className = "replay-controls"
-        controls.appendChild(prev)
-        controls.appendChild(label)
-        controls.appendChild(next)
-        controls.appendChild(share)
-
-        val boardDiv = document.createElement("div") as HTMLElement
-        boardDiv.style.display = "grid"
-        boardDiv.style.setProperty("grid-template-columns", "repeat($boardSize, 26px)")
-
-        fun render() {
-            boardDiv.innerHTML = ""
-            val cells = arrayOfNulls<String>(boardSize * boardSize)
-            for (i in 0 until index) {
-                val m = moves[i]
-                cells[m.y * boardSize + m.x] = if (i % 2 == 0) "X" else "O"
-            }
-            cells.forEach { symbol ->
-                val cellDiv = document.createElement("div") as HTMLElement
-                cellDiv.className = "mini-cell"
-                cellDiv.textContent = symbol ?: ""
-                boardDiv.appendChild(cellDiv)
-            }
-            label.textContent = " $index/${moves.size} "
-            prev.disabled = index == 0
-            next.disabled = index == moves.size
-        }
-        prev.onclick = {
-            if (index > 0) index--
-            render()
-        }
-        next.onclick = {
-            if (index < moves.size) index++
-            render()
-        }
-        share.onclick = {
-            val fragment = replayToFragment(SharedReplay(boardSize, boardSize, moves))
-            window.navigator.clipboard?.writeText("${window.location.origin}${window.location.pathname}${window.location.search}#$fragment")
-            share.textContent = "✓"
-            window.setTimeout({ share.textContent = "🔗" }, 1_500)
-        }
-
-        container.appendChild(controls)
-        container.appendChild(boardDiv)
-        render()
+        ReplayView(container, boardSize, moves, lang)
     }
 
     /** The running W/L/D tally per opponent, busiest matchups first. */
@@ -921,5 +868,129 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
         "WIN" -> "✓"
         "LOSS" -> "✗"
         else -> "="
+    }
+}
+
+/** One mounted replay: a stepper, autoplay and arrow keys over a mini board. */
+private class ReplayView(
+    container: HTMLElement,
+    private val boardSize: Int,
+    private val moves: List<Cell>,
+    private val lang: Lang,
+) {
+    private var index = moves.size // start at the final position
+    private var playTimer: Int? = null
+
+    private val prev = document.createElement("button") as HTMLButtonElement
+    private val next = document.createElement("button") as HTMLButtonElement
+    private val play = document.createElement("button") as HTMLButtonElement
+    private val label = document.createElement("span")
+    private val boardDiv = document.createElement("div") as HTMLElement
+
+    init {
+        prev.textContent = "‹"
+        next.textContent = "›"
+        play.textContent = "▶"
+        play.title = autoplayText(lang)
+        val share = document.createElement("button") as HTMLButtonElement
+        share.textContent = "🔗"
+        share.title = copyLinkText(lang)
+        val controls = document.createElement("div") as HTMLElement
+        controls.className = "replay-controls"
+        controls.appendChild(prev)
+        controls.appendChild(label)
+        controls.appendChild(next)
+        controls.appendChild(play)
+        controls.appendChild(share)
+
+        boardDiv.style.display = "grid"
+        boardDiv.style.setProperty("grid-template-columns", "repeat($boardSize, 26px)")
+
+        prev.onclick = {
+            stopPlaying()
+            step(-1)
+        }
+        next.onclick = {
+            stopPlaying()
+            step(1)
+        }
+        play.onclick = { togglePlay() }
+        share.onclick = {
+            val fragment = replayToFragment(SharedReplay(boardSize, boardSize, moves))
+            window.navigator.clipboard?.writeText("${window.location.origin}${window.location.pathname}${window.location.search}#$fragment")
+            share.textContent = "✓"
+            window.setTimeout({ share.textContent = "🔗" }, 1_500)
+        }
+
+        container.appendChild(controls)
+        container.appendChild(boardDiv)
+        render()
+        captureArrowKeys()
+    }
+
+    /** Moves the playhead and stops the autoplay once the final position is reached. */
+    private fun step(delta: Int) {
+        index = (index + delta).coerceIn(0, moves.size)
+        if (index == moves.size) stopPlaying()
+        render()
+    }
+
+    private fun togglePlay() {
+        if (playTimer != null) {
+            stopPlaying()
+        } else {
+            play.textContent = "⏸"
+            playTimer = window.setInterval({ step(1) }, 700)
+        }
+    }
+
+    private fun stopPlaying() {
+        playTimer?.let { window.clearInterval(it) }
+        playTimer = null
+        play.textContent = "▶"
+    }
+
+    private fun render() {
+        boardDiv.innerHTML = ""
+        val cells = arrayOfNulls<String>(boardSize * boardSize)
+        for (i in 0 until index) {
+            val m = moves[i]
+            cells[m.y * boardSize + m.x] = if (i % 2 == 0) "X" else "O"
+        }
+        cells.forEach { symbol ->
+            val cellDiv = document.createElement("div") as HTMLElement
+            cellDiv.className = "mini-cell"
+            cellDiv.textContent = symbol ?: ""
+            boardDiv.appendChild(cellDiv)
+        }
+        label.textContent = " $index/${moves.size} "
+        prev.disabled = index == 0
+        next.disabled = index == moves.size
+    }
+
+    /** The last mounted replay owns the arrow keys; typing into an input never moves the playhead. */
+    private fun captureArrowKeys() {
+        val handler: (Event) -> Unit = { event ->
+            if ((event.target as? HTMLElement)?.tagName != "INPUT") {
+                when (event.asDynamic().key) {
+                    "ArrowLeft" -> {
+                        stopPlaying()
+                        step(-1)
+                    }
+
+                    "ArrowRight" -> {
+                        stopPlaying()
+                        step(1)
+                    }
+                }
+            }
+        }
+        activeKeyHandler?.let { document.removeEventListener("keydown", it) }
+        activeKeyHandler = handler
+        document.addEventListener("keydown", handler)
+    }
+
+    private companion object {
+        var activeKeyHandler: ((Event) -> Unit)? = null
     }
 }

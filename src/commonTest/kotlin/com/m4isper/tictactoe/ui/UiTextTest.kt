@@ -247,6 +247,10 @@ class UiTextTest {
         assertEquals("Player not found", profileNotFoundText(Lang.EN))
         assertEquals("Соперники", headToHeadTitle())
         assertEquals("Head to head", headToHeadTitle(Lang.EN))
+        assertEquals("Показать партию", replayHintText())
+        assertEquals("Replay this match", replayHintText(Lang.EN))
+        assertEquals("Автопроигрывание", autoplayText())
+        assertEquals("Autoplay", autoplayText(Lang.EN))
     }
 
     @Test

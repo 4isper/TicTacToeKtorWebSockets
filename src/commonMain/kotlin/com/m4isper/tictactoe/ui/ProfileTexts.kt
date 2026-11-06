@@ -14,3 +14,13 @@ fun headToHeadTitle(lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> "Соперники"
     Lang.EN -> "Head to head"
 }
+
+fun replayHintText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Показать партию"
+    Lang.EN -> "Replay this match"
+}
+
+fun autoplayText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Автопроигрывание"
+    Lang.EN -> "Autoplay"
+}
