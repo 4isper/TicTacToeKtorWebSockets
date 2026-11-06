@@ -54,6 +54,8 @@ data class PlayerProfile(
     /** Which slice of the history this profile carries; [PAGINATION] records per page. */
     val page: Int = 0,
     val pages: Int = 1,
+    /** 1-based place in the full leaderboard order, the same sort [top] serves. */
+    val rank: Int = 0,
 )
 
 @Serializable
@@ -259,11 +261,13 @@ class Scoreboard(private val store: ScoreStore) {
         if (name.isNullOrBlank()) {
             null
         } else {
-            val stats = store.loadAll()[name] ?: return null
+            val all = store.loadAll()
+            val stats = all[name] ?: return null
             val pages = maxOf(1, (stats.history.size + PAGINATION - 1) / PAGINATION)
             val safePage = page.coerceIn(0, pages - 1)
             val sliced = stats.copy(history = stats.history.drop(safePage * PAGINATION).take(PAGINATION))
-            PlayerProfile(name, sliced, safePage, pages)
+            val rank = ordered(all).indexOfFirst { it.name == name } + 1
+            PlayerProfile(name, sliced, safePage, pages, rank)
         }
     }
 
@@ -271,14 +275,15 @@ class Scoreboard(private val store: ScoreStore) {
     fun ratingOf(name: String): Int? = synchronized(lock) { store.loadAll()[name]?.rating }
 
     fun top(limit: Int = 10): List<LeaderboardEntry> = synchronized(lock) {
-        store.loadAll()
-            .entries
-            .sortedWith(
-                compareByDescending<Map.Entry<String, PlayerStats>> { it.value.rating }
-                    .thenByDescending { it.value.wins }
-                    .thenBy { it.key },
-            )
-            .take(limit)
-            .map { LeaderboardEntry(it.key, it.value) }
+        ordered(store.loadAll()).take(limit)
     }
+
+    /** The leaderboard order: rating, then wins, then the name — the one place this sort lives. */
+    private fun ordered(all: Map<String, PlayerStats>): List<LeaderboardEntry> = all.entries
+        .sortedWith(
+            compareByDescending<Map.Entry<String, PlayerStats>> { it.value.rating }
+                .thenByDescending { it.value.wins }
+                .thenBy { it.key },
+        )
+        .map { LeaderboardEntry(it.key, it.value) }
 }

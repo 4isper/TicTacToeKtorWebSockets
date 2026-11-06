@@ -797,7 +797,7 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                 response.json().then { data: dynamic ->
                     profileDiv.innerHTML = ""
                     val title = document.createElement("h3")
-                    title.textContent = "${data.name as String} · ${data.stats.rating as Int}"
+                    title.textContent = "${data.name as String} · #${data.rank as Int} · ${data.stats.rating as Int}"
                     val ul = document.createElement("ul") as HTMLElement
                     val replayDiv = document.createElement("div") as HTMLElement
                     val history = (data.stats.history ?: js("[]")) as Array<dynamic>

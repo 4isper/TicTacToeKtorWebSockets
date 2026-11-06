@@ -119,6 +119,19 @@ class ScoreboardTest {
     }
 
     @Test
+    fun `profile carries the rank in the full sorted table`() {
+        val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
+        board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), PlayerSymbol.X)
+        board.recordRound(mapOf(PlayerSymbol.X to "Вера", PlayerSymbol.O to "Гоша"), PlayerSymbol.X)
+        // Аня=Вера 1020, Боря=Гоша 980 — the name breaks the ties
+
+        assertEquals(1, board.profile("Аня")!!.rank)
+        assertEquals(2, board.profile("Вера")!!.rank)
+        assertEquals(3, board.profile("Боря")!!.rank)
+        assertEquals(4, board.profile("Гоша")!!.rank)
+    }
+
+    @Test
     fun `top sorts by rating and falls back to the name`() {
         val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
         board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), PlayerSymbol.X)
