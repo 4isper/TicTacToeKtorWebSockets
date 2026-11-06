@@ -15,6 +15,7 @@ import com.m4isper.tictactoe.ui.ThemeMode
 import com.m4isper.tictactoe.ui.autoplayText
 import com.m4isper.tictactoe.ui.botLabel
 import com.m4isper.tictactoe.ui.cellAriaText
+import com.m4isper.tictactoe.ui.cellNotation
 import com.m4isper.tictactoe.ui.clockText
 import com.m4isper.tictactoe.ui.connectionErrorText
 import com.m4isper.tictactoe.ui.connectionLostText
@@ -53,6 +54,7 @@ import com.m4isper.tictactoe.ui.turnAlertBody
 import com.m4isper.tictactoe.ui.turnAlertTitle
 import com.m4isper.tictactoe.ui.turnSecondsText
 import com.m4isper.tictactoe.ui.undoButtonText
+import com.m4isper.tictactoe.ui.updatedMoveLog
 import kotlinx.browser.document
 import kotlinx.browser.localStorage
 import kotlinx.browser.window
@@ -87,6 +89,7 @@ private class GameClient {
     private val undoButton = document.getElementById("undo") as HTMLButtonElement
     private val turnBar = document.getElementById("turn-bar") as HTMLElement
     private val turnBarFill = document.getElementById("turn-bar-fill") as HTMLElement
+    private val movesList = document.getElementById("moves") as HTMLElement
     private val nameInput = document.getElementById("name") as? HTMLInputElement
     private val setNameButton = document.getElementById("set-name") as? HTMLButtonElement
 
@@ -149,6 +152,7 @@ private class GameClient {
     private var turnTotalMs = 0.0
     private var clocksSnapshot: Map<PlayerSymbol, Long> = emptyMap()
     private var clocksBase = 0.0
+    private var moveLog: List<Cell> = emptyList()
     private var countdownTimer: Int? = null
     private var opponentLostTimer: Int? = null
 
@@ -220,6 +224,17 @@ private class GameClient {
         window.setTimeout({ bubble.remove() }, 2_000)
     }
 
+    /** The running move list beside the board; each cell's occupant names its mover. */
+    private fun renderMoveLog() {
+        val current = lastState ?: return
+        movesList.innerHTML = ""
+        moveLog.forEachIndexed { i, cell ->
+            val li = document.createElement("li") as HTMLElement
+            li.textContent = "${i + 1}. ${current.field[cell.y][cell.x]} ${cellNotation(cell.x, cell.y)}"
+            movesList.appendChild(li)
+        }
+    }
+
     /** The chess clocks tick locally between server states; the player on turn is the one draining. */
     private fun renderClocks() {
         val current = lastState ?: return
@@ -236,6 +251,8 @@ private class GameClient {
         val previous = lastState
         lastState = state
         updateCountdowns(previous, state)
+        moveLog = updatedMoveLog(previous, state, moveLog)
+        renderMoveLog()
         turnAlert.onState(previous, state, mySymbol)
         updateActionButtons(state)
         updateStatus(previous, state)

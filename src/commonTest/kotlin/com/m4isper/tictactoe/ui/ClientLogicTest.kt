@@ -133,6 +133,34 @@ class ClientLogicTest {
         val waiting = GameState(connectionPlayers = listOf(PlayerSymbol.X), playerAtTurn = PlayerSymbol.X)
         assertFalse(shouldAlertTurn(waiting, PlayerSymbol.X))
     }
+
+    @Test
+    fun `coordinates read as column letter and row number`() {
+        assertEquals("a1", cellNotation(x = 0, y = 0))
+        assertEquals("c3", cellNotation(x = 2, y = 2))
+        assertEquals("e10", cellNotation(x = 4, y = 9))
+    }
+
+    @Test
+    fun `the move log appends fresh moves`() {
+        val before = GameState(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)))
+        val after = before.copy(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X, Cell(1, 0) to PlayerSymbol.O)))
+        assertEquals(listOf(Cell(0, 0), Cell(1, 0)), updatedMoveLog(before, after, listOf(Cell(0, 0))))
+    }
+
+    @Test
+    fun `an approved takeback drops the undone move`() {
+        val full = GameState(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X, Cell(1, 0) to PlayerSymbol.O)))
+        val reverted = full.copy(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)))
+        assertEquals(listOf(Cell(0, 0)), updatedMoveLog(full, reverted, listOf(Cell(0, 0), Cell(1, 0))))
+    }
+
+    @Test
+    fun `a round reset empties the move log`() {
+        val over = GameState(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)), winningPlayer = PlayerSymbol.X)
+        val fresh = GameState()
+        assertTrue(updatedMoveLog(over, fresh, listOf(Cell(0, 0))).isEmpty())
+    }
 }
 
 private object Boards {

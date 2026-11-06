@@ -67,6 +67,7 @@ import kotlinx.html.lang
 import kotlinx.html.link
 import kotlinx.html.meta
 import kotlinx.html.numberInput
+import kotlinx.html.ol
 import kotlinx.html.option
 import kotlinx.html.p
 import kotlinx.html.script
@@ -254,8 +255,30 @@ private fun CssBuilder.styles() {
     themeStyles()
     layoutStyles()
     boardStyles()
+    moveListStyles()
     createStyles()
     effectStyles()
+}
+
+/** The running move list beside the board. */
+private fun CssBuilder.moveListStyles() {
+    rule("#moves") {
+        display = Display.flex
+        flexWrap = FlexWrap.wrap
+        gap = 4.px
+        margin = Margin(vertical = 6.px)
+        padding = Padding(horizontal = 0.px)
+        listStyleType = ListStyleType.none
+        maxHeight = 90.px
+        overflowY = Overflow.auto
+    }
+    rule("#moves li") {
+        backgroundColor = Color("var(--panel)")
+        borderRadius = 6.px
+        padding = Padding(horizontal = 8.px, vertical = 2.px)
+        fontSize = 13.px
+        color = Color("var(--muted)")
+    }
 }
 
 private fun CssBuilder.themeStyles() {
@@ -633,6 +656,7 @@ private fun BODY.boardArea() {
         div { id = "turn-bar-fill" }
     }
     div { id = "board" }
+    ol { id = "moves" }
     div { id = "error" }
     div {
         id = "shared-replay"

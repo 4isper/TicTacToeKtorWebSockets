@@ -216,12 +216,11 @@ class ScoreboardTest {
 
     @Test
     fun `results against a named opponent accumulate head to head`() {
-        var stats: PlayerStats? = null
-        stats = statsAfter(stats, RoundResult.WIN, "Аня", 1L, emptyList(), 3, null, null)
+        var stats: PlayerStats = statsAfter(null, RoundResult.WIN, "Аня", 1L, emptyList(), 3, null, null)
         stats = statsAfter(stats, RoundResult.LOSS, "Аня", 2L, emptyList(), 3, null, null)
         stats = statsAfter(stats, RoundResult.DRAW, "Боря", 3L, emptyList(), 3, null, null)
 
-        assertEquals(HeadToHead(wins = 1, losses = 1), stats!!.opponents.getValue("Аня"))
+        assertEquals(HeadToHead(wins = 1, losses = 1), stats.opponents.getValue("Аня"))
         assertEquals(HeadToHead(draws = 1), stats.opponents.getValue("Боря"))
     }
 
