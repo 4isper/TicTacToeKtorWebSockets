@@ -53,11 +53,11 @@ fun Application.module(
         },
     reconnectGraceMs: Long = 10_000L,
 ) {
-    val lobby = GameLobby(newGame, reconnectGraceMs)
+    val lobby = GameLobby(newGame, reconnectGraceMs, ratingOf = scoreboard::ratingOf)
     monitor.subscribe(ApplicationStopped) { lobby.shutdownAll() }
     configureSockets()
     configureSerialization()
     configureMonitoring()
-    configureRouting(lobby)
+    configureRouting(lobby, scoreboard::ratingOf)
     webUi(scoreboard, lobby)
 }

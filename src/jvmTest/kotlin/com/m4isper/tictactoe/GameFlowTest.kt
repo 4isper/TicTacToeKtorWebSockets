@@ -492,6 +492,54 @@ class GameFlowTest {
     }
 
     @Test
+    fun `a name in the join url applies itself and a taken one leaves the session unnamed`() = testApplication {
+        application {
+            testModule()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=nmurl&name=Аня") {
+            receiveHandshake()
+            awaitStateWhere { it.playerNames[PlayerSymbol.X] == "Аня" }
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=nmurl&name=аня") {
+                    val (joined, _) = receiveHandshake()
+                    oReady.complete(Unit)
+                    assertEquals(PlayerSymbol.O, joined.symbol)
+                    sendMakeTurn(99, 99) // a guaranteed private error, whatever the turn order is
+                    // the join events may interleave: collect until both the error and a two-player state are seen
+                    val events = mutableListOf<ServerEvent>()
+                    withTimeout(5_000) {
+                        while (events.count { it is ServerEvent.Error } < 2 || events.none { it is ServerEvent.StateChanged }) {
+                            events.add(receiveEvent())
+                        }
+                    }
+                    assertTrue(
+                        events.any { it is ServerEvent.Error && it.reason == ErrorReason.NAME_TAKEN },
+                        "the taken name should be refused: $events",
+                    )
+                    val state = (events.last { it is ServerEvent.StateChanged } as ServerEvent.StateChanged).state
+                    assertEquals(mapOf(PlayerSymbol.X to "Аня"), state.playerNames) // the joiner stays unnamed
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            sendMakeTurn(0, 0) // a move gives O's collector a later state to read
+
+            second.cancel()
+        }
+    }
+
+    @Test
     fun `players name themselves and invalid names are refused`() = testApplication {
         application {
             testModule()

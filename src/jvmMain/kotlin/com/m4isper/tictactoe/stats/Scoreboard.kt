@@ -256,6 +256,9 @@ class Scoreboard(private val store: ScoreStore) {
         }
     }
 
+    /** The player's current rating, or null when unknown — anonymous matchmaking matches by it. */
+    fun ratingOf(name: String): Int? = synchronized(lock) { store.loadAll()[name]?.rating }
+
     fun top(limit: Int = 10): List<LeaderboardEntry> = synchronized(lock) {
         store.loadAll()
             .entries

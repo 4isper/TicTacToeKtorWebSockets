@@ -1,7 +1,7 @@
 package com.m4isper.tictactoe.ui
 
 /** The URL parameters a join link may carry, in the order the client forwards them to /play. */
-private val JOIN_PARAM_NAMES = listOf("room", "size", "win", "bot", "turn", "clock", "wins", "lang")
+private val JOIN_PARAM_NAMES = listOf("room", "size", "win", "bot", "turn", "clock", "wins", "spectate", "name", "lang")
 
 /**
  * The query string the WebSocket join re-sends: known parameters only, blank values dropped —

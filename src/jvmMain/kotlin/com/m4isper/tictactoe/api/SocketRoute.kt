@@ -26,10 +26,13 @@ private data class BoardSettings(val size: Int, val win: Int)
 
 private data class TimeSettings(val turn: Int, val clock: Int)
 
-fun Route.socket(lobby: GameLobby) {
+fun Route.socket(
+    lobby: GameLobby,
+    ratingOf: (String) -> Int?,
+) {
     route("/play") {
         webSocket {
-            val settings = parseSettings() ?: return@webSocket
+            val settings = parseSettings(ratingOf) ?: return@webSocket
             val joined = lobby.join(this, settings) ?: run {
                 sendError(ErrorReason.ROOM_IS_FULL)
                 return@webSocket
@@ -37,6 +40,14 @@ fun Route.socket(lobby: GameLobby) {
             val handler = SessionHandler(this, lobby, joined)
             try {
                 send(protocolJson.encodeToString<ServerEvent>(ServerEvent.Joined(joined.token, joined.symbol)))
+                if (joined.symbol != null && settings.name != null) {
+                    // a name carried by the join URL claims itself like set_name would; a refusal just stays unnamed
+                    if (!lobby.claimName(joined.token, settings.name)) {
+                        sendError(ErrorReason.NAME_TAKEN)
+                    } else {
+                        joined.game.setName(joined.symbol, settings.name)?.let { sendError(it) }
+                    }
+                }
                 if (joined.symbol == null) {
                     // spectators get no join broadcast of their own — hand them the current state
                     send(protocolJson.encodeToString<ServerEvent>(ServerEvent.StateChanged(joined.game.currentState())))
@@ -144,7 +155,7 @@ private class MessageRateLimiter {
 }
 
 /** Every invalid parameter answers with its own error; the caller then leaves the session. */
-private suspend fun DefaultWebSocketServerSession.parseSettings(): JoinSettings? {
+private suspend fun DefaultWebSocketServerSession.parseSettings(ratingOf: (String) -> Int?): JoinSettings? {
     val params = call.request.queryParameters
     val room = params["room"]
     if (room != null && !roomNamePattern.matches(room)) {
@@ -155,6 +166,11 @@ private suspend fun DefaultWebSocketServerSession.parseSettings(): JoinSettings?
     val bots = botLevels() ?: return null
     val time = timeSettings() ?: return null
     val seriesTarget = intParam("wins", 1..GameRules.MAX_SERIES_WINS, 0, ErrorReason.INVALID_WINS) ?: return null
+
+    // an invalid name answers its error but keeps the session: the client would only retry with the same name
+    val rawName = params["name"]?.trim()?.takeIf { it.isNotEmpty() }
+    if (rawName != null && rawName.length > MAX_NAME_LENGTH) sendError(ErrorReason.INVALID_NAME)
+    val name = rawName?.takeIf { it.length <= MAX_NAME_LENGTH }
     return JoinSettings(
         room = room,
         size = board.size,
@@ -165,6 +181,8 @@ private suspend fun DefaultWebSocketServerSession.parseSettings(): JoinSettings?
         clockSeconds = time.clock,
         seriesTarget = seriesTarget,
         spectate = params["spectate"] == "1",
+        name = name,
+        rating = name?.let(ratingOf),
     )
 }
 

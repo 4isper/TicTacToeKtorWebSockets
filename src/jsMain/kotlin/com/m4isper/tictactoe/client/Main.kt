@@ -117,6 +117,8 @@ private class GameClient {
     private val turnAlert = TurnAlert(lang)
     private val panels = SidePanels(lang, params.get("lang"))
     private val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
+    // the remembered name rides the join URL, so anonymous matchmaking can pair by rating
+    private val storedName = localStorage.getItem(NAME_KEY)
     private val query = joinQuery(
         mapOf(
             "room" to room,
@@ -127,12 +129,16 @@ private class GameClient {
             "clock" to clock,
             "wins" to wins,
             "spectate" to spectate,
+            "name" to storedName,
             "lang" to params.get("lang"),
         ),
     )
     private val wsUrl = "$wsProtocol://${window.location.host}/play" + (query.takeIf { it.isNotEmpty() }?.let { "?$it" } ?: "")
     private val tokenKey = "tictactoe-token" + (room?.let { ":$it" } ?: "")
-    private val nameKey = "tictactoe-name"
+
+    companion object {
+        const val NAME_KEY = "tictactoe-name"
+    }
 
     // answered before the game even started: the server closes the socket, so retrying cannot fix them
     private val fatalReasons = setOf(
@@ -416,7 +422,7 @@ private class GameClient {
                 pendingReconnectToken = null
                 // the server is the source of truth: cache the name it attributes to me
                 val myName = mySymbol?.let { symbol -> event.state.playerNames[symbol] }
-                if (myName != null) localStorage.setItem(nameKey, myName)
+                if (myName != null) localStorage.setItem(NAME_KEY, myName)
                 showState(event)
             }
 
@@ -441,8 +447,7 @@ private class GameClient {
                 pendingReconnectToken = stored
                 send(ClientMessage.Reconnect(stored))
             }
-            val storedName = localStorage.getItem(nameKey)
-            if (!storedName.isNullOrEmpty()) send(ClientMessage.SetName(storedName))
+            // the remembered name rides the join URL — no set_name needed here
         }
         socket?.onmessage = { event ->
             handleMessage(event.data.toString())
@@ -499,7 +504,7 @@ private class GameClient {
         }
 
         if (nameInput != null && setNameButton != null) {
-            nameInput.value = localStorage.getItem(nameKey) ?: ""
+            nameInput.value = localStorage.getItem(NAME_KEY) ?: ""
             fun submitName() {
                 val name = nameInput.value.trim()
                 if (name.isNotEmpty()) send(ClientMessage.SetName(name))

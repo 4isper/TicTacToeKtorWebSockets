@@ -36,6 +36,10 @@ data class JoinSettings(
     val seriesTarget: Int = 0,
     /** Only meaningful with a room: attach as a spectator instead of claiming the first free slot. */
     val spectate: Boolean = false,
+    /** A name carried by the join URL; claimed like `set_name` would, a refusal leaves the session unnamed. */
+    val name: String? = null,
+    /** The joiner's current Elo, when they are named — anonymous matchmaking prefers the closest rated player. */
+    val rating: Int? = null,
 )
 
 class GameLobby(
@@ -62,6 +66,8 @@ class GameLobby(
     private val reconnectGraceMs: Long = 10_000L,
     private val maxGames: Int = 100,
     private val maxSpectatorsPerGame: Int = 20,
+    /** Looks a named player's rating up — the scoreboard, in production. */
+    private val ratingOf: (String) -> Int? = { null },
 ) {
     data class Joined(val game: TicTacToeGame, val symbol: PlayerSymbol?, val token: String)
 
@@ -101,9 +107,10 @@ class GameLobby(
     private fun findOrCreateGame(settings: JoinSettings): TicTacToeGame? {
         if (settings.room == null) {
             // pair anonymous joiners only with identical settings, or their size/win/bot would be silently ignored
-            games.firstOrNull {
+            val candidates = games.filter {
                 !it.isFull() && it.matches(settings.size, settings.winLength, settings.botLevel, settings.turnSeconds, settings.clockSeconds, settings.seriesTarget)
-            }?.let { return it }
+            }
+            bestCandidate(candidates, settings.rating)?.let { return it }
         } else {
             rooms[settings.room]?.let { return it }
         }
@@ -111,6 +118,30 @@ class GameLobby(
         val game = newGame(settings.size, settings.winLength, settings.botLevel, settings.secondBotLevel, settings.turnSeconds, settings.clockSeconds, settings.seriesTarget)
         if (settings.room == null) games.add(game) else rooms[settings.room] = game
         return game
+    }
+
+    /**
+     * FIFO for an unrated joiner; a rated one prefers the candidate whose connected
+     * players sit closest in rating, and a rated candidate over an anonymous one —
+     * a named side wants a rated round, which only another named side can give.
+     * Caller holds [lock].
+     */
+    private fun bestCandidate(candidates: List<TicTacToeGame>, joinerRating: Int?): TicTacToeGame? {
+        if (joinerRating == null) return candidates.firstOrNull()
+        return candidates.minByOrNull { candidate ->
+            val state = candidate.currentState()
+            val ratings = state.connectionPlayers.mapNotNull { state.playerNames[it]?.let(ratingOf) }
+            if (ratings.isEmpty()) {
+                UNRATED_CANDIDATE
+            } else {
+                kotlin.math.abs(ratings.sum() / ratings.size.toDouble() - joinerRating)
+            }
+        }
+    }
+
+    private companion object {
+        /** Any rated candidate beats this, so the order among anonymous candidates stays FIFO. */
+        const val UNRATED_CANDIDATE = Double.MAX_VALUE
     }
 
     /** A name stays with the token that claimed it; another live session cannot take it. */

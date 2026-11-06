@@ -169,4 +169,87 @@ class GameLobbyTest {
 
         lobby.shutdownAll()
     }
+
+    @Test
+    fun `anonymous pairing prefers the closest rated player`() = runBlocking {
+        val ratings = mapOf("Аня" to 1200, "Боря" to 900, "Вера" to 1000, "Гоша" to 1000)
+        val lobby = GameLobby(reconnectGraceMs = 50, ratingOf = { ratings[it] })
+
+        val (_, gosha) = twoWaitingRatedGames(lobby, ratings)
+
+        val joiner = assertNotNull(lobby.join(FakeSession(), JoinSettings(rating = 1000)))
+        assertSame(gosha.game, joiner.game) // 1000-rated Гоша over 900-rated Боря
+
+        lobby.shutdownAll()
+    }
+
+    @Test
+    fun `an unnamed joiner keeps the first come pairing`() = runBlocking {
+        val ratings = mapOf("Аня" to 1200, "Боря" to 900, "Вера" to 1000, "Гоша" to 1000)
+        val lobby = GameLobby(reconnectGraceMs = 50, ratingOf = { ratings[it] })
+
+        val (boria, _) = twoWaitingRatedGames(lobby, ratings)
+
+        val joiner = assertNotNull(lobby.join(FakeSession(), JoinSettings()))
+        assertSame(boria.game, joiner.game) // no rating to match by: the oldest game wins
+
+        lobby.shutdownAll()
+    }
+
+    @Test
+    fun `a rated joiner prefers a rated waiting game over an anonymous one`() = runBlocking {
+        val lobby = GameLobby(reconnectGraceMs = 50, ratingOf = { name -> mapOf("Аня" to 1200, "Боря" to 900)[name] })
+
+        // game 1: Аня (1200) + Боря (900); game 2: two anonymous players
+        val sa = FakeSession()
+        val a = assertNotNull(lobby.join(sa, JoinSettings(rating = 1200)))
+        val b = assertNotNull(lobby.join(FakeSession(), JoinSettings(rating = 900)))
+        assertSame(a.game, b.game)
+        assertTrue(lobby.claimName(a.token, "Аня"))
+        a.game.setName(a.symbol!!, "Аня")
+        assertTrue(lobby.claimName(b.token, "Боря"))
+        b.game.setName(b.symbol!!, "Боря")
+
+        val sc = FakeSession()
+        val c = assertNotNull(lobby.join(sc, JoinSettings()))
+        assertNotNull(lobby.join(FakeSession(), JoinSettings())) // pairs into game 2
+
+        lobby.sessionClosed(a.token, sa)
+        lobby.sessionClosed(c.token, sc)
+        delay(150) // both graces expire: Боря (rated) and an anonymous player wait
+
+        val joiner = assertNotNull(lobby.join(FakeSession(), JoinSettings(rating = 1200)))
+        assertSame(a.game, joiner.game) // the rated waiting game beats the anonymous one
+
+        lobby.shutdownAll()
+    }
+
+    /** Two full same-settings games, one rated player of each dropped out; their games wait with Боря and Гоша. */
+    private suspend fun twoWaitingRatedGames(
+        lobby: GameLobby,
+        ratings: Map<String, Int>,
+    ): Pair<GameLobby.Joined, GameLobby.Joined> {
+        fun name(joined: GameLobby.Joined, it: String) {
+            assertTrue(lobby.claimName(joined.token, it))
+            joined.game.setName(joined.symbol!!, it)
+        }
+        val sa = FakeSession()
+        val sc = FakeSession()
+        val a = assertNotNull(lobby.join(sa, JoinSettings(rating = ratings.getValue("Аня"))))
+        val b = assertNotNull(lobby.join(FakeSession(), JoinSettings(rating = ratings.getValue("Боря"))))
+        assertSame(a.game, b.game) // paired
+        name(a, "Аня")
+        name(b, "Боря")
+        val c = assertNotNull(lobby.join(sc, JoinSettings(rating = ratings.getValue("Вера"))))
+        val d = assertNotNull(lobby.join(FakeSession(), JoinSettings(rating = ratings.getValue("Гоша"))))
+        assertSame(c.game, d.game) // a full pair leaves no waiting game: a fresh one starts
+        name(c, "Вера")
+        name(d, "Гоша")
+
+        lobby.sessionClosed(a.token, sa)
+        lobby.sessionClosed(c.token, sc)
+        delay(150) // both graces expire
+
+        return b to d
+    }
 }
