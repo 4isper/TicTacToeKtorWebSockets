@@ -240,6 +240,16 @@ class UiTextTest {
     }
 
     @Test
+    fun `profile search is phrased per language`() {
+        assertEquals("Найти игрока", searchPlaceholder())
+        assertEquals("Find a player", searchPlaceholder(Lang.EN))
+        assertEquals("Игрок не найден", profileNotFoundText())
+        assertEquals("Player not found", profileNotFoundText(Lang.EN))
+        assertEquals("Соперники", headToHeadTitle())
+        assertEquals("Head to head", headToHeadTitle(Lang.EN))
+    }
+
+    @Test
     fun `turn alert is phrased per language`() {
         assertEquals("Ваш ход!", turnAlertTitle())
         assertEquals("Соперник сделал ход", turnAlertBody())

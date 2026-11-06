@@ -45,8 +45,14 @@ class ScoreboardTest {
         val top = board.top(limit = 10).associateBy { it.name }
         val anya = top.getValue("Аня").stats
         val boris = top.getValue("Боря").stats
-        assertEquals(PlayerStats(wins = 1, losses = 0, draws = 1, rating = anya.rating, history = anya.history), anya)
-        assertEquals(PlayerStats(wins = 0, losses = 1, draws = 1, rating = boris.rating, history = boris.history), boris)
+        assertEquals(
+            PlayerStats(wins = 1, losses = 0, draws = 1, rating = anya.rating, history = anya.history, opponents = mapOf("Боря" to HeadToHead(wins = 1, draws = 1))),
+            anya,
+        )
+        assertEquals(
+            PlayerStats(wins = 0, losses = 1, draws = 1, rating = boris.rating, history = boris.history, opponents = mapOf("Аня" to HeadToHead(losses = 1, draws = 1))),
+            boris,
+        )
         assertEquals(RoundResult.DRAW, anya.history[0].result) // newest first
         assertEquals(RoundResult.WIN, anya.history[1].result)
         assertEquals("Боря", anya.history[0].opponent)
@@ -206,5 +212,23 @@ class ScoreboardTest {
         val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
 
         assertTrue(board.top(limit = 10).isEmpty())
+    }
+
+    @Test
+    fun `results against a named opponent accumulate head to head`() {
+        var stats: PlayerStats? = null
+        stats = statsAfter(stats, RoundResult.WIN, "Аня", 1L, emptyList(), 3, null, null)
+        stats = statsAfter(stats, RoundResult.LOSS, "Аня", 2L, emptyList(), 3, null, null)
+        stats = statsAfter(stats, RoundResult.DRAW, "Боря", 3L, emptyList(), 3, null, null)
+
+        assertEquals(HeadToHead(wins = 1, losses = 1), stats!!.opponents.getValue("Аня"))
+        assertEquals(HeadToHead(draws = 1), stats.opponents.getValue("Боря"))
+    }
+
+    @Test
+    fun `a practice round against a bot leaves the head to head alone`() {
+        val stats = statsAfter(null, RoundResult.WIN, opponent = null, atMs = 1L, moves = emptyList(), boardSize = 3, rating = null, ratingAfter = null)
+
+        assertTrue(stats.opponents.isEmpty())
     }
 }

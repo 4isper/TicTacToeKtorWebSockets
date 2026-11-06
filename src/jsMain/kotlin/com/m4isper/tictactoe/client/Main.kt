@@ -22,6 +22,7 @@ import com.m4isper.tictactoe.ui.copyLinkText
 import com.m4isper.tictactoe.ui.detectLang
 import com.m4isper.tictactoe.ui.drawButtonText
 import com.m4isper.tictactoe.ui.errorText
+import com.m4isper.tictactoe.ui.headToHeadTitle
 import com.m4isper.tictactoe.ui.isRoundRestartTransition
 import com.m4isper.tictactoe.ui.isTurnTransition
 import com.m4isper.tictactoe.ui.joinQuery
@@ -31,6 +32,7 @@ import com.m4isper.tictactoe.ui.noRoomsText
 import com.m4isper.tictactoe.ui.opponentLostText
 import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.parseTheme
+import com.m4isper.tictactoe.ui.profileNotFoundText
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.replayFromFragment
 import com.m4isper.tictactoe.ui.replayHintText
@@ -104,6 +106,7 @@ private class GameClient {
     )
     private val cues = Cues(preferences)
     private val turnAlert = TurnAlert(lang)
+    private val panels = SidePanels(lang, params.get("lang"))
     private val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
     private val query = joinQuery(
         mapOf(
@@ -162,85 +165,6 @@ private class GameClient {
         status.textContent = text
     }
 
-    private fun resultMark(result: String): String = when (result) {
-        "WIN" -> "✓"
-        "LOSS" -> "✗"
-        else -> "="
-    }
-
-    /** The stepper + mini board every replay view shares; a link button carries the whole game in the URL. */
-    private fun mountReplay(
-        container: HTMLElement,
-        boardSize: Int,
-        moves: List<Cell>,
-    ) {
-        var index = moves.size // start at the final position
-
-        val controls = document.createElement("div") as HTMLElement
-        val prev = document.createElement("button") as HTMLButtonElement
-        val next = document.createElement("button") as HTMLButtonElement
-        val share = document.createElement("button") as HTMLButtonElement
-        val label = document.createElement("span")
-        prev.textContent = "‹"
-        next.textContent = "›"
-        share.textContent = "🔗"
-        share.title = copyLinkText(lang)
-        controls.className = "replay-controls"
-        controls.appendChild(prev)
-        controls.appendChild(label)
-        controls.appendChild(next)
-        controls.appendChild(share)
-
-        val boardDiv = document.createElement("div") as HTMLElement
-        boardDiv.style.display = "grid"
-        boardDiv.style.setProperty("grid-template-columns", "repeat($boardSize, 26px)")
-
-        fun render() {
-            boardDiv.innerHTML = ""
-            val cells = arrayOfNulls<String>(boardSize * boardSize)
-            for (i in 0 until index) {
-                val m = moves[i]
-                cells[m.y * boardSize + m.x] = if (i % 2 == 0) "X" else "O"
-            }
-            cells.forEach { symbol ->
-                val cellDiv = document.createElement("div") as HTMLElement
-                cellDiv.className = "mini-cell"
-                cellDiv.textContent = symbol ?: ""
-                boardDiv.appendChild(cellDiv)
-            }
-            label.textContent = " $index/${moves.size} "
-            prev.disabled = index == 0
-            next.disabled = index == moves.size
-        }
-        prev.onclick = {
-            if (index > 0) index--
-            render()
-        }
-        next.onclick = {
-            if (index < moves.size) index++
-            render()
-        }
-        share.onclick = {
-            val fragment = replayToFragment(SharedReplay(boardSize, boardSize, moves))
-            window.navigator.clipboard?.writeText("${window.location.origin}${window.location.pathname}${window.location.search}#$fragment")
-            share.textContent = "✓"
-            window.setTimeout({ share.textContent = "🔗" }, 1_500)
-        }
-
-        container.appendChild(controls)
-        container.appendChild(boardDiv)
-        render()
-    }
-
-    private fun showReplay(record: dynamic, container: HTMLElement) {
-        val boardSize = ((record.boardSize ?: js("3")) as Double).toInt()
-        val moves = ((record.moves ?: js("[]")) as Array<dynamic>).map { m ->
-            Cell((m.x as Double).toInt(), (m.y as Double).toInt())
-        }
-        container.innerHTML = ""
-        mountReplay(container, boardSize, moves)
-    }
-
     /** A shared link opens nothing but the replay: the board stays idle while the game plays out. */
     private fun showSharedReplay(replay: SharedReplay) {
         val host = document.getElementById("shared-replay") as HTMLElement
@@ -272,7 +196,7 @@ private class GameClient {
         val title = document.createElement("h2")
         title.textContent = statusText(final, null, lang)
         host.appendChild(title)
-        mountReplay(host, replay.boardSize, replay.moves)
+        panels.mountReplay(host, replay.boardSize, replay.moves)
 
         val back = document.createElement("button") as HTMLButtonElement
         back.textContent = when (lang) {
@@ -292,106 +216,6 @@ private class GameClient {
         bubble.style.left = "${(10..80).random()}%"
         board.appendChild(bubble)
         window.setTimeout({ bubble.remove() }, 2_000)
-    }
-
-    private fun showProfile(name: String) {
-        try {
-            val encoded = js("encodeURIComponent(name)")
-            window.asDynamic().fetch("/player?name=" + encoded).then { response: dynamic ->
-                val profileDiv = document.getElementById("profile") as HTMLElement
-                if (response.status != 200) {
-                    profileDiv.innerHTML = ""
-                    return@then
-                }
-                response.json().then { data: dynamic ->
-                    profileDiv.innerHTML = ""
-                    val title = document.createElement("h3")
-                    title.textContent = "${data.name as String} · ${data.stats.rating as Int}"
-                    val ul = document.createElement("ul") as HTMLElement
-                    val replayDiv = document.createElement("div") as HTMLElement
-                    val history = (data.stats.history ?: js("[]")) as Array<dynamic>
-                    history.forEach { rec ->
-                        val li = document.createElement("li") as HTMLElement
-                        val opponent = rec.opponent as? String
-                        val d = Date(rec.epochMs as Double)
-                        val stamp = "${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')} " +
-                            "${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}"
-                        li.textContent = "${resultMark(rec.result as String)} ${if (opponent != null) "vs $opponent · " else ""}$stamp"
-                        li.style.cursor = "pointer"
-                        li.title = replayHintText(lang)
-                        li.onclick = { showReplay(rec, replayDiv) }
-                        ul.appendChild(li)
-                    }
-                    profileDiv.appendChild(title)
-                    profileDiv.appendChild(ul)
-                    profileDiv.appendChild(replayDiv)
-                }
-            }.catch { /* the profile is decorative */ }
-        } catch (ignored: Throwable) {
-            // decorative as well
-        }
-    }
-
-    private fun refreshLeaderboard() {
-        try {
-            window.asDynamic().fetch("/leaderboard").then { response: dynamic ->
-                response.json().then { data: dynamic ->
-                    val rows = document.getElementById("leaderboard-rows") as HTMLElement
-                    rows.innerHTML = ""
-                    val entries = data.entries as Array<dynamic>
-                    entries.forEachIndexed { index, entry ->
-                        val li = document.createElement("li") as HTMLElement
-                        li.textContent = "${index + 1}. ${entry.name} — ${entry.stats.rating} · ${entry.stats.wins} : ${entry.stats.losses} : ${entry.stats.draws}"
-                        li.style.cursor = "pointer"
-                        li.title = entry.name as String
-                        li.onclick = { showProfile(entry.name as String) }
-                        rows.appendChild(li)
-                    }
-                }
-            }.catch { /* the leaderboard is decorative */ }
-        } catch (ignored: Throwable) {
-            // decorative as well
-        }
-    }
-
-    private fun refreshRooms() {
-        try {
-            window.asDynamic().fetch("/rooms").then { response: dynamic ->
-                response.json().then { data: dynamic ->
-                    val rows = document.getElementById("rooms-rows") as HTMLElement
-                    rows.innerHTML = ""
-                    val rooms = (data.rooms ?: js("[]")) as Array<dynamic>
-                    if (rooms.isEmpty()) {
-                        val li = document.createElement("li")
-                        li.textContent = noRoomsText(lang)
-                        rows.appendChild(li)
-                        return@then
-                    }
-                    rooms.forEach { room ->
-                        val li = document.createElement("li") as HTMLElement
-                        val details = buildString {
-                            append("${room.boardSize}×${room.boardSize}")
-                            if (room.winLength != room.boardSize) append(", win ${room.winLength}")
-                            val level = room.botLevel as? String
-                            if (level != null) append(", ${botLabel(lang)}: $level")
-                            val seconds = room.turnSeconds as? Int
-                            if (seconds != null && seconds != 30) append(", ${turnSecondsText(seconds, lang)}")
-                            val series = room.seriesTarget as? Int
-                            if (series != null) append(", ${seriesTargetText(series, lang)}")
-                        }
-                        li.textContent = "${room.name} — ${room.players}/2 · $details"
-                        li.style.cursor = "pointer"
-                        li.onclick = {
-                            val langParam = params.get("lang")?.let { "&lang=$it" } ?: ""
-                            window.location.href = "${window.location.pathname}?room=${room.name}$langParam"
-                        }
-                        rows.appendChild(li)
-                    }
-                }
-            }.catch { /* the room list is decorative */ }
-        } catch (ignored: Throwable) {
-            // decorative as well
-        }
     }
 
     /** The chess clocks tick locally between server states; the player on turn is the one draining. */
@@ -546,7 +370,7 @@ private class GameClient {
             clocksDiv.style.display = "none"
         }
         cues.play(previous, state, mySymbol)
-        if ((previous == null || !previous.isRoundOver) && state.isRoundOver) refreshLeaderboard()
+        if ((previous == null || !previous.isRoundOver) && state.isRoundOver) panels.refreshLeaderboard()
     }
 
     private fun renderBoard(previous: GameState?, state: GameState) {
@@ -650,6 +474,19 @@ private class GameClient {
         }
     }
 
+    /** Enter in the leaderboard search opens that player's profile. */
+    private fun installPlayerSearch() {
+        document.getElementById("player-search")?.let { node ->
+            val search = node as HTMLInputElement
+            search.onkeydown = { event ->
+                if (event.asDynamic().key == "Enter") {
+                    val name = search.value.trim()
+                    if (name.isNotEmpty()) panels.showProfile(name)
+                }
+            }
+        }
+    }
+
     fun start() {
         copyLink?.let { button ->
             button.onclick = {
@@ -682,10 +519,12 @@ private class GameClient {
             }
         }
 
-        refreshLeaderboard()
-        window.setInterval({ refreshLeaderboard() }, 30_000) // the table also moves while nobody finishes a round
-        refreshRooms()
-        window.setInterval({ refreshRooms() }, 5_000)
+        installPlayerSearch()
+
+        panels.refreshLeaderboard()
+        window.setInterval({ panels.refreshLeaderboard() }, 30_000) // the table also moves while nobody finishes a round
+        panels.refreshRooms()
+        window.setInterval({ panels.refreshRooms() }, 5_000)
 
         turnAlert.install()
 
@@ -877,5 +716,210 @@ private class Preferences(
     private companion object {
         const val MUTED_KEY = "tictactoe-muted"
         const val THEME_KEY = "tictactoe-theme"
+    }
+}
+
+/** The decorative side panels: the room list, the leaderboard, the profiles and their replays. */
+private class SidePanels(private val lang: Lang, private val langParam: String?) {
+
+    fun refreshLeaderboard() {
+        try {
+            window.asDynamic().fetch("/leaderboard").then { response: dynamic ->
+                response.json().then { data: dynamic ->
+                    val rows = document.getElementById("leaderboard-rows") as HTMLElement
+                    rows.innerHTML = ""
+                    val entries = data.entries as Array<dynamic>
+                    entries.forEachIndexed { index, entry ->
+                        val li = document.createElement("li") as HTMLElement
+                        li.textContent = "${index + 1}. ${entry.name} — ${entry.stats.rating} · ${entry.stats.wins} : ${entry.stats.losses} : ${entry.stats.draws}"
+                        li.style.cursor = "pointer"
+                        li.title = entry.name as String
+                        li.onclick = { showProfile(entry.name as String) }
+                        rows.appendChild(li)
+                    }
+                }
+            }.catch { /* the leaderboard is decorative */ }
+        } catch (ignored: Throwable) {
+            // decorative as well
+        }
+    }
+
+    fun refreshRooms() {
+        try {
+            window.asDynamic().fetch("/rooms").then { response: dynamic ->
+                response.json().then { data: dynamic ->
+                    val rows = document.getElementById("rooms-rows") as HTMLElement
+                    rows.innerHTML = ""
+                    val rooms = (data.rooms ?: js("[]")) as Array<dynamic>
+                    if (rooms.isEmpty()) {
+                        val li = document.createElement("li")
+                        li.textContent = noRoomsText(lang)
+                        rows.appendChild(li)
+                        return@then
+                    }
+                    rooms.forEach { room ->
+                        val li = document.createElement("li") as HTMLElement
+                        val details = buildString {
+                            append("${room.boardSize}×${room.boardSize}")
+                            if (room.winLength != room.boardSize) append(", win ${room.winLength}")
+                            val level = room.botLevel as? String
+                            if (level != null) append(", ${botLabel(lang)}: $level")
+                            val seconds = room.turnSeconds as? Int
+                            if (seconds != null && seconds != 30) append(", ${turnSecondsText(seconds, lang)}")
+                            val series = room.seriesTarget as? Int
+                            if (series != null) append(", ${seriesTargetText(series, lang)}")
+                        }
+                        li.textContent = "${room.name} — ${room.players}/2 · $details"
+                        li.style.cursor = "pointer"
+                        li.onclick = {
+                            val langSuffix = langParam?.let { "&lang=$it" } ?: ""
+                            window.location.href = "${window.location.pathname}?room=${room.name}$langSuffix"
+                        }
+                        rows.appendChild(li)
+                    }
+                }
+            }.catch { /* the room list is decorative */ }
+        } catch (ignored: Throwable) {
+            // decorative as well
+        }
+    }
+
+    fun showProfile(name: String) {
+        try {
+            val encoded = js("encodeURIComponent(name)")
+            window.asDynamic().fetch("/player?name=" + encoded).then { response: dynamic ->
+                val profileDiv = document.getElementById("profile") as HTMLElement
+                if (response.status != 200) {
+                    profileDiv.innerHTML = ""
+                    val missing = document.createElement("p")
+                    missing.textContent = profileNotFoundText(lang)
+                    profileDiv.appendChild(missing)
+                    return@then
+                }
+                response.json().then { data: dynamic ->
+                    profileDiv.innerHTML = ""
+                    val title = document.createElement("h3")
+                    title.textContent = "${data.name as String} · ${data.stats.rating as Int}"
+                    val ul = document.createElement("ul") as HTMLElement
+                    val replayDiv = document.createElement("div") as HTMLElement
+                    val history = (data.stats.history ?: js("[]")) as Array<dynamic>
+                    history.forEach { rec ->
+                        val li = document.createElement("li") as HTMLElement
+                        val opponent = rec.opponent as? String
+                        val d = Date(rec.epochMs as Double)
+                        val stamp = "${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')} " +
+                            "${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}"
+                        li.textContent = "${resultMark(rec.result as String)} ${if (opponent != null) "vs $opponent · " else ""}$stamp"
+                        li.style.cursor = "pointer"
+                        li.title = replayHintText(lang)
+                        li.onclick = { showReplay(rec, replayDiv) }
+                        ul.appendChild(li)
+                    }
+                    profileDiv.appendChild(title)
+                    profileDiv.appendChild(ul)
+                    profileDiv.appendChild(replayDiv)
+                    mountHeadToHead(data, profileDiv)
+                }
+            }.catch { /* the profile is decorative */ }
+        } catch (ignored: Throwable) {
+            // decorative as well
+        }
+    }
+
+    fun showReplay(record: dynamic, container: HTMLElement) {
+        val boardSize = ((record.boardSize ?: js("3")) as Double).toInt()
+        val moves = ((record.moves ?: js("[]")) as Array<dynamic>).map { m ->
+            Cell((m.x as Double).toInt(), (m.y as Double).toInt())
+        }
+        container.innerHTML = ""
+        mountReplay(container, boardSize, moves)
+    }
+
+    /** The stepper + mini board every replay view shares; a link button carries the whole game in the URL. */
+    fun mountReplay(
+        container: HTMLElement,
+        boardSize: Int,
+        moves: List<Cell>,
+    ) {
+        var index = moves.size // start at the final position
+
+        val controls = document.createElement("div") as HTMLElement
+        val prev = document.createElement("button") as HTMLButtonElement
+        val next = document.createElement("button") as HTMLButtonElement
+        val share = document.createElement("button") as HTMLButtonElement
+        val label = document.createElement("span")
+        prev.textContent = "‹"
+        next.textContent = "›"
+        share.textContent = "🔗"
+        share.title = copyLinkText(lang)
+        controls.className = "replay-controls"
+        controls.appendChild(prev)
+        controls.appendChild(label)
+        controls.appendChild(next)
+        controls.appendChild(share)
+
+        val boardDiv = document.createElement("div") as HTMLElement
+        boardDiv.style.display = "grid"
+        boardDiv.style.setProperty("grid-template-columns", "repeat($boardSize, 26px)")
+
+        fun render() {
+            boardDiv.innerHTML = ""
+            val cells = arrayOfNulls<String>(boardSize * boardSize)
+            for (i in 0 until index) {
+                val m = moves[i]
+                cells[m.y * boardSize + m.x] = if (i % 2 == 0) "X" else "O"
+            }
+            cells.forEach { symbol ->
+                val cellDiv = document.createElement("div") as HTMLElement
+                cellDiv.className = "mini-cell"
+                cellDiv.textContent = symbol ?: ""
+                boardDiv.appendChild(cellDiv)
+            }
+            label.textContent = " $index/${moves.size} "
+            prev.disabled = index == 0
+            next.disabled = index == moves.size
+        }
+        prev.onclick = {
+            if (index > 0) index--
+            render()
+        }
+        next.onclick = {
+            if (index < moves.size) index++
+            render()
+        }
+        share.onclick = {
+            val fragment = replayToFragment(SharedReplay(boardSize, boardSize, moves))
+            window.navigator.clipboard?.writeText("${window.location.origin}${window.location.pathname}${window.location.search}#$fragment")
+            share.textContent = "✓"
+            window.setTimeout({ share.textContent = "🔗" }, 1_500)
+        }
+
+        container.appendChild(controls)
+        container.appendChild(boardDiv)
+        render()
+    }
+
+    /** The running W/L/D tally per opponent, busiest matchups first. */
+    private fun mountHeadToHead(data: dynamic, profileDiv: HTMLElement) {
+        val opponents = data.stats.opponents ?: return
+        val head = document.createElement("h3")
+        head.textContent = headToHeadTitle(lang)
+        val ul = document.createElement("ul") as HTMLElement
+        val entries = js("Object.entries(opponents)")
+        js("entries.sort(function (a, b) { return (b[1].wins + b[1].losses + b[1].draws) - (a[1].wins + a[1].losses + a[1].draws) })")
+        (entries as Array<dynamic>).forEach { pair ->
+            val li = document.createElement("li") as HTMLElement
+            val tally = pair[1]
+            li.textContent = "vs ${pair[0]} — ${tally.wins}:${tally.losses}:${tally.draws}"
+            ul.appendChild(li)
+        }
+        profileDiv.appendChild(head)
+        profileDiv.appendChild(ul)
+    }
+
+    private fun resultMark(result: String): String = when (result) {
+        "WIN" -> "✓"
+        "LOSS" -> "✗"
+        else -> "="
     }
 }

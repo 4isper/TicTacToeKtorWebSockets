@@ -66,6 +66,7 @@ class ApplicationTest {
 
         val russian = client.get("/").bodyAsText()
         assertTrue("id=\"quick-play\"" in russian, "quick play link missing, got: $russian")
+        assertTrue("id=\"player-search\"" in russian, "player search missing, got: $russian")
         assertTrue("<form action=\"/\"" in russian, "create-game form missing, got: $russian")
         listOf("room", "size", "win", "turn", "clock", "bot").forEach { field ->
             assertTrue("name=\"$field\"" in russian, "form field $field missing")

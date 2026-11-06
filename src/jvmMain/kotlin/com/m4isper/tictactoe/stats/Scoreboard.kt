@@ -19,6 +19,16 @@ data class MatchRecord(
     val ratingAfter: Int? = null,
 )
 
+/** The running W/L/D tally against one named opponent. */
+@Serializable
+data class HeadToHead(
+    val wins: Int = 0,
+    val losses: Int = 0,
+    val draws: Int = 0,
+) {
+    val games: Int get() = wins + losses + draws
+}
+
 @Serializable
 data class PlayerStats(
     val wins: Int = 0,
@@ -26,6 +36,7 @@ data class PlayerStats(
     val draws: Int = 0,
     val rating: Int = Elo.DEFAULT,
     val history: List<MatchRecord> = emptyList(),
+    val opponents: Map<String, HeadToHead> = emptyMap(),
 )
 
 @Serializable
@@ -90,7 +101,22 @@ internal fun statsAfter(
         boardSize = boardSize,
         ratingAfter = ratingAfter,
     )
-    return counted.copy(history = (listOf(record) + base.history).take(HISTORY_LIMIT))
+    return counted.copy(
+        history = (listOf(record) + base.history).take(HISTORY_LIMIT),
+        opponents = base.opponents.bump(opponent, result),
+    )
+}
+
+/** A named opponent's tally moves with the result; practice rounds against bots count nowhere. */
+private fun Map<String, HeadToHead>.bump(opponent: String?, result: RoundResult): Map<String, HeadToHead> {
+    if (opponent == null) return this
+    val tally = this[opponent] ?: HeadToHead()
+    val updated = when (result) {
+        RoundResult.WIN -> tally.copy(wins = tally.wins + 1)
+        RoundResult.LOSS -> tally.copy(losses = tally.losses + 1)
+        RoundResult.DRAW -> tally.copy(draws = tally.draws + 1)
+    }
+    return this + (opponent to updated)
 }
 
 /** JSON-file store with an atomic write (temp file + rename) so a crash mid-write keeps the old data. */

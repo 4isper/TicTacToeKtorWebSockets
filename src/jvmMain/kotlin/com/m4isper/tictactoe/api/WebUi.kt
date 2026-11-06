@@ -24,9 +24,11 @@ import com.m4isper.tictactoe.ui.fieldWinText
 import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.namePlaceholder
 import com.m4isper.tictactoe.ui.parseLang
+import com.m4isper.tictactoe.ui.profileNotFoundText
 import com.m4isper.tictactoe.ui.quickPlayText
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.roomsTitle
+import com.m4isper.tictactoe.ui.searchPlaceholder
 import com.m4isper.tictactoe.ui.seriesOffText
 import com.m4isper.tictactoe.ui.seriesTargetText
 import com.m4isper.tictactoe.ui.soundIcon
@@ -343,7 +345,7 @@ private fun CssBuilder.layoutStyles() {
         gap = 4.px
         margin = Margin(vertical = 4.px)
     }
-    rule("#name") {
+    rule("#name, #player-search") {
         backgroundColor = Color("var(--panel)")
         color = Color("var(--text)")
         borderWidth = 0.px
@@ -351,7 +353,7 @@ private fun CssBuilder.layoutStyles() {
         padding = Padding(horizontal = 10.px, vertical = 8.px)
         fontSize = 15.px
     }
-    rule("#name::placeholder") {
+    rule("#name::placeholder, #player-search::placeholder") {
         color = Color("var(--placeholder)")
     }
     rule("#set-name") {
@@ -657,6 +659,11 @@ private fun BODY.panels(pageLang: Lang, langParam: String?) {
     div {
         id = "leaderboard"
         h2 { +leaderboardTitle(pageLang) }
+        input(InputType.text) {
+            id = "player-search"
+            placeholder = searchPlaceholder(pageLang)
+            maxLength = "20"
+        }
         ul { id = "leaderboard-rows" }
     }
     div { id = "profile" }
