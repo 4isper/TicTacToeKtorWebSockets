@@ -25,6 +25,8 @@ class TicTacToeGame(
     val secondBotLevel: BotLevel? = null,
     val turnTimeoutMs: Long = 30_000L,
     val clockBudgetMs: Long? = null,
+    /** Wins needed to take the series; null keeps the score open-ended. */
+    val seriesTarget: Int? = null,
     private val onRoundOver: (playerNames: Map<PlayerSymbol, String>, winner: PlayerSymbol?, moves: List<Cell>, boardSize: Int) -> Unit = { _, _, _, _ -> },
 ) {
     private val logger = LoggerFactory.getLogger(TicTacToeGame::class.java)
@@ -36,7 +38,7 @@ class TicTacToeGame(
         val boardSize: Int,
     )
 
-    private val state = MutableStateFlow(GameState(field = GameRules.emptyField(boardSize)))
+    private val state = MutableStateFlow(GameState(field = GameRules.emptyField(boardSize), seriesTarget = seriesTarget))
     private val stateChanges = Channel<GameState>(Channel.UNLIMITED)
 
     // Recording a round writes to disk/SQLite. Keep that off the game lock: one
@@ -251,19 +253,23 @@ class TicTacToeGame(
             cells.mapIndexed { col, cell -> if (row == y && col == x) player else cell }
         }
         val win = GameRules.win(newField, winLength)
-        val newScore = if (win != null) {
-            current.score + (win.player to (current.score[win.player] ?: 0) + 1)
-        } else {
-            current.score
-        }
-        return current.copy(
+        val moved = current.copy(
             playerAtTurn = player.other,
             field = newField,
             isBoardFull = GameRules.isBoardFull(newField),
             winningPlayer = win?.player,
             winningCells = win?.cells.orEmpty(),
-            score = newScore,
             undoOfferBy = null, // the position moved on: a stale takeback offer dies
+        )
+        return if (win != null) moved.scored(win.player) else moved
+    }
+
+    /** One win for [winner]: the score bumps, and a reached series target decides the series. */
+    private fun GameState.scored(winner: PlayerSymbol): GameState {
+        val wins = (score[winner] ?: 0) + 1
+        return copy(
+            score = score + (winner to wins),
+            seriesWinner = this@TicTacToeGame.seriesTarget?.takeIf { wins >= it }?.let { winner },
         )
     }
 
@@ -359,9 +365,17 @@ class TicTacToeGame(
     }
 
     /** True when an anonymous joiner with these settings can be paired into this game. */
-    fun matches(boardSize: Int, winLength: Int, botLevel: BotLevel?, turnSeconds: Int, clockSeconds: Int = 0): Boolean = this.boardSize == boardSize &&
+    fun matches(
+        boardSize: Int,
+        winLength: Int,
+        botLevel: BotLevel?,
+        turnSeconds: Int,
+        clockSeconds: Int = 0,
+        seriesTarget: Int = 0,
+    ): Boolean = this.boardSize == boardSize &&
         this.winLength == winLength && this.botLevel == botLevel && this.turnTimeoutMs == turnSeconds * 1000L &&
-        this.clockBudgetMs == clockSeconds.takeIf { it > 0 }?.let { it * 1000L }
+        this.clockBudgetMs == clockSeconds.takeIf { it > 0 }?.let { it * 1000L } &&
+        this.seriesTarget == seriesTarget.takeIf { it > 0 }
 
     fun isFull(): Boolean = state.value.connectionPlayers.size >= 2
 
@@ -404,6 +418,7 @@ class TicTacToeGame(
         roundStarter = roundStarter.other
         roundMoves.clear()
         resetClocksLocked()
+        val seriesTaken = state.value.seriesWinner != null
         publish(
             state.value.copy(
                 playerAtTurn = roundStarter,
@@ -416,6 +431,9 @@ class TicTacToeGame(
                 undoOfferBy = null,
                 roundRestartInMs = null,
                 rematchPlayers = emptyList(),
+                // a decided series is over: the next round starts a new one from zero
+                score = if (seriesTaken) mapOf(PlayerSymbol.X to 0, PlayerSymbol.O to 0) else state.value.score,
+                seriesWinner = null,
             ),
         )
     }
@@ -493,12 +511,13 @@ class TicTacToeGame(
                 armedTurnFor = null
                 scheduleRoundRestart()
                 publish(
-                    snapshot.copy(
-                        winningPlayer = winner,
-                        winningCells = emptyList(),
-                        score = snapshot.score + (winner to (snapshot.score[winner] ?: 0) + 1),
-                        rematchPlayers = emptyList(),
-                    ),
+                    snapshot
+                        .copy(
+                            winningPlayer = winner,
+                            winningCells = emptyList(),
+                            rematchPlayers = emptyList(),
+                        )
+                        .scored(winner),
                 )
             }
         }

@@ -11,6 +11,7 @@ fun statusText(
     lang: Lang = Lang.RU,
 ): String = when (lang) {
     Lang.RU -> when {
+        state.seriesWinner != null -> "${displayName(state, state.seriesWinner)} берёт серию!"
         state.winningPlayer != null -> "Победил ${displayName(state, state.winningPlayer)}!"
         state.isDrawAgreed -> "Ничья по соглашению!"
         state.isBoardFull -> "Ничья!"
@@ -20,6 +21,7 @@ fun statusText(
     }
 
     Lang.EN -> when {
+        state.seriesWinner != null -> "${displayName(state, state.seriesWinner)} takes the series!"
         state.winningPlayer != null -> "${displayName(state, state.winningPlayer)} won!"
         state.isDrawAgreed -> "Draw by agreement!"
         state.isBoardFull -> "Draw!"
@@ -41,7 +43,14 @@ fun scoreText(
         Lang.RU -> "Счёт"
         Lang.EN -> "Score"
     }
-    return "$label — X $x : $o O"
+    val series = state.seriesTarget?.let { " · ${seriesTargetText(it, lang)}" }.orEmpty()
+    return "$label — X $x : $o O$series"
+}
+
+/** The series goal, as the score line and the room list phrase it. */
+fun seriesTargetText(target: Int, lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "до $target побед"
+    Lang.EN -> "first to $target"
 }
 
 fun errorText(
@@ -68,6 +77,7 @@ fun errorText(
         ErrorReason.INVALID_REACTION -> "Неизвестная реакция"
         ErrorReason.NOTHING_TO_UNDO -> "Отменять нечего"
         ErrorReason.INVALID_CLOCK -> "Неверное время на партию"
+        ErrorReason.INVALID_WINS -> "Неверная цель серии"
     }
 
     Lang.EN -> when (reason) {
@@ -90,6 +100,7 @@ fun errorText(
         ErrorReason.INVALID_REACTION -> "Unknown reaction"
         ErrorReason.NOTHING_TO_UNDO -> "Nothing to undo"
         ErrorReason.INVALID_CLOCK -> "Invalid game clock"
+        ErrorReason.INVALID_WINS -> "Invalid series target"
     }
 }
 

@@ -37,6 +37,7 @@ import com.m4isper.tictactoe.ui.replayHintText
 import com.m4isper.tictactoe.ui.replayToFragment
 import com.m4isper.tictactoe.ui.restartText
 import com.m4isper.tictactoe.ui.scoreText
+import com.m4isper.tictactoe.ui.seriesTargetText
 import com.m4isper.tictactoe.ui.shouldAlertTurn
 import com.m4isper.tictactoe.ui.soundCue
 import com.m4isper.tictactoe.ui.soundIcon
@@ -92,6 +93,7 @@ private class GameClient {
     private val bot = params.get("bot")
     private val turn = params.get("turn")
     private val clock = params.get("clock")
+    private val wins = params.get("wins")
 
     // an explicit lang parameter wins; otherwise the browser's own preference decides
     private val lang = params.get("lang")?.let(::parseLang) ?: detectLang(window.navigator.language)
@@ -111,6 +113,7 @@ private class GameClient {
             "bot" to bot,
             "turn" to turn,
             "clock" to clock,
+            "wins" to wins,
             "lang" to params.get("lang"),
         ),
     )
@@ -127,6 +130,7 @@ private class GameClient {
         ErrorReason.INVALID_TURN_TIME,
         ErrorReason.INVALID_BOT_LEVEL,
         ErrorReason.INVALID_CLOCK,
+        ErrorReason.INVALID_WINS,
     )
 
     private var socket: WebSocket? = null
@@ -372,6 +376,8 @@ private class GameClient {
                             if (level != null) append(", ${botLabel(lang)}: $level")
                             val seconds = room.turnSeconds as? Int
                             if (seconds != null && seconds != 30) append(", ${turnSecondsText(seconds, lang)}")
+                            val series = room.seriesTarget as? Int
+                            if (series != null) append(", ${seriesTargetText(series, lang)}")
                         }
                         li.textContent = "${room.name} — ${room.players}/2 · $details"
                         li.style.cursor = "pointer"

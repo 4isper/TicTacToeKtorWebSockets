@@ -28,6 +28,7 @@ private data class JoinSettings(
     val secondBotLevel: BotLevel?,
     val turnSeconds: Int,
     val clockSeconds: Int,
+    val seriesTarget: Int,
 )
 
 private data class BotLevels(val first: BotLevel?, val second: BotLevel?)
@@ -49,6 +50,7 @@ fun Route.socket(lobby: GameLobby) {
                 settings.secondBotLevel,
                 settings.turnSeconds,
                 settings.clockSeconds,
+                settings.seriesTarget,
             ) ?: run {
                 sendError(ErrorReason.ROOM_IS_FULL)
                 return@webSocket
@@ -168,7 +170,8 @@ private suspend fun DefaultWebSocketServerSession.parseSettings(): JoinSettings?
     val board = boardSettings() ?: return null
     val bots = botLevels() ?: return null
     val time = timeSettings() ?: return null
-    return JoinSettings(room, board.size, board.win, bots.first, bots.second, time.turn, time.clock)
+    val seriesTarget = intParam("wins", 1..GameRules.MAX_SERIES_WINS, 0, ErrorReason.INVALID_WINS) ?: return null
+    return JoinSettings(room, board.size, board.win, bots.first, bots.second, time.turn, time.clock, seriesTarget)
 }
 
 private suspend fun DefaultWebSocketServerSession.boardSettings(): BoardSettings? {

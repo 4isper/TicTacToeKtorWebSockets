@@ -24,6 +24,10 @@ data class GameState(
     val isDrawAgreed: Boolean = false,
     val undoOfferBy: PlayerSymbol? = null,
     val clocks: Map<PlayerSymbol, Long> = emptyMap(),
+    /** Wins needed to take the series, when the game set a target. */
+    val seriesTarget: Int? = null,
+    /** The player who took the series; cleared by the fresh round that starts the next one. */
+    val seriesWinner: PlayerSymbol? = null,
 ) {
     /** Nothing left to play: won, drawn out, or given up by agreement. */
     val isRoundOver: Boolean

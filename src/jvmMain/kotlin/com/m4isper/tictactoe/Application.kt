@@ -30,8 +30,16 @@ fun Application.module() {
 
 fun Application.module(
     scoreboard: Scoreboard = defaultScoreboard(),
-    newGame: (boardSize: Int, winLength: Int, botLevel: BotLevel?, secondBotLevel: BotLevel?, turnSeconds: Int, clockSeconds: Int) -> TicTacToeGame =
-        { boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds ->
+    newGame: (
+        boardSize: Int,
+        winLength: Int,
+        botLevel: BotLevel?,
+        secondBotLevel: BotLevel?,
+        turnSeconds: Int,
+        clockSeconds: Int,
+        seriesTarget: Int,
+    ) -> TicTacToeGame =
+        { boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds, seriesTarget ->
             TicTacToeGame(
                 boardSize = boardSize,
                 winLength = winLength,
@@ -39,6 +47,7 @@ fun Application.module(
                 secondBotLevel = secondBotLevel,
                 turnTimeoutMs = turnSeconds * 1000L,
                 clockBudgetMs = clockSeconds.takeIf { it > 0 }?.let { it * 1000L },
+                seriesTarget = seriesTarget.takeIf { it > 0 },
                 onRoundOver = scoreboard::recordRound,
             )
         },

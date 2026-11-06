@@ -18,14 +18,23 @@ data class RoomInfo(
     val winLength: Int,
     val botLevel: BotLevel? = null,
     val turnSeconds: Int,
+    val seriesTarget: Int? = null,
 )
 
 @Serializable
 data class RoomsResponse(val rooms: List<RoomInfo> = emptyList())
 
 class GameLobby(
-    private val newGame: (boardSize: Int, winLength: Int, botLevel: BotLevel?, secondBotLevel: BotLevel?, turnSeconds: Int, clockSeconds: Int) -> TicTacToeGame =
-        { boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds ->
+    private val newGame: (
+        boardSize: Int,
+        winLength: Int,
+        botLevel: BotLevel?,
+        secondBotLevel: BotLevel?,
+        turnSeconds: Int,
+        clockSeconds: Int,
+        seriesTarget: Int,
+    ) -> TicTacToeGame =
+        { boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds, seriesTarget ->
             TicTacToeGame(
                 boardSize = boardSize,
                 winLength = winLength,
@@ -33,6 +42,7 @@ class GameLobby(
                 secondBotLevel = secondBotLevel,
                 turnTimeoutMs = turnSeconds * 1000L,
                 clockBudgetMs = clockSeconds.takeIf { it > 0 }?.let { it * 1000L },
+                seriesTarget = seriesTarget.takeIf { it > 0 },
             )
         },
     private val reconnectGraceMs: Long = 10_000L,
@@ -68,8 +78,9 @@ class GameLobby(
         secondBotLevel: BotLevel? = null,
         turnSeconds: Int = GameRules.DEFAULT_TURN_SECONDS,
         clockSeconds: Int = 0,
+        seriesTarget: Int = 0,
     ): Joined? = synchronized(lock) {
-        val game = findOrCreateGame(room, boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds)
+        val game = findOrCreateGame(room, boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds, seriesTarget)
             ?: return null
         val symbol = game.connectPlayer(session)
         if (symbol == null && (room == null || game.spectatorCount() >= maxSpectatorsPerGame)) return null
@@ -88,16 +99,18 @@ class GameLobby(
         secondBotLevel: BotLevel?,
         turnSeconds: Int,
         clockSeconds: Int,
+        seriesTarget: Int,
     ): TicTacToeGame? {
         if (room == null) {
             // pair anonymous joiners only with identical settings, or their size/win/bot would be silently ignored
-            games.firstOrNull { !it.isFull() && it.matches(boardSize, winLength, botLevel, turnSeconds, clockSeconds) }
-                ?.let { return it }
+            games.firstOrNull {
+                !it.isFull() && it.matches(boardSize, winLength, botLevel, turnSeconds, clockSeconds, seriesTarget)
+            }?.let { return it }
         } else {
             rooms[room]?.let { return it }
         }
         if (games.size + rooms.size >= maxGames) return null
-        val game = newGame(boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds)
+        val game = newGame(boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds, seriesTarget)
         if (room == null) games.add(game) else rooms[room] = game
         return game
     }
@@ -193,6 +206,7 @@ class GameLobby(
                 winLength = game.winLength,
                 botLevel = game.botLevel,
                 turnSeconds = (game.turnTimeoutMs / 1000L).toInt(),
+                seriesTarget = game.seriesTarget,
             )
         }.sortedBy { it.name }
     }

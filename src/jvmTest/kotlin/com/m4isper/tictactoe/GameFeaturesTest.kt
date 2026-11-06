@@ -55,6 +55,29 @@ class GameFeaturesTest {
     }
 
     @Test
+    fun `a series target rides the room list and a bad one is refused`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=series&wins=3") {
+            receiveHandshake()
+
+            val body = client.get("/rooms").bodyAsText()
+            assertTrue("\"seriesTarget\":3" in body, body)
+        }
+
+        client.webSocket("/play?room=seriesbad&wins=11") {
+            val event = receiveEvent()
+            assertTrue(event is ServerEvent.Error, "expected an error, got $event")
+            assertEquals(ErrorReason.INVALID_WINS, (event as ServerEvent.Error).reason)
+        }
+    }
+
+    @Test
     fun `the page is installable`() = testApplication {
         application {
             testModule()

@@ -207,6 +207,8 @@ class UiTextTest {
         assertEquals("Ход, с", fieldTurnText())
         assertEquals("Часы, с", fieldClockText())
         assertEquals("Бот", fieldBotText())
+        assertEquals("Серия", fieldSeriesText())
+        assertEquals("нет", seriesOffText())
         assertEquals("нет", botNoneText())
         assertEquals("выставка (2 бота)", botExhibitionText())
         assertEquals("вся доска", winPlaceholderText())
@@ -223,6 +225,8 @@ class UiTextTest {
         assertEquals("Turn, s", fieldTurnText(Lang.EN))
         assertEquals("Clock, s", fieldClockText(Lang.EN))
         assertEquals("Bot", fieldBotText(Lang.EN))
+        assertEquals("Series", fieldSeriesText(Lang.EN))
+        assertEquals("none", seriesOffText(Lang.EN))
         assertEquals("none", botNoneText(Lang.EN))
         assertEquals("exhibition (2 bots)", botExhibitionText(Lang.EN))
         assertEquals("whole board", winPlaceholderText(Lang.EN))
@@ -241,5 +245,26 @@ class UiTextTest {
         assertEquals("Соперник сделал ход", turnAlertBody())
         assertEquals("Your move!", turnAlertTitle(Lang.EN))
         assertEquals("The opponent moved", turnAlertBody(Lang.EN))
+    }
+
+    @Test
+    fun `the series target rides the score line`() {
+        val state = GameState(score = mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), seriesTarget = 2)
+        assertEquals("Счёт — X 1 : 0 O · до 2 побед", scoreText(state))
+        assertEquals("Score — X 1 : 0 O · first to 2", scoreText(state, Lang.EN))
+        assertEquals("Счёт — X 0 : 0 O", scoreText(GameState()))
+    }
+
+    @Test
+    fun `a decided series is announced and a bad target has words`() {
+        val state = GameState(
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            winningPlayer = PlayerSymbol.X,
+            seriesWinner = PlayerSymbol.X,
+        )
+        assertEquals("X берёт серию!", statusText(state, PlayerSymbol.O))
+        assertEquals("X takes the series!", statusText(state, PlayerSymbol.O, Lang.EN))
+        assertEquals("Неверная цель серии", errorText(ErrorReason.INVALID_WINS))
+        assertEquals("Invalid series target", errorText(ErrorReason.INVALID_WINS, Lang.EN))
     }
 }

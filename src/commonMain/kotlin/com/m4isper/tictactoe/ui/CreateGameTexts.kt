@@ -45,6 +45,16 @@ fun fieldBotText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.EN -> "Bot"
 }
 
+fun fieldSeriesText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Серия"
+    Lang.EN -> "Series"
+}
+
+fun seriesOffText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "нет"
+    Lang.EN -> "none"
+}
+
 fun botNoneText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> "нет"
     Lang.EN -> "none"

@@ -17,6 +17,7 @@ import com.m4isper.tictactoe.ui.drawButtonText
 import com.m4isper.tictactoe.ui.fieldBotText
 import com.m4isper.tictactoe.ui.fieldClockText
 import com.m4isper.tictactoe.ui.fieldRoomText
+import com.m4isper.tictactoe.ui.fieldSeriesText
 import com.m4isper.tictactoe.ui.fieldSizeText
 import com.m4isper.tictactoe.ui.fieldTurnText
 import com.m4isper.tictactoe.ui.fieldWinText
@@ -26,6 +27,8 @@ import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.quickPlayText
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.roomsTitle
+import com.m4isper.tictactoe.ui.seriesOffText
+import com.m4isper.tictactoe.ui.seriesTargetText
 import com.m4isper.tictactoe.ui.soundIcon
 import com.m4isper.tictactoe.ui.soundTitle
 import com.m4isper.tictactoe.ui.themeIcon
@@ -702,7 +705,7 @@ private fun FORM.createBoardFields(pageLang: Lang) {
     }
 }
 
-/** Turn and game-clock budgets, plus the practice bot level. */
+/** Turn and game-clock budgets, the practice bot level and the series target. */
 private fun FORM.createTimeFields(pageLang: Lang) {
     label {
         +fieldTurnText(pageLang)
@@ -743,6 +746,22 @@ private fun FORM.createTimeFields(pageLang: Lang) {
             option {
                 value = "2"
                 +botExhibitionText(pageLang)
+            }
+        }
+    }
+    label {
+        +fieldSeriesText(pageLang)
+        select {
+            name = "wins"
+            option {
+                value = ""
+                +seriesOffText(pageLang)
+            }
+            for (target in listOf(2, 3, 5)) {
+                option {
+                    value = target.toString()
+                    +seriesTargetText(target, pageLang)
+                }
             }
         }
     }
