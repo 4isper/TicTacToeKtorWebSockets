@@ -782,10 +782,10 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
         }
     }
 
-    fun showProfile(name: String) {
+    fun showProfile(name: String, page: Int = 0) {
         try {
             val encoded = js("encodeURIComponent(name)")
-            window.asDynamic().fetch("/player?name=" + encoded).then { response: dynamic ->
+            window.asDynamic().fetch("/player?name=" + encoded + "&page=" + page).then { response: dynamic ->
                 val profileDiv = document.getElementById("profile") as HTMLElement
                 if (response.status != 200) {
                     profileDiv.innerHTML = ""
@@ -816,12 +816,35 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                     profileDiv.appendChild(title)
                     profileDiv.appendChild(ul)
                     profileDiv.appendChild(replayDiv)
+                    mountHistoryPages(data, name, profileDiv)
                     mountHeadToHead(data, profileDiv)
                 }
             }.catch { /* the profile is decorative */ }
         } catch (ignored: Throwable) {
             // decorative as well
         }
+    }
+
+    /** The history pages over twenty records a page: two glyph buttons re-fetch the slice. */
+    private fun mountHistoryPages(data: dynamic, name: String, profileDiv: HTMLElement) {
+        val pages = (data.pages ?: js("1")) as Int
+        if (pages <= 1) return
+        val current = (data.page ?: js("0")) as Int
+        val row = document.createElement("div") as HTMLElement
+        val older = document.createElement("button") as HTMLButtonElement
+        older.textContent = "‹"
+        older.disabled = current >= pages - 1
+        older.onclick = { showProfile(name, current + 1) }
+        val newer = document.createElement("button") as HTMLButtonElement
+        newer.textContent = "›"
+        newer.disabled = current <= 0
+        newer.onclick = { showProfile(name, current - 1) }
+        val label = document.createElement("span")
+        label.textContent = " ${current + 1}/$pages "
+        row.appendChild(older)
+        row.appendChild(label)
+        row.appendChild(newer)
+        profileDiv.appendChild(row)
     }
 
     fun showReplay(record: dynamic, container: HTMLElement) {

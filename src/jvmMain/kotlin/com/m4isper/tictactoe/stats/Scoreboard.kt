@@ -51,6 +51,9 @@ data class LeaderboardEntry(
 data class PlayerProfile(
     val name: String,
     val stats: PlayerStats,
+    /** Which slice of the history this profile carries; [PAGINATION] records per page. */
+    val page: Int = 0,
+    val pages: Int = 1,
 )
 
 @Serializable
@@ -76,7 +79,10 @@ interface ScoreStore {
     fun loadAll(): Map<String, PlayerStats>
 }
 
-private const val HISTORY_LIMIT = 20
+private const val HISTORY_LIMIT = 200
+
+/** How many history records one profile page carries; the wire keeps up to [HISTORY_LIMIT]. */
+const val PAGINATION = 20
 
 /** The shared result math: bump the counter, adopt the rating, prepend the record, cap the history. */
 internal fun statsAfter(
@@ -248,11 +254,16 @@ class Scoreboard(private val store: ScoreStore) {
         return xNext to oNext
     }
 
-    fun profile(name: String?): PlayerProfile? = synchronized(lock) {
+    /** The profile with its history sliced to [PAGINATION] records; a page outside the range clamps. */
+    fun profile(name: String?, page: Int = 0): PlayerProfile? = synchronized(lock) {
         if (name.isNullOrBlank()) {
             null
         } else {
-            store.loadAll()[name]?.let { PlayerProfile(name, it) }
+            val stats = store.loadAll()[name] ?: return null
+            val pages = maxOf(1, (stats.history.size + PAGINATION - 1) / PAGINATION)
+            val safePage = page.coerceIn(0, pages - 1)
+            val sliced = stats.copy(history = stats.history.drop(safePage * PAGINATION).take(PAGINATION))
+            PlayerProfile(name, sliced, safePage, pages)
         }
     }
 

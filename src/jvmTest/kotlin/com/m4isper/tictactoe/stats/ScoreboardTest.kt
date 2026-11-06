@@ -130,17 +130,43 @@ class ScoreboardTest {
     }
 
     @Test
-    fun `history keeps the opponent and caps at twenty entries`() {
+    fun `history keeps the opponent and caps at two hundred entries`() {
+        val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
+
+        repeat(210) { board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), PlayerSymbol.X) }
+
+        val stats = board.profile("Аня")!!.stats
+        assertEquals(210, stats.wins)
+        assertEquals(20, stats.history.size) // one page of the sliced profile
+        assertEquals(10, board.profile("Аня")!!.pages) // 210 played, 200 kept: ten full pages, the cap held
+        assertEquals(RoundResult.WIN, stats.history.first().result)
+        assertEquals("Боря", stats.history.first().opponent)
+        assertEquals("Аня", board.profile("Боря")!!.stats.history.first().opponent) // the loser's opponent is the winner
+    }
+
+    @Test
+    fun `profile history pages through twenty records`() {
         val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
 
         repeat(25) { board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), PlayerSymbol.X) }
 
-        val stats = board.profile("Аня")!!.stats
-        assertEquals(25, stats.wins)
-        assertEquals(20, stats.history.size)
-        assertEquals(RoundResult.WIN, stats.history.first().result)
-        assertEquals("Боря", stats.history.first().opponent)
-        assertEquals("Аня", board.profile("Боря")!!.stats.history.first().opponent) // the loser's opponent is the winner
+        val first = board.profile("Аня")
+        assertEquals(20, first!!.stats.history.size)
+        assertEquals(0, first.page)
+        assertEquals(2, first.pages)
+
+        val second = board.profile("Аня", page = 1)
+        assertEquals(5, second!!.stats.history.size) // the oldest remainder
+        assertEquals(1, second.page)
+        assertEquals(2, second.pages)
+
+        // a page past the end clamps to the last one; a bad one falls back to the first
+        val clamped = board.profile("Аня", page = 9)!!
+        assertEquals(5, clamped.stats.history.size)
+        assertEquals(1, clamped.page)
+        val fallback = board.profile("Аня", page = -1)!!
+        assertEquals(20, fallback.stats.history.size)
+        assertEquals(0, fallback.page)
     }
 
     @Test

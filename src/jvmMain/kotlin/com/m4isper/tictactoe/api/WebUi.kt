@@ -179,7 +179,8 @@ private fun Route.apiRoutes(
     }
 
     get("/player") {
-        val profile = scoreboard.profile(call.request.queryParameters["name"])
+        val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 0
+        val profile = scoreboard.profile(call.request.queryParameters["name"], page)
         if (profile == null) {
             call.respond(HttpStatusCode.NotFound)
         } else {
