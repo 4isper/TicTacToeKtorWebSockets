@@ -35,6 +35,8 @@ data class PlayerStats(
     val losses: Int = 0,
     val draws: Int = 0,
     val rating: Int = Elo.DEFAULT,
+    /** Rated rounds so far — the Elo step cools down as this grows. */
+    val ratedGames: Int = 0,
     val history: List<MatchRecord> = emptyList(),
     val opponents: Map<String, HeadToHead> = emptyMap(),
 )
@@ -93,6 +95,8 @@ internal fun statsAfter(
         RoundResult.LOSS -> base.copy(losses = base.losses + 1)
         RoundResult.DRAW -> base.copy(draws = base.draws + 1)
     }.copy(rating = rating ?: base.rating)
+        // a rated round is the one whose rating moved — both sides were named
+        .copy(ratedGames = if (rating != null) base.ratedGames + 1 else base.ratedGames)
     val record = MatchRecord(
         epochMs = atMs,
         opponent = opponent,
@@ -238,7 +242,10 @@ class Scoreboard(private val store: ScoreStore) {
             PlayerSymbol.O -> 0.0 to 1.0
             null -> 0.5 to 0.5
         }
-        return Elo.next(xRating, oRating, xScore) to Elo.next(oRating, xRating, oScore)
+        // each side's step follows its own rated-game count: a newcomer climbs faster
+        val xNext = Elo.next(xRating, oRating, xScore, k = Elo.kFor(all[xName]?.ratedGames ?: 0))
+        val oNext = Elo.next(oRating, xRating, oScore, k = Elo.kFor(all[oName]?.ratedGames ?: 0))
+        return xNext to oNext
     }
 
     fun profile(name: String?): PlayerProfile? = synchronized(lock) {

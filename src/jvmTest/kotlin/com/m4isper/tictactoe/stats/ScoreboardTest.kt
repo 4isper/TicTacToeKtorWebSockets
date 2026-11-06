@@ -46,11 +46,11 @@ class ScoreboardTest {
         val anya = top.getValue("Аня").stats
         val boris = top.getValue("Боря").stats
         assertEquals(
-            PlayerStats(wins = 1, losses = 0, draws = 1, rating = anya.rating, history = anya.history, opponents = mapOf("Боря" to HeadToHead(wins = 1, draws = 1))),
+            PlayerStats(wins = 1, losses = 0, draws = 1, rating = anya.rating, ratedGames = 2, history = anya.history, opponents = mapOf("Боря" to HeadToHead(wins = 1, draws = 1))),
             anya,
         )
         assertEquals(
-            PlayerStats(wins = 0, losses = 1, draws = 1, rating = boris.rating, history = boris.history, opponents = mapOf("Аня" to HeadToHead(losses = 1, draws = 1))),
+            PlayerStats(wins = 0, losses = 1, draws = 1, rating = boris.rating, ratedGames = 2, history = boris.history, opponents = mapOf("Аня" to HeadToHead(losses = 1, draws = 1))),
             boris,
         )
         assertEquals(RoundResult.DRAW, anya.history[0].result) // newest first
@@ -75,14 +75,33 @@ class ScoreboardTest {
         val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
 
         board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), winner = PlayerSymbol.X)
-        assertEquals(1016, board.profile("Аня")!!.stats.rating)
-        assertEquals(984, board.profile("Боря")!!.stats.rating)
-        assertEquals(1016, board.profile("Аня")!!.stats.history.single().ratingAfter)
+        assertEquals(1020, board.profile("Аня")!!.stats.rating) // a newcomer's first win is worth K/2 = 20
+        assertEquals(980, board.profile("Боря")!!.stats.rating)
+        assertEquals(1020, board.profile("Аня")!!.stats.history.single().ratingAfter)
 
         board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), winner = null)
-        // Аня (1016) drew the weaker Боря (984): a small loss each
-        assertTrue(board.profile("Аня")!!.stats.rating < 1016)
-        assertTrue(board.profile("Боря")!!.stats.rating > 984)
+        // Аня (1020) drew the weaker Боря (980): a small loss each
+        assertTrue(board.profile("Аня")!!.stats.rating < 1020)
+        assertTrue(board.profile("Боря")!!.stats.rating > 980)
+    }
+
+    @Test
+    fun `a newcomer trades more points than a veteran at equal ratings`() {
+        val file = Files.createTempFile("scoreboard", ".json").toFile()
+        val store = JsonScoreStore(file)
+        // Вера has settled: thirty rated rounds held her at 1000, so her k is the veteran's 16
+        repeat(30) { store.addResult("Вера", RoundResult.WIN, opponent = "Гоша", rating = 1000, ratingAfter = 1000) }
+        val board = Scoreboard(store)
+
+        board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Вера"), winner = PlayerSymbol.X)
+
+        val anya = board.profile("Аня")!!.stats
+        val vera = board.profile("Вера")!!.stats
+        assertEquals(1020, anya.rating) // 1000 + 40/2 — the newcomer's step
+        assertEquals(992, vera.rating) // 1000 - 16/2 — the veteran's step
+        assertEquals(1, anya.ratedGames)
+        assertEquals(31, vera.ratedGames)
+        file.delete()
     }
 
     @Test
@@ -179,8 +198,10 @@ class ScoreboardTest {
         var x = Elo.DEFAULT
         var o = Elo.DEFAULT
         repeat(rounds) {
-            val nextX = Elo.next(x, o, 1.0)
-            val nextO = Elo.next(o, x, 0.0)
+            // the two sides only ever play each other, so their k cools down together
+            val k = Elo.kFor(it)
+            val nextX = Elo.next(x, o, 1.0, k = k)
+            val nextO = Elo.next(o, x, 0.0, k = k)
             x = nextX
             o = nextO
         }

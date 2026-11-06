@@ -130,8 +130,8 @@ class ApplicationTest {
         assertEquals(HttpStatusCode.OK, profile.status)
         assertTrue("Боря" in profile.bodyAsText(), "history should name the opponent: ${profile.bodyAsText()}")
         assertTrue("WIN" in profile.bodyAsText())
-        assertTrue("\"rating\":1016" in profile.bodyAsText(), "the win should pay elo: ${profile.bodyAsText()}")
-        assertTrue("\"ratingAfter\":1016" in profile.bodyAsText())
+        assertTrue("\"rating\":1020" in profile.bodyAsText(), "the win should pay elo: ${profile.bodyAsText()}")
+        assertTrue("\"ratingAfter\":1020" in profile.bodyAsText())
         assertTrue(
             "\"moves\":[{\"x\":0,\"y\":0},{\"x\":1,\"y\":0},{\"x\":0,\"y\":1},{\"x\":1,\"y\":1},{\"x\":0,\"y\":2}]" in profile.bodyAsText(),
             "the record should carry the replay: ${profile.bodyAsText()}",
