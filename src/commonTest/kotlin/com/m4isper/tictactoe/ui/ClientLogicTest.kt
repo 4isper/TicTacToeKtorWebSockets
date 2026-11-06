@@ -113,6 +113,26 @@ class ClientLogicTest {
         assertFalse(isTurnTransition(oTurn, oTurn.copy(turnRemainingMs = 28_000))) // same turn: keep the deadline
         assertFalse(isTurnTransition(xTurn, xTurn)) // same turn
     }
+
+    @Test
+    fun `my turn in a running game asks for a background alert`() {
+        val state = GameState(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O), playerAtTurn = PlayerSymbol.X)
+        assertTrue(shouldAlertTurn(state, PlayerSymbol.X))
+        assertFalse(shouldAlertTurn(state, PlayerSymbol.O))
+        assertFalse(shouldAlertTurn(state, null)) // a spectator never moves
+    }
+
+    @Test
+    fun `a finished round or a missing opponent never alerts`() {
+        val won = GameState(
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            playerAtTurn = PlayerSymbol.X,
+            winningPlayer = PlayerSymbol.X,
+        )
+        assertFalse(shouldAlertTurn(won, PlayerSymbol.X))
+        val waiting = GameState(connectionPlayers = listOf(PlayerSymbol.X), playerAtTurn = PlayerSymbol.X)
+        assertFalse(shouldAlertTurn(waiting, PlayerSymbol.X))
+    }
 }
 
 private object Boards {

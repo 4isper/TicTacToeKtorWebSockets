@@ -234,4 +234,12 @@ class UiTextTest {
         assertEquals("Быстрая игра", quickPlayText())
         assertEquals("Quick play", quickPlayText(Lang.EN))
     }
+
+    @Test
+    fun `turn alert is phrased per language`() {
+        assertEquals("Ваш ход!", turnAlertTitle())
+        assertEquals("Соперник сделал ход", turnAlertBody())
+        assertEquals("Your move!", turnAlertTitle(Lang.EN))
+        assertEquals("The opponent moved", turnAlertBody(Lang.EN))
+    }
 }

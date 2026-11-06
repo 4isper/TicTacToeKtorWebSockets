@@ -37,6 +37,7 @@ import com.m4isper.tictactoe.ui.replayHintText
 import com.m4isper.tictactoe.ui.replayToFragment
 import com.m4isper.tictactoe.ui.restartText
 import com.m4isper.tictactoe.ui.scoreText
+import com.m4isper.tictactoe.ui.shouldAlertTurn
 import com.m4isper.tictactoe.ui.soundCue
 import com.m4isper.tictactoe.ui.soundIcon
 import com.m4isper.tictactoe.ui.soundTitle
@@ -44,6 +45,8 @@ import com.m4isper.tictactoe.ui.statusText
 import com.m4isper.tictactoe.ui.themeIcon
 import com.m4isper.tictactoe.ui.themeTitle
 import com.m4isper.tictactoe.ui.timerSuffix
+import com.m4isper.tictactoe.ui.turnAlertBody
+import com.m4isper.tictactoe.ui.turnAlertTitle
 import com.m4isper.tictactoe.ui.turnSecondsText
 import com.m4isper.tictactoe.ui.undoButtonText
 import kotlinx.browser.document
@@ -97,6 +100,8 @@ private class GameClient {
         document.getElementById("theme") as HTMLButtonElement,
         lang,
     )
+    private val cues = Cues(preferences)
+    private val turnAlert = TurnAlert(lang)
     private val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
     private val query = joinQuery(
         mapOf(
@@ -383,59 +388,6 @@ private class GameClient {
         }
     }
 
-    // -- sound: tiny synthesized cues, never a game breaker --
-    private var audioCtx: dynamic = null
-
-    private fun ensureAudio() {
-        if (audioCtx != null) return
-        try {
-            audioCtx = js("new (window.AudioContext || window.webkitAudioContext)()")
-        } catch (ignored: Throwable) {
-            audioCtx = null
-        }
-    }
-
-    private fun beep(freq: Double, durationMs: Int, type: String = "sine") {
-        if (preferences.muted) return
-        try {
-            ensureAudio()
-            val ctx = audioCtx ?: return
-            val osc = ctx.createOscillator()
-            val gain = ctx.createGain()
-            osc.type = type
-            osc.frequency.value = freq
-            gain.gain.value = 0.04
-            osc.connect(gain)
-            gain.connect(ctx.destination)
-            osc.start()
-            osc.stop(ctx.currentTime + durationMs / 1000.0)
-        } catch (ignored: Throwable) {
-            // sound is decorative; never break the game over it
-        }
-    }
-
-    private fun playStateSounds(previous: GameState?, state: GameState) {
-        when (soundCue(previous, state, mySymbol)) {
-            SoundCue.WIN -> {
-                beep(523.0, 120)
-                window.setTimeout({ beep(659.0, 120) }, 120)
-                window.setTimeout({ beep(784.0, 220) }, 240)
-            }
-
-            SoundCue.DRAW -> beep(220.0, 250, "triangle")
-
-            SoundCue.MOVE_MINE -> beep(660.0, 60)
-
-            // my stone: a brighter blip
-
-            SoundCue.MOVE_OPPONENT -> beep(440.0, 90, "triangle")
-
-            // the opponent's: a lower knock
-
-            SoundCue.NONE -> Unit
-        }
-    }
-
     /** The chess clocks tick locally between server states; the player on turn is the one draining. */
     private fun renderClocks() {
         val current = lastState ?: return
@@ -452,6 +404,7 @@ private class GameClient {
         val previous = lastState
         lastState = state
         updateCountdowns(previous, state)
+        turnAlert.onState(previous, state, mySymbol)
         updateActionButtons(state)
         updateStatus(previous, state)
         renderBoard(previous, state)
@@ -586,7 +539,7 @@ private class GameClient {
             clocksSnapshot = emptyMap()
             clocksDiv.style.display = "none"
         }
-        playStateSounds(previous, state)
+        cues.play(previous, state, mySymbol)
         if ((previous == null || !previous.isRoundOver) && state.isRoundOver) refreshLeaderboard()
     }
 
@@ -620,7 +573,7 @@ private class GameClient {
                 cellButton.disabled =
                     cell != null || mySymbol == null || state.connectionPlayers.size < 2 || state.playerAtTurn != mySymbol
                 cellButton.onclick = {
-                    ensureAudio()
+                    cues.unlock()
                     send(ClientMessage.MakeTurn(x = x, y = y))
                 }
                 rowDiv.appendChild(cellButton)
@@ -676,6 +629,7 @@ private class GameClient {
         socket?.onclose = {
             stopOpponentLostPlate()
             stopCountdowns()
+            turnAlert.stop()
             if (fatal) {
                 // the join was rejected: the reason is in the error box, there is nothing to reconnect to
                 showStatus("")
@@ -727,11 +681,143 @@ private class GameClient {
         refreshRooms()
         window.setInterval({ refreshRooms() }, 5_000)
 
+        turnAlert.install()
+
         val sharedReplay = replayFromFragment(window.location.hash.removePrefix("#"))
         if (sharedReplay != null) {
             showSharedReplay(sharedReplay) // the link carries the whole game: no connection needed
         } else {
             connect()
+        }
+    }
+}
+
+/** Tiny synthesized Web Audio cues: my move, the opponent's, wins and draws — never a game breaker. */
+private class Cues(private val preferences: Preferences) {
+    private var audioCtx: dynamic = null
+
+    /** The first user gesture unlocks audio playback in a browser. */
+    fun unlock() {
+        if (audioCtx != null) return
+        try {
+            audioCtx = js("new (window.AudioContext || window.webkitAudioContext)()")
+        } catch (ignored: Throwable) {
+            audioCtx = null
+        }
+    }
+
+    fun play(previous: GameState?, state: GameState, mySymbol: PlayerSymbol?) {
+        when (soundCue(previous, state, mySymbol)) {
+            SoundCue.WIN -> {
+                beep(523.0, 120)
+                window.setTimeout({ beep(659.0, 120) }, 120)
+                window.setTimeout({ beep(784.0, 220) }, 240)
+            }
+
+            SoundCue.DRAW -> beep(220.0, 250, "triangle")
+
+            SoundCue.MOVE_MINE -> beep(660.0, 60)
+
+            // my stone: a brighter blip
+
+            SoundCue.MOVE_OPPONENT -> beep(440.0, 90, "triangle")
+
+            // the opponent's: a lower knock
+
+            SoundCue.NONE -> Unit
+        }
+    }
+
+    private fun beep(freq: Double, durationMs: Int, type: String = "sine") {
+        if (preferences.muted) return
+        try {
+            unlock()
+            val ctx = audioCtx ?: return
+            val osc = ctx.createOscillator()
+            val gain = ctx.createGain()
+            osc.type = type
+            osc.frequency.value = freq
+            gain.gain.value = 0.04
+            osc.connect(gain)
+            gain.connect(ctx.destination)
+            osc.start()
+            osc.stop(ctx.currentTime + durationMs / 1000.0)
+        } catch (ignored: Throwable) {
+            // sound is decorative; never break the game over it
+        }
+    }
+}
+
+/** The hidden-tab alert: a flashing tab title, a buzz and a system notification while it is your move. */
+private class TurnAlert(private val lang: Lang) {
+    private var timer: Int? = null
+    private val baseTitle = window.document.title
+    private var permissionAsked = false
+
+    /** Notification permission needs one user gesture; the first click anywhere is as good as any. */
+    fun install() {
+        document.addEventListener("pointerdown", {
+            if (permissionAsked) return@addEventListener
+            permissionAsked = true
+            try {
+                window.asDynamic().Notification?.requestPermission()
+            } catch (_: Throwable) {
+            }
+        })
+        // a returning tab immediately gets its normal title back
+        document.addEventListener("visibilitychange", {
+            if (window.document.asDynamic().hidden as Boolean) return@addEventListener
+            stop()
+        })
+    }
+
+    /** The page is hidden and it is my move: flash the title; a fresh turn also buzzes and notifies. */
+    fun onState(previous: GameState?, state: GameState, mySymbol: PlayerSymbol?) {
+        val hidden = window.document.asDynamic().hidden as Boolean
+        if (shouldAlertTurn(state, mySymbol) && hidden) {
+            startFlash()
+            if (isTurnTransition(previous, state)) {
+                vibrate()
+                notify()
+            }
+        } else {
+            stop()
+        }
+    }
+
+    /** The connection is gone: no turn is coming, the title goes back to normal. */
+    fun stop() {
+        timer?.let { window.clearInterval(it) }
+        timer = null
+        window.document.title = baseTitle
+    }
+
+    private fun startFlash() {
+        if (timer != null) return
+        val alert = turnAlertTitle(lang)
+        var alerted = false
+        window.document.title = "$alert $baseTitle"
+        timer = window.setInterval({
+            alerted = !alerted
+            window.document.title = if (alerted) baseTitle else "$alert $baseTitle"
+        }, 1_000)
+    }
+
+    private fun vibrate() {
+        try {
+            js("window.navigator.vibrate && window.navigator.vibrate(200)")
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun notify() {
+        try {
+            val notif = window.asDynamic().Notification ?: return
+            if (notif.permission != "granted") return
+            val title = turnAlertTitle(lang)
+            val body = turnAlertBody(lang)
+            js("new Notification(title, { body: body })")
+        } catch (_: Throwable) {
         }
     }
 }
