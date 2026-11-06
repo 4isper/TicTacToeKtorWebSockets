@@ -196,4 +196,42 @@ class UiTextTest {
         assertEquals("Play again", rematchButtonText(waiting = false, Lang.EN))
         assertEquals("Copy link", copyLinkText(Lang.EN))
     }
+
+    @Test
+    fun `create-game form texts in russian`() {
+        assertEquals("Создать игру", createGameTitle())
+        assertEquals("Создать", createGameSubmit())
+        assertEquals("Комната", fieldRoomText())
+        assertEquals("Доска", fieldSizeText())
+        assertEquals("Линия", fieldWinText())
+        assertEquals("Ход, с", fieldTurnText())
+        assertEquals("Часы, с", fieldClockText())
+        assertEquals("Бот", fieldBotText())
+        assertEquals("нет", botNoneText())
+        assertEquals("выставка (2 бота)", botExhibitionText())
+        assertEquals("вся доска", winPlaceholderText())
+        assertEquals("выкл", clockOffText())
+    }
+
+    @Test
+    fun `create-game form texts in english`() {
+        assertEquals("Create a game", createGameTitle(Lang.EN))
+        assertEquals("Create", createGameSubmit(Lang.EN))
+        assertEquals("Room", fieldRoomText(Lang.EN))
+        assertEquals("Board", fieldSizeText(Lang.EN))
+        assertEquals("Win line", fieldWinText(Lang.EN))
+        assertEquals("Turn, s", fieldTurnText(Lang.EN))
+        assertEquals("Clock, s", fieldClockText(Lang.EN))
+        assertEquals("Bot", fieldBotText(Lang.EN))
+        assertEquals("none", botNoneText(Lang.EN))
+        assertEquals("exhibition (2 bots)", botExhibitionText(Lang.EN))
+        assertEquals("whole board", winPlaceholderText(Lang.EN))
+        assertEquals("off", clockOffText(Lang.EN))
+    }
+
+    @Test
+    fun `quick play text follows the language`() {
+        assertEquals("Быстрая игра", quickPlayText())
+        assertEquals("Quick play", quickPlayText(Lang.EN))
+    }
 }

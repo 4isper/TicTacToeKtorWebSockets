@@ -1,16 +1,29 @@
 package com.m4isper.tictactoe.api
 
+import com.m4isper.tictactoe.domain.GameRules
 import com.m4isper.tictactoe.protocol.REACTION_EMOJIS
 import com.m4isper.tictactoe.stats.LeaderboardResponse
 import com.m4isper.tictactoe.stats.Scoreboard
 import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.ThemeMode
+import com.m4isper.tictactoe.ui.botExhibitionText
+import com.m4isper.tictactoe.ui.botNoneText
+import com.m4isper.tictactoe.ui.clockOffText
 import com.m4isper.tictactoe.ui.copyLinkText
+import com.m4isper.tictactoe.ui.createGameSubmit
+import com.m4isper.tictactoe.ui.createGameTitle
 import com.m4isper.tictactoe.ui.detectLang
 import com.m4isper.tictactoe.ui.drawButtonText
+import com.m4isper.tictactoe.ui.fieldBotText
+import com.m4isper.tictactoe.ui.fieldClockText
+import com.m4isper.tictactoe.ui.fieldRoomText
+import com.m4isper.tictactoe.ui.fieldSizeText
+import com.m4isper.tictactoe.ui.fieldTurnText
+import com.m4isper.tictactoe.ui.fieldWinText
 import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.namePlaceholder
 import com.m4isper.tictactoe.ui.parseLang
+import com.m4isper.tictactoe.ui.quickPlayText
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.roomsTitle
 import com.m4isper.tictactoe.ui.soundIcon
@@ -18,6 +31,7 @@ import com.m4isper.tictactoe.ui.soundTitle
 import com.m4isper.tictactoe.ui.themeIcon
 import com.m4isper.tictactoe.ui.themeTitle
 import com.m4isper.tictactoe.ui.undoButtonText
+import com.m4isper.tictactoe.ui.winPlaceholderText
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.html.*
@@ -27,22 +41,32 @@ import io.ktor.server.routing.*
 import kotlinx.css.*
 import kotlinx.css.properties.*
 import kotlinx.html.BODY
+import kotlinx.html.FORM
+import kotlinx.html.FormMethod
 import kotlinx.html.HEAD
 import kotlinx.html.HTML
 import kotlinx.html.InputType
+import kotlinx.html.a
 import kotlinx.html.body
 import kotlinx.html.button
 import kotlinx.html.div
+import kotlinx.html.form
 import kotlinx.html.h1
 import kotlinx.html.h2
 import kotlinx.html.head
+import kotlinx.html.hiddenInput
 import kotlinx.html.id
 import kotlinx.html.input
+import kotlinx.html.label
 import kotlinx.html.lang
 import kotlinx.html.link
 import kotlinx.html.meta
+import kotlinx.html.numberInput
+import kotlinx.html.option
 import kotlinx.html.p
 import kotlinx.html.script
+import kotlinx.html.select
+import kotlinx.html.textInput
 import kotlinx.html.title
 import kotlinx.html.ul
 import kotlinx.serialization.SerialName
@@ -214,9 +238,10 @@ private fun Route.pageRoute() {
     get("/") {
         val room = call.request.queryParameters["room"]
         // an explicit lang parameter wins; otherwise the browser's own preference decides
-        val pageLang = call.request.queryParameters["lang"]?.let(::parseLang)
+        val langParam = call.request.queryParameters["lang"]?.takeIf { it.isNotBlank() }
+        val pageLang = langParam?.let(::parseLang)
             ?: detectLang(call.request.headers[HttpHeaders.AcceptLanguage])
-        call.respondHtml { page(pageLang, room) }
+        call.respondHtml { page(pageLang, room, langParam) }
     }
 }
 
@@ -224,6 +249,7 @@ private fun CssBuilder.styles() {
     themeStyles()
     layoutStyles()
     boardStyles()
+    createStyles()
     effectStyles()
 }
 
@@ -396,6 +422,55 @@ private fun CssBuilder.boardStyles() {
     }
 }
 
+/** The create-game form and the quick-play link. */
+private fun CssBuilder.createStyles() {
+    rule("#quick-play") {
+        display = Display.inlineBlock
+        margin = Margin(vertical = 6.px)
+        padding = Padding(horizontal = 14.px, vertical = 8.px)
+        fontSize = 15.px
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        borderRadius = 8.px
+        textDecoration = TextDecoration.none
+    }
+    rule("#create") {
+        margin = Margin(vertical = 12.px)
+    }
+    rule("#create form") {
+        display = Display.flex
+        flexWrap = FlexWrap.wrap
+        gap = 8.px
+        alignItems = Align.flexEnd
+        margin = Margin(vertical = 8.px)
+    }
+    rule("#create label") {
+        display = Display.flex
+        flexDirection = FlexDirection.column
+        gap = 2.px
+        fontSize = 12.px
+        color = Color("var(--muted)")
+    }
+    rule("#create input, #create select") {
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        borderWidth = 0.px
+        borderRadius = 8.px
+        padding = Padding(horizontal = 8.px, vertical = 6.px)
+        fontSize = 14.px
+        width = 96.px
+    }
+    rule("#create button") {
+        padding = Padding(horizontal = 14.px, vertical = 8.px)
+        fontSize = 15.px
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        borderWidth = 0.px
+        borderRadius = 8.px
+        cursor = Cursor.pointer
+    }
+}
+
 private fun CssBuilder.effectStyles() {
     rule("#board") {
         position = Position.relative
@@ -450,17 +525,17 @@ private fun CssBuilder.effectStyles() {
     }
 }
 
-private fun HTML.page(pageLang: Lang, room: String?) {
+private fun HTML.page(pageLang: Lang, room: String?, langParam: String?) {
     lang = when (pageLang) {
         Lang.RU -> "ru"
         Lang.EN -> "en"
     }
     head { pageHead(pageLang) }
     body {
-        pageHeading(pageLang, room)
+        pageHeading(pageLang, room, langParam)
         controls(pageLang)
         boardArea()
-        panels(pageLang)
+        panels(pageLang, langParam)
         script(src = "/static/app.js") {}
     }
 }
@@ -483,12 +558,16 @@ private fun HEAD.pageHead(pageLang: Lang) {
     link(rel = "stylesheet", href = "/styles.css")
 }
 
-private fun BODY.pageHeading(pageLang: Lang, room: String?) {
+private fun BODY.pageHeading(pageLang: Lang, room: String?, langParam: String?) {
     h1 {
         +"${when (pageLang) {
             Lang.RU -> "Крестики-нолики"
             Lang.EN -> "Tic-tac-toe"
         }}"
+    }
+    a(href = if (langParam == null) "/" else "/?lang=$langParam") {
+        id = "quick-play"
+        +quickPlayText(pageLang)
     }
     room?.let {
         p {
@@ -556,7 +635,8 @@ private fun BODY.boardArea() {
     }
 }
 
-private fun BODY.panels(pageLang: Lang) {
+private fun BODY.panels(pageLang: Lang, langParam: String?) {
+    createGameForm(pageLang, langParam)
     div {
         id = "reactions"
         REACTION_EMOJIS.forEach { emoji ->
@@ -577,4 +657,93 @@ private fun BODY.panels(pageLang: Lang) {
         ul { id = "leaderboard-rows" }
     }
     div { id = "profile" }
+}
+
+/** A GET form that composes a join link: the browser navigates, the client drops blank fields. */
+private fun BODY.createGameForm(pageLang: Lang, langParam: String?) {
+    div {
+        id = "create"
+        h2 { +createGameTitle(pageLang) }
+        form(action = "/", method = FormMethod.get) {
+            langParam?.let { hiddenInput(name = "lang") { value = it } }
+            createBoardFields(pageLang)
+            createTimeFields(pageLang)
+            button {
+                +createGameSubmit(pageLang)
+            }
+        }
+    }
+}
+
+/** Room, board and win line — the same names the room link and /play accept. */
+private fun FORM.createBoardFields(pageLang: Lang) {
+    label {
+        +fieldRoomText(pageLang)
+        textInput(name = "room") {
+            maxLength = "32"
+            pattern = "[A-Za-z0-9_-]{1,32}"
+        }
+    }
+    label {
+        +fieldSizeText(pageLang)
+        numberInput(name = "size") {
+            min = GameRules.MIN_BOARD_SIZE.toString()
+            max = GameRules.MAX_BOARD_SIZE.toString()
+            value = GameRules.DEFAULT_BOARD_SIZE.toString()
+        }
+    }
+    label {
+        +fieldWinText(pageLang)
+        numberInput(name = "win") {
+            min = GameRules.MIN_WIN_LENGTH.toString()
+            max = GameRules.MAX_BOARD_SIZE.toString()
+            placeholder = winPlaceholderText(pageLang)
+        }
+    }
+}
+
+/** Turn and game-clock budgets, plus the practice bot level. */
+private fun FORM.createTimeFields(pageLang: Lang) {
+    label {
+        +fieldTurnText(pageLang)
+        numberInput(name = "turn") {
+            min = GameRules.MIN_TURN_SECONDS.toString()
+            max = GameRules.MAX_TURN_SECONDS.toString()
+            value = GameRules.DEFAULT_TURN_SECONDS.toString()
+        }
+    }
+    label {
+        +fieldClockText(pageLang)
+        numberInput(name = "clock") {
+            min = GameRules.MIN_CLOCK_SECONDS.toString()
+            max = GameRules.MAX_CLOCK_SECONDS.toString()
+            placeholder = clockOffText(pageLang)
+        }
+    }
+    label {
+        +fieldBotText(pageLang)
+        select {
+            name = "bot"
+            option {
+                value = ""
+                +botNoneText(pageLang)
+            }
+            option {
+                value = "easy"
+                +"easy"
+            }
+            option {
+                value = "normal"
+                +"normal"
+            }
+            option {
+                value = "hard"
+                +"hard"
+            }
+            option {
+                value = "2"
+                +botExhibitionText(pageLang)
+            }
+        }
+    }
 }

@@ -58,6 +58,27 @@ class ApplicationTest {
     }
 
     @Test
+    fun `the page offers a quick play link and a create-game form`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient { }
+
+        val russian = client.get("/").bodyAsText()
+        assertTrue("id=\"quick-play\"" in russian, "quick play link missing, got: $russian")
+        assertTrue("<form action=\"/\"" in russian, "create-game form missing, got: $russian")
+        listOf("room", "size", "win", "turn", "clock", "bot").forEach { field ->
+            assertTrue("name=\"$field\"" in russian, "form field $field missing")
+        }
+
+        val english = client.get("/?lang=en").bodyAsText()
+        assertTrue("Quick play" in english)
+        assertTrue("Create a game" in english)
+        // an explicit lang rides the form submission as a hidden field
+        assertTrue("name=\"lang\"" in english)
+    }
+
+    @Test
     fun `named wins reach the leaderboard endpoint`() = testApplication {
         application {
             testModule()
