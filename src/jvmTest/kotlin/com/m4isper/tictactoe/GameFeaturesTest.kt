@@ -179,6 +179,21 @@ class GameFeaturesTest {
     }
 
     @Test
+    fun `the page offers a manual theme override`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient { }
+
+        val page = client.get("/").bodyAsText()
+        assertTrue("id=\"theme\"" in page, "the page should carry a theme toggle: $page")
+
+        val css = client.get("/styles.css").bodyAsText()
+        assertTrue("""root[data-theme="light"]""" in css, "a forced light palette should exist: $css")
+        assertTrue("""root:not([data-theme="dark"])""" in css, "the auto light palette should spare an explicit dark: $css")
+    }
+
+    @Test
     fun `the service worker falls back to an offline page`() = testApplication {
         application {
             testModule()

@@ -224,6 +224,26 @@ fun soundTitle(muted: Boolean, lang: Lang = Lang.RU): String = when (lang) {
     Lang.EN -> if (muted) "Unmute" else "Mute"
 }
 
+fun themeIcon(theme: ThemeMode): String = when (theme) {
+    ThemeMode.AUTO -> "🌓"
+    ThemeMode.LIGHT -> "☀️"
+    ThemeMode.DARK -> "🌙"
+}
+
+fun themeTitle(theme: ThemeMode, lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> when (theme) {
+        ThemeMode.AUTO -> "Тема: как в системе — включить светлую"
+        ThemeMode.LIGHT -> "Тема: светлая — включить тёмную"
+        ThemeMode.DARK -> "Тема: тёмная — вернуть как в системе"
+    }
+
+    Lang.EN -> when (theme) {
+        ThemeMode.AUTO -> "Theme: follow the system — switch to light"
+        ThemeMode.LIGHT -> "Theme: light — switch to dark"
+        ThemeMode.DARK -> "Theme: dark — follow the system"
+    }
+}
+
 fun connectionLostText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> "Соединение потеряно, переподключение…"
     Lang.EN -> "Connection lost, reconnecting…"

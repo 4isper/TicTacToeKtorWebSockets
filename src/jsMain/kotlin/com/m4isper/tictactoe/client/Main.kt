@@ -11,6 +11,7 @@ import com.m4isper.tictactoe.protocol.protocolJson
 import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.SharedReplay
 import com.m4isper.tictactoe.ui.SoundCue
+import com.m4isper.tictactoe.ui.ThemeMode
 import com.m4isper.tictactoe.ui.botLabel
 import com.m4isper.tictactoe.ui.cellAriaText
 import com.m4isper.tictactoe.ui.clockText
@@ -26,6 +27,7 @@ import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.newMoveCells
 import com.m4isper.tictactoe.ui.noRoomsText
 import com.m4isper.tictactoe.ui.parseLang
+import com.m4isper.tictactoe.ui.parseTheme
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.replayFromFragment
 import com.m4isper.tictactoe.ui.replayHintText
@@ -36,6 +38,8 @@ import com.m4isper.tictactoe.ui.soundCue
 import com.m4isper.tictactoe.ui.soundIcon
 import com.m4isper.tictactoe.ui.soundTitle
 import com.m4isper.tictactoe.ui.statusText
+import com.m4isper.tictactoe.ui.themeIcon
+import com.m4isper.tictactoe.ui.themeTitle
 import com.m4isper.tictactoe.ui.timerSuffix
 import com.m4isper.tictactoe.ui.turnSecondsText
 import com.m4isper.tictactoe.ui.undoButtonText
@@ -121,6 +125,7 @@ private class GameClient {
     private var clocksBase = 0.0
     private var countdownTimer: Int? = null
     private var muted = localStorage.getItem("tictactoe-muted") == "1"
+    private var theme = parseTheme(localStorage.getItem("tictactoe-theme"))
 
     private fun send(message: ClientMessage) {
         socket?.send(protocolJson.encodeToString<ClientMessage>(message))
@@ -630,10 +635,22 @@ private class GameClient {
     }
 
     private val soundButton = document.getElementById("sound") as HTMLButtonElement
+    private val themeButton = document.getElementById("theme") as HTMLButtonElement
 
     private fun renderSound() {
         soundButton.textContent = soundIcon(muted)
         soundButton.title = soundTitle(muted, lang)
+    }
+
+    private fun renderTheme() {
+        val root = document.documentElement as HTMLElement
+        if (theme == ThemeMode.AUTO) {
+            root.removeAttribute("data-theme")
+        } else {
+            root.setAttribute("data-theme", theme.name.lowercase())
+        }
+        themeButton.textContent = themeIcon(theme)
+        themeButton.title = themeTitle(theme, lang)
     }
 
     fun start() {
@@ -651,6 +668,17 @@ private class GameClient {
             renderSound()
         }
         renderSound()
+
+        themeButton.onclick = {
+            theme = when (theme) {
+                ThemeMode.AUTO -> ThemeMode.LIGHT
+                ThemeMode.LIGHT -> ThemeMode.DARK
+                ThemeMode.DARK -> ThemeMode.AUTO
+            }
+            localStorage.setItem("tictactoe-theme", theme.name.lowercase())
+            renderTheme()
+        }
+        renderTheme()
 
         rematchButton.onclick = { send(ClientMessage.RequestRematch) }
         drawButton.onclick = { send(ClientMessage.RequestDraw) }

@@ -14,7 +14,7 @@ Then open http://localhost:8080/ to play in the browser (the page is rendered wi
 
 - **One codebase, two targets:** `commonMain` holds the rules, the bot brain, Elo and the wire protocol; `jvmMain` is the Ktor server, `jsMain` the browser client. Both sides compile from the same types.
 - **Installable PWA:** `/manifest.webmanifest` with an SVG icon and generated 192/512 PNG icons, a `/sw.js` service worker and an `/offline` fallback page. Offline support is best-effort — playing still needs the server.
-- **Themes:** dark by default, automatic light theme via `prefers-color-scheme`, with matching `theme-color` meta tags.
+- **Themes:** dark by default, automatic light theme via `prefers-color-scheme`, with matching `theme-color` meta tags; a manual toggle (auto → light → dark) sits next to the sound button and persists in `localStorage`.
 - **Sound and accessibility:** synthesized Web Audio cues distinguish your own move from the opponent's and mark wins and draws; a mute toggle persists in `localStorage`. Cells carry `aria-label`s, the last move stays marked, and the turn timer shows a progress bar.
 - **Resilient scoreboard:** JSON writes are atomic (temp file + rename). If the file is unreadable, the original is saved as `<name>.corrupt` and a warning is logged before the store starts empty, so the history is not silently lost.
 - **Fair play and bounds:** a name belongs to the reconnect token that claimed it, so another live session cannot take it and change its Elo rating. The lobby caps active games (100) and spectators per room (20); a refused join answers `room is full`. These are light-weight identity guards, not user accounts — there are no passwords or registration.

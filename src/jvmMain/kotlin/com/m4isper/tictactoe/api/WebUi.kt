@@ -4,6 +4,7 @@ import com.m4isper.tictactoe.protocol.REACTION_EMOJIS
 import com.m4isper.tictactoe.stats.LeaderboardResponse
 import com.m4isper.tictactoe.stats.Scoreboard
 import com.m4isper.tictactoe.ui.Lang
+import com.m4isper.tictactoe.ui.ThemeMode
 import com.m4isper.tictactoe.ui.copyLinkText
 import com.m4isper.tictactoe.ui.drawButtonText
 import com.m4isper.tictactoe.ui.leaderboardTitle
@@ -13,6 +14,8 @@ import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.roomsTitle
 import com.m4isper.tictactoe.ui.soundIcon
 import com.m4isper.tictactoe.ui.soundTitle
+import com.m4isper.tictactoe.ui.themeIcon
+import com.m4isper.tictactoe.ui.themeTitle
 import com.m4isper.tictactoe.ui.undoButtonText
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -233,17 +236,10 @@ private fun CssBuilder.themeStyles() {
         put("--placeholder", "#6a6a85")
     }
     rule("@media (prefers-color-scheme: light)") {
-        rule(":root") {
-            put("--bg", "#f4f4f8")
-            put("--panel", "#ffffff")
-            put("--text", "#1a1a24")
-            put("--muted", "#6a6a85")
-            put("--accent", "#4a6fd4")
-            put("--win", "#2e7d4f")
-            put("--danger", "#c0392b")
-            put("--placeholder", "#9a9ab8")
-        }
+        // the automatic light theme spares a manually chosen dark one
+        rule(":root:not([data-theme=\"dark\"])") { lightPalette() }
     }
+    rule(":root[data-theme=\"light\"]") { lightPalette() }
     rule("body") {
         fontFamily = "system-ui, sans-serif"
         display = Display.flex
@@ -280,6 +276,18 @@ private fun CssBuilder.themeStyles() {
         borderRadius = 8.px
         cursor = Cursor.pointer
     }
+}
+
+/** The light palette, shared by the automatic (media query) and the manual (`data-theme`) selectors. */
+private fun CssBuilder.lightPalette() {
+    put("--bg", "#f4f4f8")
+    put("--panel", "#ffffff")
+    put("--text", "#1a1a24")
+    put("--muted", "#6a6a85")
+    put("--accent", "#4a6fd4")
+    put("--win", "#2e7d4f")
+    put("--danger", "#c0392b")
+    put("--placeholder", "#9a9ab8")
 }
 
 private fun CssBuilder.layoutStyles() {
@@ -511,6 +519,11 @@ private fun BODY.controls(pageLang: Lang) {
             id = "sound"
             title = soundTitle(muted = false, lang = pageLang)
             +soundIcon(muted = false)
+        }
+        button(classes = "secondary") {
+            id = "theme"
+            title = themeTitle(ThemeMode.AUTO, lang = pageLang)
+            +themeIcon(ThemeMode.AUTO)
         }
     }
     button(classes = "secondary") {
