@@ -102,6 +102,16 @@ fun clockText(msLeft: Long): String {
     return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
 }
 
+/**
+ * A hint button makes sense on my turn, in a running round with a full pair — and only
+ * in a practice one: a hint in a rated round would be advice for a rated game.
+ */
+fun hintAvailable(state: GameState, mySymbol: PlayerSymbol?): Boolean = mySymbol != null &&
+    !state.isRoundOver &&
+    state.connectionPlayers.size >= 2 &&
+    state.playerAtTurn == mySymbol &&
+    (state.playerNames[PlayerSymbol.X] == null || state.playerNames[PlayerSymbol.O] == null)
+
 /** A round restart countdown just appeared and the deadline should be captured once. */
 fun isRoundRestartTransition(previous: GameState?, state: GameState): Boolean = state.roundRestartInMs != null && (previous == null || previous.roundRestartInMs == null)
 

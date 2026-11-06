@@ -26,6 +26,7 @@ internal class BoardRenderer(
     private var cellPx = 0
 
     fun render(previous: GameState?, state: GameState, mySymbol: PlayerSymbol?) {
+        clearHint()
         val size = state.field.size
         if (cells.size != size || cells.any { it.size != size }) rebuild(size)
         val px = cellSize(size)
@@ -67,6 +68,22 @@ internal class BoardRenderer(
         button.setAttribute("aria-label", view.ariaLabel)
         button.textContent = view.text
         button.disabled = view.disabled
+    }
+
+    /** The suggested cell stays outlined until the next state arrives. */
+    private var hintCell: Pair<Int, Int>? = null
+
+    fun showHint(x: Int, y: Int) {
+        clearHint()
+        hintCell = x to y
+        cells[y][x].classList.add("hint")
+    }
+
+    private fun clearHint() {
+        hintCell?.let { (x, y) ->
+            if (y < cells.size && x < cells[y].size) cells[y][x].classList.remove("hint")
+        }
+        hintCell = null
     }
 
     private fun sizeButton(button: HTMLButtonElement, px: Int) {

@@ -21,6 +21,7 @@ import com.m4isper.tictactoe.ui.fieldSeriesText
 import com.m4isper.tictactoe.ui.fieldSizeText
 import com.m4isper.tictactoe.ui.fieldTurnText
 import com.m4isper.tictactoe.ui.fieldWinText
+import com.m4isper.tictactoe.ui.hintText
 import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.namePlaceholder
 import com.m4isper.tictactoe.ui.parseLang
@@ -350,7 +351,7 @@ private fun CssBuilder.lightPalette() {
 }
 
 private fun CssBuilder.layoutStyles() {
-    rule("#rematch, #draw, #resign") {
+    rule("#rematch, #draw, #resign, #hint") {
         display = Display.none
         margin = Margin(vertical = 4.px)
         padding = Padding(horizontal = 14.px, vertical = 8.px)
@@ -361,7 +362,7 @@ private fun CssBuilder.layoutStyles() {
         borderRadius = 8.px
         cursor = Cursor.pointer
     }
-    rule("#rematch:disabled, #draw:disabled, #resign:disabled") {
+    rule("#rematch:disabled, #draw:disabled, #resign:disabled, #hint:disabled") {
         opacity = 0.6
         cursor = Cursor.default
     }
@@ -440,6 +441,10 @@ private fun CssBuilder.boardStyles() {
     rule(".cell:disabled") {
         cursor = Cursor.default
         opacity = 0.85
+    }
+    rule(".cell.hint") {
+        put("outline", "3px solid var(--accent)")
+        put("outline-offset", "-3px")
     }
     rule(".cell.pop") {
         animation += Animation("cell-pop", 180.ms, Timing.easeOut)
@@ -672,6 +677,10 @@ private fun BODY.controls(pageLang: Lang) {
     button(classes = "secondary") {
         id = "resign"
         +resignButtonText(pageLang)
+    }
+    button(classes = "secondary") {
+        id = "hint"
+        +hintText(pageLang)
     }
 }
 

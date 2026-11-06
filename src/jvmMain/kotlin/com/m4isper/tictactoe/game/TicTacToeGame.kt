@@ -38,7 +38,7 @@ class TicTacToeGame(
         val boardSize: Int,
     )
 
-    private val state = MutableStateFlow(GameState(field = GameRules.emptyField(boardSize), seriesTarget = seriesTarget))
+    private val state = MutableStateFlow(GameState(field = GameRules.emptyField(boardSize), winLength = winLength, seriesTarget = seriesTarget))
     private val stateChanges = Channel<GameState>(Channel.UNLIMITED)
 
     // Recording a round writes to disk/SQLite. Keep that off the game lock: one

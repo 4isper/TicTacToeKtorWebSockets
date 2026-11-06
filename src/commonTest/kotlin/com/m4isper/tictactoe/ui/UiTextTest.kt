@@ -240,6 +240,14 @@ class UiTextTest {
     }
 
     @Test
+    fun `resign and hint are phrased per language`() {
+        assertEquals("Сдаться", resignButtonText())
+        assertEquals("Resign", resignButtonText(Lang.EN))
+        assertEquals("Подсказка", hintText())
+        assertEquals("Hint", hintText(Lang.EN))
+    }
+
+    @Test
     fun `profile search is phrased per language`() {
         assertEquals("Найти игрока", searchPlaceholder())
         assertEquals("Find a player", searchPlaceholder(Lang.EN))

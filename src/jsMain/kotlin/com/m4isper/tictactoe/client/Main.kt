@@ -1,5 +1,7 @@
 package com.m4isper.tictactoe.client
 
+import com.m4isper.tictactoe.domain.BotBrain
+import com.m4isper.tictactoe.domain.BotLevel
 import com.m4isper.tictactoe.domain.Cell
 import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.GameRules
@@ -24,6 +26,7 @@ import com.m4isper.tictactoe.ui.detectLang
 import com.m4isper.tictactoe.ui.drawButtonText
 import com.m4isper.tictactoe.ui.errorText
 import com.m4isper.tictactoe.ui.headToHeadTitle
+import com.m4isper.tictactoe.ui.hintAvailable
 import com.m4isper.tictactoe.ui.isRoundRestartTransition
 import com.m4isper.tictactoe.ui.isTurnTransition
 import com.m4isper.tictactoe.ui.joinQuery
@@ -88,6 +91,7 @@ private class GameClient {
     private val drawButton = document.getElementById("draw") as HTMLButtonElement
     private val undoButton = document.getElementById("undo") as HTMLButtonElement
     private val resignButton = document.getElementById("resign") as HTMLButtonElement
+    private val hintButton = document.getElementById("hint") as HTMLButtonElement
     private val turnBar = document.getElementById("turn-bar") as HTMLElement
     private val turnBarFill = document.getElementById("turn-bar-fill") as HTMLElement
     private val movesList = document.getElementById("moves") as HTMLElement
@@ -338,6 +342,7 @@ private class GameClient {
         updateDrawButton(state)
         updateUndoButton(state)
         updateResignButton(state)
+        updateHintButton(state)
     }
 
     /** The away-plate: a countdown while the reconnect grace lasts, then plain waiting until the state changes. */
@@ -389,6 +394,26 @@ private class GameClient {
     private fun updateResignButton(state: GameState) {
         val roundOver = state.isRoundOver
         resignButton.style.display = if (!roundOver && mySymbol != null && state.connectionPlayers.size >= 2) "block" else "none"
+    }
+
+    private fun updateHintButton(state: GameState) {
+        hintButton.style.display = if (hintAvailable(state, mySymbol)) "block" else "none"
+    }
+
+    /**
+     * Runs the same search the hard bot plays, locally — the brain ships in the shared
+     * code. The deferral lets the button repaint first; a deep search on a big board
+     * freezes the tab for under a second.
+     */
+    private fun requestHint() {
+        val state = lastState ?: return
+        val me = mySymbol ?: return
+        hintButton.disabled = true
+        window.setTimeout({
+            val move = BotBrain.chooseMove(state.field, me, state.winLength, BotLevel.HARD)
+            hintButton.disabled = false
+            move?.let { boardRenderer.showHint(it.x, it.y) }
+        }, 50)
     }
 
     private fun updateStatus(previous: GameState?, state: GameState) {
@@ -499,6 +524,7 @@ private class GameClient {
         drawButton.onclick = { send(ClientMessage.RequestDraw) }
         undoButton.onclick = { send(ClientMessage.RequestUndo) }
         resignButton.onclick = { send(ClientMessage.RequestResign) }
+        hintButton.onclick = { requestHint() }
 
         document.querySelectorAll("#reactions button").asDynamic().forEach { node: dynamic ->
             (node as? HTMLButtonElement)?.let { button ->

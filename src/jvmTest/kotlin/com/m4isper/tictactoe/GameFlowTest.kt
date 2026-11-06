@@ -133,6 +133,7 @@ class GameFlowTest {
             assertTrue(event is ServerEvent.StateChanged, "expected state, got $event")
             val state = event.state
             assertEquals(PlayerSymbol.X, state.winningPlayer)
+            assertEquals(4, state.winLength) // the client learns the win rule from the state
             assertEquals(listOf(Cell(0, 0), Cell(0, 1), Cell(0, 2), Cell(0, 3)), state.winningCells)
             assertEquals(mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), state.score)
 

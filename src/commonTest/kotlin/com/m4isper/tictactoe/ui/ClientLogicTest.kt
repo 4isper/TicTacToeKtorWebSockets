@@ -222,6 +222,35 @@ class ClientLogicTest {
         assertTrue(cellViews(null, state, null, Lang.RU)[0].ariaLabel.startsWith("Ряд 1"))
         assertTrue(cellViews(null, state, null, Lang.EN)[0].ariaLabel.startsWith("Row 1"))
     }
+
+    @Test
+    fun `a hint shows on my turn in a practice round`() {
+        val practice = GameState(
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            playerNames = mapOf(PlayerSymbol.X to "Бот-тренер"),
+            playerAtTurn = PlayerSymbol.O,
+        )
+        assertTrue(hintAvailable(practice, PlayerSymbol.O)) // one side unnamed: nothing rated to protect
+        assertFalse(hintAvailable(practice, PlayerSymbol.X)) // not this side's turn
+    }
+
+    @Test
+    fun `a rated round hides the hint`() {
+        val rated = GameState(
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            playerNames = mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"),
+        )
+        assertFalse(hintAvailable(rated, PlayerSymbol.X))
+    }
+
+    @Test
+    fun `a hint needs a running round and both players`() {
+        val over = GameState(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O), winningPlayer = PlayerSymbol.X)
+        assertFalse(hintAvailable(over, PlayerSymbol.O))
+        val solo = GameState(connectionPlayers = listOf(PlayerSymbol.X))
+        assertFalse(hintAvailable(solo, PlayerSymbol.X))
+        assertFalse(hintAvailable(GameState(), null)) // a spectator never asks
+    }
 }
 
 private object Boards {
