@@ -161,6 +161,67 @@ class ClientLogicTest {
         val fresh = GameState()
         assertTrue(updatedMoveLog(over, fresh, listOf(Cell(0, 0))).isEmpty())
     }
+
+    @Test
+    fun `a cell view renders the mark and disables taken cells`() {
+        val state = GameState(
+            field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)),
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            playerAtTurn = PlayerSymbol.O,
+        )
+        val views = cellViews(previous = null, state, mySymbol = PlayerSymbol.O)
+        assertEquals(9, views.size)
+        assertEquals("X", views[0].text)
+        assertTrue(views[0].disabled)
+        assertEquals("", views[4].text)
+        assertFalse(views[4].disabled) // my turn: empty cells are clickable
+    }
+
+    @Test
+    fun `a spectator and a waiting player can click nothing`() {
+        val state = GameState(connectionPlayers = listOf(PlayerSymbol.X), playerAtTurn = PlayerSymbol.X)
+        assertTrue(cellViews(null, state, mySymbol = null).all { it.disabled }) // spectator
+        assertTrue(cellViews(null, state, mySymbol = PlayerSymbol.O).all { it.disabled }) // opponent slot empty
+        assertTrue(cellViews(null, state, mySymbol = PlayerSymbol.X).all { it.disabled }) // no opponent yet
+    }
+
+    @Test
+    fun `the fresh move pops until the next state`() {
+        val before = GameState(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O))
+        val moved = before.copy(field = Boards.fieldWith(listOf(Cell(1, 1) to PlayerSymbol.X)), playerAtTurn = PlayerSymbol.O)
+        val after = moved.copy(field = Boards.fieldWith(listOf(Cell(1, 1) to PlayerSymbol.X, Cell(0, 0) to PlayerSymbol.O)), playerAtTurn = PlayerSymbol.X)
+        assertEquals("cell pop last-move", cellViews(before, moved, PlayerSymbol.O)[4].cssClass)
+        assertEquals("cell", cellViews(moved, after, PlayerSymbol.X)[4].cssClass) // an older stone pops no more
+    }
+
+    @Test
+    fun `winning cells carry the winning class`() {
+        val field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X, Cell(1, 0) to PlayerSymbol.X, Cell(2, 0) to PlayerSymbol.X))
+        val state = GameState(field = field, winningPlayer = PlayerSymbol.X, winningCells = listOf(Cell(0, 0), Cell(1, 0), Cell(2, 0)))
+        val views = cellViews(null, state, mySymbol = null)
+        assertEquals("cell winning", views[0].cssClass)
+        assertEquals("cell winning", views[1].cssClass)
+        assertEquals("cell", views[5].cssClass)
+    }
+
+    @Test
+    fun `a move changes exactly one cell view`() {
+        val before = GameState(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O))
+        val after = before.copy(field = Boards.fieldWith(listOf(Cell(2, 1) to PlayerSymbol.X)), playerAtTurn = PlayerSymbol.O)
+        val beforeViews = cellViews(before, before, PlayerSymbol.O)
+        val afterViews = cellViews(before, after, PlayerSymbol.O)
+        val changedContent = beforeViews.zip(afterViews).count { (old, new) -> old.text != new.text || old.cssClass != new.cssClass }
+        assertEquals(1, changedContent)
+        assertFalse(afterViews[7].disabled)
+        assertTrue(beforeViews[7].disabled)
+    }
+
+    @Test
+    fun `the aria label follows the language`() {
+        val state = GameState(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)))
+        assertTrue(cellViews(null, state, null, Lang.RU)[0].ariaLabel.startsWith("Ряд 1"))
+        assertTrue(cellViews(null, state, null, Lang.EN)[0].ariaLabel.startsWith("Row 1"))
+    }
 }
 
 private object Boards {

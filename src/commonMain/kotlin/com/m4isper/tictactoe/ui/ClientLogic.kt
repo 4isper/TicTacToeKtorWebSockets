@@ -19,6 +19,43 @@ fun newMoveCells(previous: GameState?, state: GameState): List<Cell> {
     }
 }
 
+/** Everything one board cell shows; two equal views mean the DOM node needs no touch. */
+data class CellView(
+    val text: String,
+    val cssClass: String,
+    val ariaLabel: String,
+    val disabled: Boolean,
+)
+
+/** The per-cell picture of the board; the renderer diffs these lists to update cells in place. */
+fun cellViews(
+    previous: GameState?,
+    state: GameState,
+    mySymbol: PlayerSymbol?,
+    lang: Lang = Lang.RU,
+): List<CellView> {
+    val winning = state.winningCells.map { "${it.x},${it.y}" }.toSet()
+    val fresh = newMoveCells(previous, state)
+    return state.field.flatMapIndexed { y, row ->
+        row.mapIndexed { x, cell ->
+            CellView(
+                text = when (cell) {
+                    PlayerSymbol.X -> "X"
+                    PlayerSymbol.O -> "O"
+                    null -> ""
+                },
+                cssClass = buildString {
+                    append("cell")
+                    if ("$x,$y" in winning) append(" winning")
+                    if (fresh.any { it.x == x && it.y == y }) append(" pop last-move")
+                },
+                ariaLabel = cellAriaText(x, y, cell, lang),
+                disabled = cell != null || mySymbol == null || state.connectionPlayers.size < 2 || state.playerAtTurn != mySymbol,
+            )
+        }
+    }
+}
+
 /** Chess-style coordinates: the column letter then the 1-based row, e.g. a1. */
 fun cellNotation(x: Int, y: Int): String = "${'a' + x}${y + 1}"
 
