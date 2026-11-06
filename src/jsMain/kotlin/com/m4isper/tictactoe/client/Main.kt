@@ -33,6 +33,7 @@ import com.m4isper.tictactoe.ui.opponentLostText
 import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.parseTheme
 import com.m4isper.tictactoe.ui.profileNotFoundText
+import com.m4isper.tictactoe.ui.ratingSparklinePoints
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.replayFromFragment
 import com.m4isper.tictactoe.ui.replayHintText
@@ -57,6 +58,7 @@ import kotlinx.browser.document
 import kotlinx.browser.localStorage
 import kotlinx.browser.window
 import kotlinx.serialization.encodeToString
+import org.w3c.dom.Element
 import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.HTMLInputElement
@@ -814,6 +816,7 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                         ul.appendChild(li)
                     }
                     profileDiv.appendChild(title)
+                    mountRatingSparkline(data, profileDiv)
                     profileDiv.appendChild(ul)
                     profileDiv.appendChild(replayDiv)
                     mountHistoryPages(data, name, profileDiv)
@@ -823,6 +826,21 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
         } catch (ignored: Throwable) {
             // decorative as well
         }
+    }
+
+    /** The rating curve over the history page's rated rounds, oldest to newest, drawn as an SVG polyline. */
+    private fun mountRatingSparkline(data: dynamic, profileDiv: HTMLElement) {
+        val history = (data.stats.history ?: js("[]")) as Array<dynamic>
+        val ratings = history.mapNotNull { it.ratingAfter as? Int }.reversed()
+        val points = ratingSparklinePoints(ratings)
+        if (points.isEmpty()) return
+        val svg = js("document.createElementNS('http://www.w3.org/2000/svg', 'svg')") as Element
+        svg.setAttribute("viewBox", "0 0 100 30")
+        svg.setAttribute("class", "sparkline")
+        val polyline = js("document.createElementNS('http://www.w3.org/2000/svg', 'polyline')") as Element
+        polyline.setAttribute("points", points.joinToString(" ") { "${it.first},${it.second}" })
+        svg.appendChild(polyline)
+        profileDiv.appendChild(svg)
     }
 
     /** The history pages over twenty records a page: two glyph buttons re-fetch the slice. */

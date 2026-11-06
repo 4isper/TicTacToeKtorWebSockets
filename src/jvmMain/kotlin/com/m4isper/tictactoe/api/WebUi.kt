@@ -365,6 +365,25 @@ private fun CssBuilder.layoutStyles() {
         opacity = 0.6
         cursor = Cursor.default
     }
+    nameRowStyles()
+    rule("#turn-bar") {
+        display = Display.none
+        height = 6.px
+        backgroundColor = Color("var(--panel)")
+        borderRadius = 3.px
+        margin = Margin(vertical = 6.px)
+        overflow = Overflow.hidden
+    }
+    rule("#turn-bar-fill") {
+        width = 100.pct
+        height = 100.pct
+        backgroundColor = Color("var(--accent)")
+        transition += Transition("width", 250.ms, Timing.linear)
+    }
+    sparklineStyles()
+}
+
+private fun CssBuilder.nameRowStyles() {
     rule(".name-row") {
         display = Display.flex
         gap = 4.px
@@ -390,19 +409,19 @@ private fun CssBuilder.layoutStyles() {
         borderRadius = 8.px
         cursor = Cursor.pointer
     }
-    rule("#turn-bar") {
-        display = Display.none
-        height = 6.px
-        backgroundColor = Color("var(--panel)")
-        borderRadius = 3.px
-        margin = Margin(vertical = 6.px)
-        overflow = Overflow.hidden
-    }
-    rule("#turn-bar-fill") {
+}
+
+private fun CssBuilder.sparklineStyles() {
+    rule(".sparkline") {
         width = 100.pct
-        height = 100.pct
-        backgroundColor = Color("var(--accent)")
-        transition += Transition("width", 250.ms, Timing.linear)
+        height = 30.px
+        margin = Margin(vertical = 4.px)
+    }
+    rule(".sparkline polyline") {
+        // the svg properties are outside kotlinx.css's vocabulary
+        put("fill", "none")
+        put("stroke", "var(--accent)")
+        put("stroke-width", "2px")
     }
 }
 
