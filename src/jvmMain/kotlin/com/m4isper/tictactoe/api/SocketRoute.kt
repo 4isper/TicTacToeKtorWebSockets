@@ -105,6 +105,11 @@ private class SessionHandler(
             else -> binding.game.requestDraw(symbol, session)?.let(ServerEvent::Error)
         }
 
+        is ClientMessage.RequestResign -> when (val symbol = binding.symbol) {
+            null -> ServerEvent.Error(ErrorReason.NOT_YOUR_TURN)
+            else -> binding.game.requestResign(symbol, session)?.let(ServerEvent::Error)
+        }
+
         is ClientMessage.RequestUndo -> when (val symbol = binding.symbol) {
             null -> ServerEvent.Error(ErrorReason.NOT_YOUR_TURN)
             else -> binding.game.requestUndo(symbol, session)?.let(ServerEvent::Error)

@@ -93,6 +93,10 @@ internal suspend fun WebSocketSession.sendRequestUndo() {
     send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.RequestUndo)))
 }
 
+internal suspend fun WebSocketSession.sendRequestResign() {
+    send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.RequestResign)))
+}
+
 internal suspend fun WebSocketSession.sendReact(emoji: String) {
     send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.React(emoji))))
 }

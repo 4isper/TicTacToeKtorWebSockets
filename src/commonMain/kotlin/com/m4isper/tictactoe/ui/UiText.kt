@@ -164,6 +164,11 @@ fun undoButtonText(
     }
 }
 
+fun resignButtonText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Сдаться"
+    Lang.EN -> "Resign"
+}
+
 fun copyLinkText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> "Скопировать ссылку"
     Lang.EN -> "Copy link"

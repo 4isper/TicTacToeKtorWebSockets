@@ -27,6 +27,7 @@ import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.profileNotFoundText
 import com.m4isper.tictactoe.ui.quickPlayText
 import com.m4isper.tictactoe.ui.rematchButtonText
+import com.m4isper.tictactoe.ui.resignButtonText
 import com.m4isper.tictactoe.ui.roomsTitle
 import com.m4isper.tictactoe.ui.searchPlaceholder
 import com.m4isper.tictactoe.ui.seriesOffText
@@ -348,7 +349,7 @@ private fun CssBuilder.lightPalette() {
 }
 
 private fun CssBuilder.layoutStyles() {
-    rule("#rematch, #draw") {
+    rule("#rematch, #draw, #resign") {
         display = Display.none
         margin = Margin(vertical = 4.px)
         padding = Padding(horizontal = 14.px, vertical = 8.px)
@@ -359,7 +360,7 @@ private fun CssBuilder.layoutStyles() {
         borderRadius = 8.px
         cursor = Cursor.pointer
     }
-    rule("#rematch:disabled, #draw:disabled") {
+    rule("#rematch:disabled, #draw:disabled, #resign:disabled") {
         opacity = 0.6
         cursor = Cursor.default
     }
@@ -647,6 +648,10 @@ private fun BODY.controls(pageLang: Lang) {
     button(classes = "secondary") {
         id = "undo"
         +undoButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
+    }
+    button(classes = "secondary") {
+        id = "resign"
+        +resignButtonText(pageLang)
     }
 }
 

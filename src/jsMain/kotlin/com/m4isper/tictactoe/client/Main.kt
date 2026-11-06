@@ -85,6 +85,7 @@ private class GameClient {
     private val rematchButton = document.getElementById("rematch") as HTMLButtonElement
     private val drawButton = document.getElementById("draw") as HTMLButtonElement
     private val undoButton = document.getElementById("undo") as HTMLButtonElement
+    private val resignButton = document.getElementById("resign") as HTMLButtonElement
     private val turnBar = document.getElementById("turn-bar") as HTMLElement
     private val turnBarFill = document.getElementById("turn-bar-fill") as HTMLElement
     private val movesList = document.getElementById("moves") as HTMLElement
@@ -325,6 +326,7 @@ private class GameClient {
         updateRematchButton(state)
         updateDrawButton(state)
         updateUndoButton(state)
+        updateResignButton(state)
     }
 
     /** The away-plate: a countdown while the reconnect grace lasts, then plain waiting until the state changes. */
@@ -371,6 +373,11 @@ private class GameClient {
         val iOfferedUndo = mySymbol != null && state.undoOfferBy == mySymbol
         val opponentOfferedUndo = state.undoOfferBy != null && state.undoOfferBy != mySymbol
         undoButton.textContent = undoButtonText(iOfferedUndo, opponentOfferedUndo, lang)
+    }
+
+    private fun updateResignButton(state: GameState) {
+        val roundOver = state.isRoundOver
+        resignButton.style.display = if (!roundOver && mySymbol != null && state.connectionPlayers.size >= 2) "block" else "none"
     }
 
     private fun updateStatus(previous: GameState?, state: GameState) {
@@ -481,6 +488,7 @@ private class GameClient {
         rematchButton.onclick = { send(ClientMessage.RequestRematch) }
         drawButton.onclick = { send(ClientMessage.RequestDraw) }
         undoButton.onclick = { send(ClientMessage.RequestUndo) }
+        resignButton.onclick = { send(ClientMessage.RequestResign) }
 
         document.querySelectorAll("#reactions button").asDynamic().forEach { node: dynamic ->
             (node as? HTMLButtonElement)?.let { button ->

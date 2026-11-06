@@ -451,6 +451,9 @@ class GameFlowTest {
                     val events = listOf(receiveEvent(), receiveEvent())
                     assertTrue(events.any { it is ServerEvent.Error }) // spectators cannot play
                     assertTrue(events.any { it is ServerEvent.StateChanged }) // X's move reaches the spectator
+
+                    sendRequestResign()
+                    assertEquals(ErrorReason.NOT_YOUR_TURN, (receiveEvent() as ServerEvent.Error).reason)
                     awaitCancellation()
                 }
             }
@@ -620,5 +623,63 @@ class GameFlowTest {
 
             second.cancel()
         }
+    }
+
+    @Test
+    fun `a resignation forfeits the round and counts as a rated loss`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=rg") {
+            receiveHandshake()
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=rg") {
+                    receiveHandshake()
+                    oReady.complete(Unit)
+                    awaitStateWhere { it.playerNames[PlayerSymbol.X] == "Аня" }
+                    sendSetName("Боря")
+                    awaitStateWhere { it.playerNames[PlayerSymbol.O] == "Боря" }
+                    sendRequestResign()
+                    val resigned = receiveState()
+                    assertEquals(PlayerSymbol.X, resigned.winningPlayer)
+                    assertNotNull(resigned.roundRestartInMs)
+
+                    // asking again is refused — the round is already over
+                    sendRequestResign()
+                    assertEquals(ErrorReason.ROUND_IS_OVER, (receiveEvent() as ServerEvent.Error).reason)
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            skipBroadcast() // [X, O]
+
+            sendSetName("Аня")
+            awaitStateWhere { it.playerNames[PlayerSymbol.O] == "Боря" }
+
+            val resigned = awaitStateWhere { it.winningPlayer == PlayerSymbol.X }
+            assertEquals(mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), resigned.score)
+            assertNotNull(resigned.roundRestartInMs)
+
+            second.cancel()
+        }
+
+        val winner = client.get("/player?name=Аня").bodyAsText()
+        assertTrue("WIN" in winner, "the resignation should pay the opponent: $winner")
+        val resigner = client.get("/player?name=Боря").bodyAsText()
+        assertTrue("LOSS" in resigner, "the resignation should count as a loss: $resigner")
     }
 }

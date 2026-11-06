@@ -322,6 +322,28 @@ class TicTacToeGame(
         }
     }
 
+    /** A resignation: the asking player forfeits at once, like a run-out clock would. */
+    fun requestResign(player: PlayerSymbol, session: WebSocketSession): ErrorReason? {
+        synchronized(lock) {
+            val current = state.value
+            if (playerSockets[player] !== session) return ErrorReason.STALE_SESSION
+            if (current.isRoundOver) return ErrorReason.ROUND_IS_OVER
+
+            roundRestartDeadline = System.currentTimeMillis() + roundRestartDelayMs
+            scheduleRoundRestart()
+            publish(
+                current.copy(
+                    winningPlayer = player.other,
+                    winningCells = emptyList(),
+                    rematchPlayers = emptyList(),
+                    drawPlayers = emptyList(),
+                    undoOfferBy = null,
+                ).scored(player.other),
+            )
+            return null
+        }
+    }
+
     /** A takeback: the last mover asks, the player on turn approves; the move is reverted and the turn returns. */
     fun requestUndo(player: PlayerSymbol, session: WebSocketSession): ErrorReason? {
         synchronized(lock) {

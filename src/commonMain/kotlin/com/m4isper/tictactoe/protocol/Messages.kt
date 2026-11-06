@@ -34,6 +34,10 @@ sealed interface ClientMessage {
     data object RequestDraw : ClientMessage
 
     @Serializable
+    @SerialName("request_resign")
+    data object RequestResign : ClientMessage
+
+    @Serializable
     @SerialName("request_undo")
     data object RequestUndo : ClientMessage
 
