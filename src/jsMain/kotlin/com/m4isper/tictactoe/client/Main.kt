@@ -24,6 +24,7 @@ import com.m4isper.tictactoe.ui.drawButtonText
 import com.m4isper.tictactoe.ui.errorText
 import com.m4isper.tictactoe.ui.isRoundRestartTransition
 import com.m4isper.tictactoe.ui.isTurnTransition
+import com.m4isper.tictactoe.ui.joinQuery
 import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.newMoveCells
 import com.m4isper.tictactoe.ui.noRoomsText
@@ -97,15 +98,17 @@ private class GameClient {
         lang,
     )
     private val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
-    private val query = listOfNotNull(
-        room?.let { "room=$it" },
-        size?.let { "size=$it" },
-        win?.let { "win=$it" },
-        bot?.let { "bot=$it" },
-        turn?.let { "turn=$it" },
-        clock?.let { "clock=$it" },
-        params.get("lang")?.let { "lang=$it" },
-    ).joinToString("&")
+    private val query = joinQuery(
+        mapOf(
+            "room" to room,
+            "size" to size,
+            "win" to win,
+            "bot" to bot,
+            "turn" to turn,
+            "clock" to clock,
+            "lang" to params.get("lang"),
+        ),
+    )
     private val wsUrl = "$wsProtocol://${window.location.host}/play" + (query.takeIf { it.isNotEmpty() }?.let { "?$it" } ?: "")
     private val tokenKey = "tictactoe-token" + (room?.let { ":$it" } ?: "")
     private val nameKey = "tictactoe-name"
