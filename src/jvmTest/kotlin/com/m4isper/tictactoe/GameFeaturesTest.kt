@@ -11,8 +11,10 @@ import com.m4isper.tictactoe.stats.JsonScoreStore
 import com.m4isper.tictactoe.stats.Scoreboard
 import io.ktor.client.plugins.websocket.*
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.testing.*
@@ -161,6 +163,29 @@ class GameFeaturesTest {
                 "$src is not a PNG",
             )
         }
+    }
+
+    @Test
+    fun `the page follows the accept-language header unless the url says otherwise`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient { }
+
+        val en = client.get("/") {
+            header(HttpHeaders.AcceptLanguage, "en-US,en;q=0.9")
+        }.bodyAsText()
+        assertTrue("Your name" in en, "the header should pick the English page: ${en.take(400)}")
+
+        val ru = client.get("/") {
+            header(HttpHeaders.AcceptLanguage, "ru-RU,ru;q=0.9,en;q=0.8")
+        }.bodyAsText()
+        assertTrue("Ваше имя" in ru, "the header should pick the Russian page: ${ru.take(400)}")
+
+        val forced = client.get("/?lang=ru") {
+            header(HttpHeaders.AcceptLanguage, "en-US,en;q=0.9")
+        }.bodyAsText()
+        assertTrue("Ваше имя" in forced, "an explicit lang parameter should beat the header: ${forced.take(400)}")
     }
 
     @Test

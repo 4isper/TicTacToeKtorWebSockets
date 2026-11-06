@@ -6,6 +6,7 @@ import com.m4isper.tictactoe.stats.Scoreboard
 import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.ThemeMode
 import com.m4isper.tictactoe.ui.copyLinkText
+import com.m4isper.tictactoe.ui.detectLang
 import com.m4isper.tictactoe.ui.drawButtonText
 import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.namePlaceholder
@@ -212,7 +213,9 @@ private fun Route.assetRoutes() {
 private fun Route.pageRoute() {
     get("/") {
         val room = call.request.queryParameters["room"]
-        val pageLang = parseLang(call.request.queryParameters["lang"])
+        // an explicit lang parameter wins; otherwise the browser's own preference decides
+        val pageLang = call.request.queryParameters["lang"]?.let(::parseLang)
+            ?: detectLang(call.request.headers[HttpHeaders.AcceptLanguage])
         call.respondHtml { page(pageLang, room) }
     }
 }

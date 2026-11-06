@@ -19,6 +19,7 @@ import com.m4isper.tictactoe.ui.connectionErrorText
 import com.m4isper.tictactoe.ui.connectionLostText
 import com.m4isper.tictactoe.ui.copiedText
 import com.m4isper.tictactoe.ui.copyLinkText
+import com.m4isper.tictactoe.ui.detectLang
 import com.m4isper.tictactoe.ui.drawButtonText
 import com.m4isper.tictactoe.ui.errorText
 import com.m4isper.tictactoe.ui.isRoundRestartTransition
@@ -86,7 +87,9 @@ private class GameClient {
     private val bot = params.get("bot")
     private val turn = params.get("turn")
     private val clock = params.get("clock")
-    private val lang = parseLang(params.get("lang"))
+
+    // an explicit lang parameter wins; otherwise the browser's own preference decides
+    private val lang = params.get("lang")?.let(::parseLang) ?: detectLang(window.navigator.language)
     private val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
     private val query = listOfNotNull(
         room?.let { "room=$it" },
