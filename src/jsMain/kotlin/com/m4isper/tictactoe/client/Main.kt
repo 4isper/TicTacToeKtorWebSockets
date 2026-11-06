@@ -14,7 +14,6 @@ import com.m4isper.tictactoe.ui.SoundCue
 import com.m4isper.tictactoe.ui.ThemeMode
 import com.m4isper.tictactoe.ui.autoplayText
 import com.m4isper.tictactoe.ui.botLabel
-import com.m4isper.tictactoe.ui.cellAriaText
 import com.m4isper.tictactoe.ui.cellNotation
 import com.m4isper.tictactoe.ui.clockText
 import com.m4isper.tictactoe.ui.connectionErrorText
@@ -29,7 +28,6 @@ import com.m4isper.tictactoe.ui.isRoundRestartTransition
 import com.m4isper.tictactoe.ui.isTurnTransition
 import com.m4isper.tictactoe.ui.joinQuery
 import com.m4isper.tictactoe.ui.leaderboardTitle
-import com.m4isper.tictactoe.ui.newMoveCells
 import com.m4isper.tictactoe.ui.noRoomsText
 import com.m4isper.tictactoe.ui.opponentLostText
 import com.m4isper.tictactoe.ui.parseLang
@@ -110,6 +108,10 @@ private class GameClient {
         lang,
     )
     private val cues = Cues(preferences)
+    private val boardRenderer = BoardRenderer(board, turnBar, lang) { x, y ->
+        cues.unlock()
+        send(ClientMessage.MakeTurn(x = x, y = y))
+    }
     private val turnAlert = TurnAlert(lang)
     private val panels = SidePanels(lang, params.get("lang"))
     private val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
@@ -256,7 +258,7 @@ private class GameClient {
         turnAlert.onState(previous, state, mySymbol)
         updateActionButtons(state)
         updateStatus(previous, state)
-        renderBoard(previous, state)
+        boardRenderer.render(previous, state, mySymbol)
     }
 
     private fun updateCountdowns(previous: GameState?, state: GameState) {
@@ -390,45 +392,6 @@ private class GameClient {
         }
         cues.play(previous, state, mySymbol)
         if ((previous == null || !previous.isRoundOver) && state.isRoundOver) panels.refreshLeaderboard()
-    }
-
-    private fun renderBoard(previous: GameState?, state: GameState) {
-        board.innerHTML = ""
-        val cellPx = (minOf(window.innerWidth, window.innerHeight) * 0.8 / state.field.size)
-            .toInt()
-            .coerceAtMost(76)
-        turnBar.style.width = "${state.field.size * cellPx + (state.field.size - 1) * 4}px" // match the board width
-        val winningCells = state.winningCells.map { "${it.x},${it.y}" }.toSet()
-        val newMoves = newMoveCells(previous, state)
-        state.field.forEachIndexed { y, row ->
-            val rowDiv = document.createElement("div")
-            rowDiv.className = "row"
-            row.forEachIndexed { x, cell ->
-                val cellButton = document.createElement("button") as HTMLButtonElement
-                cellButton.className = buildString {
-                    append("cell")
-                    if ("$x,$y" in winningCells) append(" winning")
-                    if (newMoves.any { it.x == x && it.y == y }) append(" pop last-move")
-                }
-                cellButton.setAttribute("aria-label", cellAriaText(x, y, cell, lang))
-                cellButton.style.width = "${cellPx}px"
-                cellButton.style.height = "${cellPx}px"
-                cellButton.style.fontSize = "${cellPx / 2}px"
-                cellButton.textContent = when (cell) {
-                    PlayerSymbol.X -> "X"
-                    PlayerSymbol.O -> "O"
-                    null -> ""
-                }
-                cellButton.disabled =
-                    cell != null || mySymbol == null || state.connectionPlayers.size < 2 || state.playerAtTurn != mySymbol
-                cellButton.onclick = {
-                    cues.unlock()
-                    send(ClientMessage.MakeTurn(x = x, y = y))
-                }
-                rowDiv.appendChild(cellButton)
-            }
-            board.appendChild(rowDiv)
-        }
     }
 
     private fun handleMessage(text: String) {
