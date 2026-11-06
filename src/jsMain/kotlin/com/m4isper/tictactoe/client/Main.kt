@@ -117,6 +117,7 @@ private class GameClient {
     private val turnAlert = TurnAlert(lang)
     private val panels = SidePanels(lang, params.get("lang"))
     private val wsProtocol = if (window.location.protocol == "https:") "wss" else "ws"
+
     // the remembered name rides the join URL, so anonymous matchmaking can pair by rating
     private val storedName = localStorage.getItem(NAME_KEY)
     private val query = joinQuery(
