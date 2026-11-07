@@ -1,0 +1,8 @@
+.git
+.gradle
+build
+.workbuddy-ai
+data/*.json
+data/*.db
+data/*.sqlite
+*.md
