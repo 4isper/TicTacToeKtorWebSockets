@@ -36,7 +36,7 @@ Numbers are clamped to sane ranges, and only well-formed `http(s)://host` origin
 - **Room chat:** text lines (trimmed, flattened, up to 200 characters) reach both players and spectators with the author's name; invalid or too-frequent lines are refused or dropped. Chat and reactions share one broadcast path.
 - **Resilient scoreboard:** JSON writes are atomic (temp file + rename). If the file is unreadable, the original is saved as `<name>.corrupt` and a warning is logged before the store starts empty, so the history is not silently lost.
 - **Fair play and bounds:** a name belongs to the persistent player key that claimed it (`&key=`, generated once and kept in the browser's localStorage), so nobody can take it — even after its owner goes offline — and change its Elo rating; a claim without a key belongs to the live session only and is freed on disconnect. The lobby caps active games and spectators per room, and the handshake caps sockets per address and in total (see Configuration). A refused join answers `room is full` or `too many connections`; a foreign browser `Origin` is closed with a policy violation. Bot-only and exhibition games are retired once their last human or spectator leaves. These are light-weight identity guards, not user accounts — there are no passwords or registration.
-- **Checks:** `./gradlew build` runs the full test suite, ktlint via spotless, detekt (including the JVM type-resolution tasks) and the JS production bundle; GitHub Actions runs the same on every push and pull request.
+- **Checks:** `./gradlew build` runs the full test suite, ktlint via spotless, detekt (including the JVM type-resolution tasks) and the JS production bundle; GitHub Actions runs the same on every push and pull request, plus a Playwright E2E job (`npm ci && npx playwright install --with-deps chromium && npm run test:e2e`) that builds the fat jar, starts the server and drives real Chromium through a two-player win, a reconnect reload and a bot round.
 
 ## Protocol
 
@@ -100,6 +100,6 @@ The build is multiplatform: `commonMain` holds the domain rules and the wire pro
 
 detekt checks every Kotlin source in `src/`, and `check` also runs the JVM type-resolution analysis (`detektMainJvm` / `detektTestJvm`) for rules that need type information. Every violation fails the build — there is no baseline to hide behind.
 
-The `commonTest` suite runs on the JVM. Browser tests (`jsBrowserTest`) are deliberately disabled in `build.gradle.kts`: they need a Karma/Chrome runner and npm packages from the Kotlin karma fork, which an offline build cannot resolve. Re-enable them only with network access and a headless browser available.
+The `commonTest` suite runs on the JVM. Browser tests (`jsBrowserTest`) are deliberately disabled in `build.gradle.kts`: they need a Karma/Chrome runner and npm packages from the Kotlin karma fork, which an offline build cannot resolve. Re-enable them only with network access and a headless browser available. The Playwright suite under `e2e/` is separate: it drives the built app over HTTP/WebSocket like a user would — `npm run test:e2e` starts the server itself (or reuses one already listening on :8080 outside CI).
 
 CI runs `./gradlew build` on every push and pull request (GitHub Actions).
