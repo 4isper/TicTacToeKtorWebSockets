@@ -168,7 +168,7 @@ class GameLobby(
             tokens.remove(token)
             releaseNameLocked(token)
             binding.game.detachSpectator(session)
-            retireIfAbandoned(binding.game)
+            retireIfUnused(binding.game)
             return
         }
         if (!binding.game.detachSession(binding.symbol, session)) return
@@ -179,7 +179,7 @@ class GameLobby(
                 val symbol = pending.symbol ?: return@launch
                 releaseNameLocked(token)
                 pending.game.disconnectPlayer(symbol)
-                if (pending.game.isEmpty()) retire(pending.game)
+                retireIfUnused(pending.game)
             }
         }
     }
@@ -208,17 +208,18 @@ class GameLobby(
         releaseNameLocked(token)
         if (binding.symbol == null) {
             binding.game.detachSpectator(binding.session)
-            retireIfAbandoned(binding.game)
+            retireIfUnused(binding.game)
             return
         }
         binding.game.disconnectPlayer(binding.symbol)
-        if (binding.game.isEmpty()) retire(binding.game)
+        retireIfUnused(binding.game)
     }
 
-    /** A game nobody plays and nobody waits in — a spectator-only room — is retired. Caller holds [lock]. */
-    private fun retireIfAbandoned(game: TicTacToeGame) {
-        val aSlotIsOnGrace = tokens.values.any { it.game === game && it.graceJob != null }
-        if (game.isEmpty() && !aSlotIsOnGrace) retire(game)
+    /** Bots do not keep a game alive; a slot still held for a comeback does. Caller holds [lock]. */
+    private fun retireIfUnused(game: TicTacToeGame) {
+        if (!game.isBotOnly()) return
+        if (tokens.values.any { it.game === game && it.graceJob != null }) return
+        retire(game)
     }
 
     fun shutdownAll(): Unit = synchronized(lock) {

@@ -120,6 +120,54 @@ class GameLobbyTest {
     }
 
     @Test
+    fun `a bot room disappears once its last human leaves`() = runBlocking {
+        val lobby = GameLobby(reconnectGraceMs = 50)
+        val session = FakeSession()
+        val joined = assertNotNull(lobby.join(session, JoinSettings(room = "alpha", botLevel = BotLevel.NORMAL)))
+        assertEquals(1, lobby.roomSnapshots().size)
+
+        lobby.sessionClosed(joined.token, session)
+        delay(150)
+
+        assertTrue(lobby.roomSnapshots().isEmpty()) // a bot alone does not keep a room alive
+        val again = assertNotNull(lobby.join(FakeSession(), JoinSettings(room = "alpha")))
+        assertNotSame(joined.game, again.game) // the retired game is not reused
+        lobby.shutdownAll()
+    }
+
+    @Test
+    fun `an exhibition retires when its last spectator leaves`() {
+        val lobby = GameLobby()
+        val session = FakeSession()
+        val joined = assertNotNull(
+            lobby.join(session, JoinSettings(room = "alpha", botLevel = BotLevel.NORMAL, secondBotLevel = BotLevel.NORMAL)),
+        )
+        assertNull(joined.symbol)
+        assertEquals(1, lobby.roomSnapshots().size)
+
+        lobby.sessionClosed(joined.token, session)
+
+        assertTrue(lobby.roomSnapshots().isEmpty())
+        val again = assertNotNull(lobby.join(FakeSession(), JoinSettings(room = "alpha", spectate = true)))
+        assertNotSame(joined.game, again.game)
+        lobby.shutdownAll()
+    }
+
+    @Test
+    fun `an abandoned bot game frees its lobby slot`() = runBlocking {
+        val lobby = GameLobby(reconnectGraceMs = 50, maxGames = 1)
+        val session = FakeSession()
+        val joined = assertNotNull(lobby.join(session, JoinSettings(room = "alpha", botLevel = BotLevel.NORMAL)))
+        assertNull(lobby.join(FakeSession(), JoinSettings(room = "beta"))) // the cap is reached
+
+        lobby.sessionClosed(joined.token, session)
+        delay(150)
+
+        assertNotNull(lobby.join(FakeSession(), JoinSettings(room = "beta"))) // the slot came back
+        lobby.shutdownAll()
+    }
+
+    @Test
     fun `the lobby refuses to grow past its game limit`() {
         val lobby = GameLobby(maxGames = 1)
         assertNotNull(lobby.join(FakeSession(), JoinSettings()))

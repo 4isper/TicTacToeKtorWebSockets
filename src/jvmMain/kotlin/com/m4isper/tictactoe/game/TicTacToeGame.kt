@@ -403,6 +403,9 @@ class TicTacToeGame(
 
     fun isEmpty(): Boolean = state.value.connectionPlayers.isEmpty()
 
+    /** Only bots (or nobody) hold the slots and nobody is watching — the lobby may retire this game. */
+    fun isBotOnly(): Boolean = playerSockets.values.all { it === BotSession } && spectatorSockets.isEmpty()
+
     fun currentState(): GameState = state.value
 
     private fun rejectionReason(
