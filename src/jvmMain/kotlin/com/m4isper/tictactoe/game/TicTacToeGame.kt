@@ -394,10 +394,12 @@ class TicTacToeGame(
         turnSeconds: Int,
         clockSeconds: Int = 0,
         seriesTarget: Int = 0,
+        secondBotLevel: BotLevel? = null,
     ): Boolean = this.boardSize == boardSize &&
         this.winLength == winLength && this.botLevel == botLevel && this.turnTimeoutMs == turnSeconds * 1000L &&
         this.clockBudgetMs == clockSeconds.takeIf { it > 0 }?.let { it * 1000L } &&
-        this.seriesTarget == seriesTarget.takeIf { it > 0 }
+        this.seriesTarget == seriesTarget.takeIf { it > 0 } &&
+        this.secondBotLevel == secondBotLevel
 
     fun isFull(): Boolean = state.value.connectionPlayers.size >= 2
 

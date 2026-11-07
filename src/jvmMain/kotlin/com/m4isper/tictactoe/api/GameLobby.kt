@@ -109,7 +109,15 @@ class GameLobby(
         if (settings.room == null) {
             // pair anonymous joiners only with identical settings, or their size/win/bot would be silently ignored
             val candidates = games.filter {
-                !it.isFull() && it.matches(settings.size, settings.winLength, settings.botLevel, settings.turnSeconds, settings.clockSeconds, settings.seriesTarget)
+                !it.isFull() && it.matches(
+                    settings.size,
+                    settings.winLength,
+                    settings.botLevel,
+                    settings.turnSeconds,
+                    settings.clockSeconds,
+                    settings.seriesTarget,
+                    settings.secondBotLevel,
+                )
             }
             bestCandidate(candidates, settings.rating)?.let { return it }
         } else {

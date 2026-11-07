@@ -38,6 +38,7 @@ import com.m4isper.tictactoe.ui.soundTitle
 import com.m4isper.tictactoe.ui.themeIcon
 import com.m4isper.tictactoe.ui.themeTitle
 import com.m4isper.tictactoe.ui.undoButtonText
+import com.m4isper.tictactoe.ui.urlEncode
 import com.m4isper.tictactoe.ui.winPlaceholderText
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -619,7 +620,7 @@ private fun BODY.pageHeading(pageLang: Lang, room: String?, langParam: String?) 
             Lang.EN -> "Tic-tac-toe"
         }}"
     }
-    a(href = if (langParam == null) "/" else "/?lang=$langParam") {
+    a(href = if (langParam == null) "/" else "/?lang=${urlEncode(langParam)}") {
         id = "quick-play"
         +quickPlayText(pageLang)
     }

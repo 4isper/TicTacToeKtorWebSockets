@@ -190,6 +190,30 @@ class TicTacToeGameTest {
     }
 
     @Test
+    fun `anonymous pairing never drops the exhibition flag`() {
+        val exhibition = TicTacToeGame(botLevel = BotLevel.NORMAL, secondBotLevel = BotLevel.NORMAL)
+        assertTrue(
+            exhibition.matches(
+                boardSize = 3,
+                winLength = 3,
+                botLevel = BotLevel.NORMAL,
+                turnSeconds = 30,
+                secondBotLevel = BotLevel.NORMAL,
+            ),
+        )
+        assertFalse(
+            exhibition.matches(
+                boardSize = 3,
+                winLength = 3,
+                botLevel = BotLevel.NORMAL,
+                turnSeconds = 30,
+                secondBotLevel = null,
+            ),
+        )
+        exhibition.shutdown()
+    }
+
+    @Test
     fun `rematch is rejected while the round is running`() = runBlocking {
         val game = TicTacToeGame()
         val xSession = FakeSession()

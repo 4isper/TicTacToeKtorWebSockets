@@ -39,6 +39,14 @@ class JoinParamsTest {
     }
 
     @Test
+    fun `values are percent encoded so a name cannot break the query`() {
+        val query = joinQuery(mapOf("room" to "a b", "name" to "Аня&Б", "lang" to "en"))
+        assertEquals("room=a%20b&name=%D0%90%D0%BD%D1%8F%26%D0%91&lang=en", query)
+        assertEquals("%F0%9F%98%80", urlEncode("😀"))
+        assertEquals("alpha-5_1.2~3", urlEncode("alpha-5_1.2~3"))
+    }
+
+    @Test
     fun `nothing to send builds no query`() {
         assertEquals("", joinQuery(emptyMap()))
     }

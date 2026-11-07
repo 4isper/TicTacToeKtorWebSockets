@@ -57,6 +57,7 @@ import com.m4isper.tictactoe.ui.turnAlertTitle
 import com.m4isper.tictactoe.ui.turnSecondsText
 import com.m4isper.tictactoe.ui.undoButtonText
 import com.m4isper.tictactoe.ui.updatedMoveLog
+import com.m4isper.tictactoe.ui.urlEncode
 import kotlinx.browser.document
 import kotlinx.browser.localStorage
 import kotlinx.browser.window
@@ -798,8 +799,8 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                         li.textContent = "${room.name} — ${room.players}/2 · $details"
                         li.style.cursor = "pointer"
                         li.onclick = {
-                            val langSuffix = langParam?.let { "&lang=$it" } ?: ""
-                            window.location.href = "${window.location.pathname}?room=${room.name}$langSuffix"
+                            val langSuffix = langParam?.let { "&lang=${urlEncode(it)}" } ?: ""
+                            window.location.href = "${window.location.pathname}?room=${urlEncode(room.name as String)}$langSuffix"
                         }
                         rows.appendChild(li)
                     }
@@ -812,8 +813,7 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
 
     fun showProfile(name: String, page: Int = 0) {
         try {
-            val encoded = js("encodeURIComponent(name)")
-            window.asDynamic().fetch("/player?name=" + encoded + "&page=" + page).then { response: dynamic ->
+            window.asDynamic().fetch("/player?name=${urlEncode(name)}&page=$page").then { response: dynamic ->
                 val profileDiv = document.getElementById("profile") as HTMLElement
                 if (response.status != 200) {
                     profileDiv.innerHTML = ""
