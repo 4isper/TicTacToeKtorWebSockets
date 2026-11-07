@@ -11,6 +11,7 @@ import com.m4isper.tictactoe.protocol.ClientMessage
 import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
 import com.m4isper.tictactoe.ui.Lang
+import com.m4isper.tictactoe.ui.MAX_AUTO_RETRIES
 import com.m4isper.tictactoe.ui.SharedReplay
 import com.m4isper.tictactoe.ui.SoundCue
 import com.m4isper.tictactoe.ui.ThemeMode
@@ -18,15 +19,19 @@ import com.m4isper.tictactoe.ui.autoplayText
 import com.m4isper.tictactoe.ui.botLabel
 import com.m4isper.tictactoe.ui.cellNotation
 import com.m4isper.tictactoe.ui.clockText
+import com.m4isper.tictactoe.ui.connectingText
 import com.m4isper.tictactoe.ui.connectionErrorText
 import com.m4isper.tictactoe.ui.connectionLostText
 import com.m4isper.tictactoe.ui.copiedText
+import com.m4isper.tictactoe.ui.copyFailedText
 import com.m4isper.tictactoe.ui.copyLinkText
 import com.m4isper.tictactoe.ui.detectLang
+import com.m4isper.tictactoe.ui.dismissText
 import com.m4isper.tictactoe.ui.drawButtonText
 import com.m4isper.tictactoe.ui.errorText
 import com.m4isper.tictactoe.ui.headToHeadTitle
 import com.m4isper.tictactoe.ui.hintAvailable
+import com.m4isper.tictactoe.ui.installText
 import com.m4isper.tictactoe.ui.isRoundRestartTransition
 import com.m4isper.tictactoe.ui.isTurnTransition
 import com.m4isper.tictactoe.ui.joinQuery
@@ -37,11 +42,15 @@ import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.parseTheme
 import com.m4isper.tictactoe.ui.profileNotFoundText
 import com.m4isper.tictactoe.ui.ratingSparklinePoints
+import com.m4isper.tictactoe.ui.reconnectingText
+import com.m4isper.tictactoe.ui.reloadText
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.replayFromFragment
 import com.m4isper.tictactoe.ui.replayHintText
 import com.m4isper.tictactoe.ui.replayToFragment
 import com.m4isper.tictactoe.ui.restartText
+import com.m4isper.tictactoe.ui.retryDelayMs
+import com.m4isper.tictactoe.ui.retryNowText
 import com.m4isper.tictactoe.ui.scoreText
 import com.m4isper.tictactoe.ui.seriesTargetText
 import com.m4isper.tictactoe.ui.shouldAlertTurn
@@ -50,6 +59,7 @@ import com.m4isper.tictactoe.ui.soundIcon
 import com.m4isper.tictactoe.ui.soundTitle
 import com.m4isper.tictactoe.ui.spectatorText
 import com.m4isper.tictactoe.ui.statusText
+import com.m4isper.tictactoe.ui.themeColor
 import com.m4isper.tictactoe.ui.themeIcon
 import com.m4isper.tictactoe.ui.themeTitle
 import com.m4isper.tictactoe.ui.timerSuffix
@@ -57,6 +67,7 @@ import com.m4isper.tictactoe.ui.turnAlertBody
 import com.m4isper.tictactoe.ui.turnAlertTitle
 import com.m4isper.tictactoe.ui.turnSecondsText
 import com.m4isper.tictactoe.ui.undoButtonText
+import com.m4isper.tictactoe.ui.updateNoticeText
 import com.m4isper.tictactoe.ui.updatedMoveLog
 import com.m4isper.tictactoe.ui.urlEncode
 import kotlinx.browser.document
@@ -67,19 +78,135 @@ import org.w3c.dom.Element
 import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.HTMLInputElement
+import org.w3c.dom.HTMLTextAreaElement
 import org.w3c.dom.WebSocket
 import org.w3c.dom.events.Event
 import org.w3c.dom.url.URLSearchParams
 import kotlin.js.Date
 
+private var deferredInstallPrompt: Event? = null
+
 fun main() {
+    val lang = clientLang()
+    registerServiceWorker(lang)
+    captureInstallPrompt(lang)
+    GameClient().start()
+}
+
+/** One language decision, shared by the page and the PWA notices. */
+private fun clientLang(): Lang = URLSearchParams(window.location.search).get("lang")?.let(::parseLang)
+    ?: detectLang(window.navigator.language)
+
+/** Offer a reload only when a new worker replaces one that already controlled the page. */
+private fun registerServiceWorker(lang: Lang) {
     try {
-        window.asDynamic().navigator.serviceWorker.register("/sw.js").catch { /* offline support is decorative */ }
+        val container = window.asDynamic().navigator.serviceWorker
+        if (container == null) return
+        val hadController = container.controller != null
+        container.register("/sw.js")
+            .then { registration: dynamic ->
+                registration.addEventListener("updatefound", {
+                    val worker = registration.installing
+                    if (worker != null) {
+                        worker.addEventListener("statechange", {
+                            if (worker.state == "installed" && hadController) showUpdateNotice(lang)
+                        })
+                    }
+                })
+            }
+            .catch { /* registration blocked: the page still works online */ }
+        container.addEventListener("controllerchange", {
+            if (hadController) showUpdateNotice(lang)
+        })
     } catch (_: Throwable) {
         // no service worker support: the page still works
     }
+}
 
-    GameClient().start()
+private fun showUpdateNotice(lang: Lang) {
+    if (document.getElementById("pwa-notice") != null) return
+    val notice = document.createElement("div") as HTMLElement
+    notice.id = "pwa-notice"
+    notice.className = "pwa-notice"
+    val text = document.createElement("span") as HTMLElement
+    text.textContent = updateNoticeText(lang)
+    val reload = document.createElement("button") as HTMLButtonElement
+    reload.textContent = reloadText(lang)
+    reload.onclick = { window.location.reload() }
+    val dismiss = document.createElement("button") as HTMLButtonElement
+    dismiss.textContent = dismissText(lang)
+    dismiss.onclick = { notice.remove() }
+    notice.appendChild(text)
+    notice.appendChild(reload)
+    notice.appendChild(dismiss)
+    document.body?.appendChild(notice)
+}
+
+private fun captureInstallPrompt(lang: Lang) {
+    window.addEventListener("beforeinstallprompt", { event ->
+        event.preventDefault()
+        deferredInstallPrompt = event
+        showInstallButton(lang)
+    })
+}
+
+private fun showInstallButton(lang: Lang) {
+    if (document.getElementById("install-button") != null) return
+    val button = document.createElement("button") as HTMLButtonElement
+    button.id = "install-button"
+    button.className = "secondary"
+    button.textContent = installText(lang)
+    button.onclick = {
+        val prompt = deferredInstallPrompt
+        if (prompt != null) {
+            prompt.asDynamic().prompt()
+            deferredInstallPrompt = null
+            button.remove()
+        }
+    }
+    document.body?.appendChild(button)
+}
+
+/** Clipboard writes are async and absent on insecure origins: only a real success shows success text. */
+private fun copyTextWithFeedback(
+    text: String,
+    button: HTMLButtonElement,
+    successText: String,
+    failureText: String,
+    restoreText: String,
+) {
+    val done: (Boolean) -> Unit = { ok ->
+        button.textContent = if (ok) successText else failureText
+        window.setTimeout({ button.textContent = restoreText }, 2_000)
+    }
+    val clipboard = window.asDynamic().navigator.clipboard
+    if (clipboard != null) {
+        try {
+            clipboard.writeText(text).then { done(true) }.catch { legacyCopy(text, done) }
+            return
+        } catch (_: Throwable) {
+            // insecure origin or a rejected write: fall through to the legacy path
+        }
+    }
+    legacyCopy(text, done)
+}
+
+private fun legacyCopy(text: String, onDone: (Boolean) -> Unit) {
+    val area = document.createElement("textarea") as HTMLTextAreaElement
+    try {
+        area.value = text
+        area.setAttribute("readonly", "")
+        area.style.position = "fixed"
+        area.style.top = "0"
+        area.style.opacity = "0"
+        document.body?.appendChild(area)
+        area.select()
+        onDone(document.asDynamic().execCommand("copy") as Boolean)
+    } catch (_: Throwable) {
+        onDone(false)
+    } finally {
+        area.remove()
+    }
 }
 
 private class GameClient {
@@ -111,7 +238,7 @@ private class GameClient {
     private val spectate = params.get("spectate")
 
     // an explicit lang parameter wins; otherwise the browser's own preference decides
-    private val lang = params.get("lang")?.let(::parseLang) ?: detectLang(window.navigator.language)
+    private val lang = clientLang()
     private val preferences = Preferences(
         document.getElementById("sound") as HTMLButtonElement,
         document.getElementById("theme") as HTMLButtonElement,
@@ -500,9 +627,11 @@ private class GameClient {
     }
 
     private fun connect() {
+        showStatus(if (retry == 0) connectingText(lang) else reconnectingText(lang))
         socket = WebSocket(wsUrl)
         socket?.onopen = {
             retry = 0
+            hideRetryButton()
             showError("")
             val stored = localStorage.getItem(tokenKey)
             if (stored != null) {
@@ -520,16 +649,40 @@ private class GameClient {
             turnAlert.stop()
             if (fatal) {
                 // the join was rejected: the reason is in the error box, there is nothing to reconnect to
+                hideRetryButton()
                 showStatus("")
+            } else if (retry >= MAX_AUTO_RETRIES) {
+                showError(connectionErrorText(lang))
+                showStatus("")
+                showRetryButton()
             } else {
                 showStatus(connectionLostText(lang))
                 retry++
-                window.setTimeout({ connect() }, (retry.coerceAtMost(5) * 1000))
+                window.setTimeout({ connect() }, retryDelayMs(retry).toInt())
             }
         }
         socket?.onerror = {
             showError(connectionErrorText(lang))
         }
+    }
+
+    private fun showRetryButton() {
+        val host = document.getElementById("connection-actions") as? HTMLElement ?: return
+        if (document.getElementById("retry-now") != null) return
+        val button = document.createElement("button") as HTMLButtonElement
+        button.id = "retry-now"
+        button.className = "secondary"
+        button.textContent = retryNowText(lang)
+        button.onclick = {
+            button.remove()
+            retry = 0
+            connect()
+        }
+        host.appendChild(button)
+    }
+
+    private fun hideRetryButton() {
+        document.getElementById("retry-now")?.remove()
     }
 
     /** Enter in the leaderboard search opens that player's profile. */
@@ -548,9 +701,13 @@ private class GameClient {
     fun start() {
         copyLink?.let { button ->
             button.onclick = {
-                window.navigator.clipboard?.writeText(window.location.href)
-                button.textContent = copiedText(lang)
-                window.setTimeout({ button.textContent = copyLinkText(lang) }, 2000)
+                copyTextWithFeedback(
+                    text = window.location.href,
+                    button = button,
+                    successText = copiedText(lang),
+                    failureText = copyFailedText(lang),
+                    restoreText = copyLinkText(lang),
+                )
             }
         }
 
@@ -761,6 +918,7 @@ private class Preferences(
     private fun renderSound() {
         soundButton.textContent = soundIcon(muted)
         soundButton.title = soundTitle(muted, lang)
+        soundButton.setAttribute("aria-label", soundTitle(muted, lang))
     }
 
     private fun renderTheme() {
@@ -772,6 +930,15 @@ private class Preferences(
         }
         themeButton.textContent = themeIcon(theme)
         themeButton.title = themeTitle(theme, lang)
+        themeButton.setAttribute("aria-label", themeTitle(theme, lang))
+        updateThemeColorMetas()
+    }
+
+    private fun updateThemeColorMetas() {
+        document.getElementById("theme-color-light")
+            ?.setAttribute("content", themeColor(theme, prefersLight = true))
+        document.getElementById("theme-color-dark")
+            ?.setAttribute("content", themeColor(theme, prefersLight = false))
     }
 
     private companion object {
@@ -1014,9 +1181,8 @@ private class ReplayView(
         play.onclick = { togglePlay() }
         share.onclick = {
             val fragment = replayToFragment(SharedReplay(boardSize, boardSize, moves))
-            window.navigator.clipboard?.writeText("${window.location.origin}${window.location.pathname}${window.location.search}#$fragment")
-            share.textContent = "✓"
-            window.setTimeout({ share.textContent = "🔗" }, 1_500)
+            val url = "${window.location.origin}${window.location.pathname}${window.location.search}#$fragment"
+            copyTextWithFeedback(url, share, "✓", copyFailedText(lang), "🔗")
         }
 
         container.appendChild(controls)

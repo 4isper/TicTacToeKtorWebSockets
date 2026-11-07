@@ -28,9 +28,11 @@ import com.m4isper.tictactoe.ui.fieldWinText
 import com.m4isper.tictactoe.ui.hintText
 import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.namePlaceholder
+import com.m4isper.tictactoe.ui.okText
 import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.profileNotFoundText
 import com.m4isper.tictactoe.ui.quickPlayText
+import com.m4isper.tictactoe.ui.reactionLabel
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.resignButtonText
 import com.m4isper.tictactoe.ui.roomsTitle
@@ -39,6 +41,7 @@ import com.m4isper.tictactoe.ui.seriesOffText
 import com.m4isper.tictactoe.ui.seriesTargetText
 import com.m4isper.tictactoe.ui.soundIcon
 import com.m4isper.tictactoe.ui.soundTitle
+import com.m4isper.tictactoe.ui.themeColor
 import com.m4isper.tictactoe.ui.themeIcon
 import com.m4isper.tictactoe.ui.themeTitle
 import com.m4isper.tictactoe.ui.undoButtonText
@@ -123,13 +126,25 @@ private const val ICON_SVG =
         """<g stroke="#e8e8f0" stroke-width="7"><circle cx="66" cy="66" r="13" fill="none"/></g></svg>"""
 
 private const val SERVICE_WORKER_JS =
-    """const OFFLINE_URL = "/offline";""" +
+    """const CACHE = "ttt-v2"; const OFFLINE_URL = "/offline";""" +
+        """const SHELL = ["/", "/styles.css", "/static/app.js", "/manifest.webmanifest", "/icon.svg", "/icon-192.png", "/icon-512.png", OFFLINE_URL];""" +
         """self.addEventListener("install", function (e) {""" +
-        """e.waitUntil(caches.open("ttt-v1").then(function (c) { return c.add(OFFLINE_URL); })); self.skipWaiting(); });""" +
-        """self.addEventListener("activate", function (e) { self.clients.claim(); });""" +
+        """e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); })); });""" +
+        """self.addEventListener("activate", function (e) {""" +
+        """e.waitUntil(caches.keys().then(function (keys) {""" +
+        """return Promise.all(keys.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));""" +
+        """}).then(function () { return self.clients.claim(); })); });""" +
         """self.addEventListener("fetch", function (e) {""" +
         """if (e.request.mode === "navigate") {""" +
-        """e.respondWith(fetch(e.request).catch(function () { return caches.match(OFFLINE_URL); })); } });"""
+        """e.respondWith(fetch(e.request).catch(function () {""" +
+        """return caches.match(e.request).then(function (page) { return page || caches.match(OFFLINE_URL); });""" +
+        """})); return; }""" +
+        """if (e.request.method !== "GET") return;""" +
+        """e.respondWith(caches.match(e.request).then(function (hit) {""" +
+        """return hit || fetch(e.request).then(function (res) {""" +
+        """if (res && res.ok && new URL(e.request.url).origin === self.location.origin) {""" +
+        """var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(e.request, copy); }); }""" +
+        """return res; }); })); });"""
 
 private const val OFFLINE_HTML =
     """<!doctype html><html lang="ru"><head><meta charset="utf-8">""" +
@@ -387,6 +402,30 @@ private fun CssBuilder.layoutStyles() {
         transition += Transition("width", 250.ms, Timing.linear)
     }
     sparklineStyles()
+    rule(":focus-visible") {
+        put("outline", "3px solid var(--accent)")
+        put("outline-offset", "2px")
+    }
+    rule("@media (prefers-reduced-motion: reduce)") {
+        rule(".cell.winning, .cell.pop, .reaction-bubble, #turn-bar-fill") {
+            put("animation", "none")
+            put("transition", "none")
+        }
+    }
+    rule(".pwa-notice, #install-button") {
+        position = Position.fixed
+        put("bottom", "12px")
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        padding = Padding(horizontal = 12.px, vertical = 8.px)
+        put("z-index", "50")
+    }
+    rule(".pwa-notice") {
+        put("left", "12px")
+        put("right", "12px")
+        display = Display.flex
+        gap = 8.px
+    }
 }
 
 private fun CssBuilder.nameRowStyles() {
@@ -533,6 +572,7 @@ private fun CssBuilder.createStyles() {
 private fun CssBuilder.effectStyles() {
     rule("#board") {
         position = Position.relative
+        put("overflow-x", "auto") // a 10x10 board keeps 44px touch targets on narrow screens
     }
     rule("#reactions") {
         display = Display.flex
@@ -602,10 +642,13 @@ private fun HTML.page(pageLang: Lang, room: String?, langParam: String?) {
 private fun HEAD.pageHead(pageLang: Lang) {
     meta { charset = "utf-8" }
     meta(name = "viewport", content = "width=device-width, initial-scale=1")
-    meta(name = "theme-color", content = "#f4f4f8") {
+    meta(name = "theme-color", content = themeColor(ThemeMode.AUTO, prefersLight = true)) {
         attributes["media"] = "(prefers-color-scheme: light)"
+        attributes["id"] = "theme-color-light"
     }
-    meta(name = "theme-color", content = "#14141f")
+    meta(name = "theme-color", content = themeColor(ThemeMode.AUTO, prefersLight = false)) {
+        attributes["id"] = "theme-color-dark"
+    }
     link(rel = "manifest", href = "/manifest.webmanifest")
     link(rel = "icon", href = "/icon.svg")
     title {
@@ -643,30 +686,43 @@ private fun BODY.pageHeading(pageLang: Lang, room: String?, langParam: String?) 
 }
 
 private fun BODY.controls(pageLang: Lang) {
-    div { id = "status" }
-    div { id = "score" }
-    div { id = "clocks" }
+    div {
+        id = "status"
+        attributes.putAll(mapOf("role" to "status", "aria-live" to "polite"))
+    }
+    div {
+        id = "score"
+        attributes.putAll(mapOf("role" to "status", "aria-live" to "polite"))
+    }
+    div {
+        id = "clocks"
+        attributes.putAll(mapOf("role" to "timer", "aria-live" to "off"))
+    }
     div(classes = "name-row") {
         input(InputType.text) {
             id = "name"
             placeholder = namePlaceholder(pageLang)
+            attributes["aria-label"] = namePlaceholder(pageLang)
             maxLength = "20"
         }
         button(classes = "secondary") {
             id = "set-name"
-            +"ОК"
+            +okText(pageLang)
         }
         button(classes = "secondary") {
             id = "sound"
             title = soundTitle(muted = false, lang = pageLang)
+            attributes["aria-label"] = soundTitle(muted = false, lang = pageLang)
             +soundIcon(muted = false)
         }
         button(classes = "secondary") {
             id = "theme"
             title = themeTitle(ThemeMode.AUTO, lang = pageLang)
+            attributes["aria-label"] = themeTitle(ThemeMode.AUTO, lang = pageLang)
             +themeIcon(ThemeMode.AUTO)
         }
     }
+    div { id = "connection-actions" }
     button(classes = "secondary") {
         id = "rematch"
         +rematchButtonText(waiting = false, lang = pageLang)
@@ -696,7 +752,11 @@ private fun BODY.boardArea() {
     }
     div { id = "board" }
     ol { id = "moves" }
-    div { id = "error" }
+    div {
+        id = "error"
+        attributes["role"] = "alert"
+        attributes["aria-live"] = "assertive"
+    }
     div {
         id = "shared-replay"
         attributes["style"] = "display:none"
@@ -709,7 +769,7 @@ private fun BODY.panels(pageLang: Lang, langParam: String?) {
         id = "reactions"
         REACTION_EMOJIS.forEach { emoji ->
             button(classes = "reaction") {
-                attributes["aria-label"] = emoji
+                attributes["aria-label"] = reactionLabel(emoji, pageLang)
                 +emoji
             }
         }
@@ -748,6 +808,7 @@ private fun BODY.panels(pageLang: Lang, langParam: String?) {
         input(InputType.text) {
             id = "player-search"
             placeholder = searchPlaceholder(pageLang)
+            attributes["aria-label"] = searchPlaceholder(pageLang)
             maxLength = "20"
         }
         ul { id = "leaderboard-rows" }
