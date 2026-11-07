@@ -38,6 +38,8 @@ data class JoinSettings(
     val spectate: Boolean = false,
     /** A name carried by the join URL; claimed like `set_name` would, a refusal leaves the session unnamed. */
     val name: String? = null,
+    /** A persistent player secret from the client's localStorage; owns the name across sessions. */
+    val playerKey: String? = null,
     /** The joiner's current Elo, when they are named — anonymous matchmaking prefers the closest rated player. */
     val rating: Int? = null,
 )
@@ -85,10 +87,12 @@ class GameLobby(
     private val tokens = mutableMapOf<String, TokenBinding>()
     private val lobbyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // A claimed name belongs to one reconnect token, so a second session cannot
-    // play (and change the Elo rating) under somebody else's name.
-    private val nameOwners = mutableMapOf<String, String>() // lowercased name -> token
+    // A claimed name belongs to a persistent player key when the client sends one, so the
+    // owner keeps it (and its Elo) across sessions; a keyless claim belongs to the live
+    // token only and is freed on disconnect.
+    private val nameOwners = mutableMapOf<String, String>() // lowercased name -> player key or token
     private val tokenNames = mutableMapOf<String, String>() // token -> lowercased name
+    private val keyNames = mutableMapOf<String, String>() // player key -> lowercased name; one name per key
 
     fun join(
         session: WebSocketSession,
@@ -153,21 +157,22 @@ class GameLobby(
         const val UNRATED_CANDIDATE = Double.MAX_VALUE
     }
 
-    /** A name stays with the token that claimed it; another live session cannot take it. */
-    fun claimName(token: String, name: String): Boolean = synchronized(lock) {
+    /** A name stays with its player key (or, keyless, with the live token); a stranger cannot take it. */
+    fun claimName(token: String, name: String, playerKey: String? = null): Boolean = synchronized(lock) {
         val key = name.lowercase()
+        val self = playerKey ?: token
         val owner = nameOwners[key]
-        if (owner != null && owner != token) return false
-        tokenNames[token]?.let { previous ->
-            if (previous != key) nameOwners.remove(previous)
-        }
-        nameOwners[key] = token
+        if (owner != null && owner != self) return false
+        val previous = if (playerKey != null) keyNames[playerKey] else tokenNames[token]
+        if (previous != null && previous != key) nameOwners.remove(previous)
+        nameOwners[key] = self
         tokenNames[token] = key
+        if (playerKey != null) keyNames[playerKey] = key
         true
     }
 
     fun releaseName(token: String): Unit = synchronized(lock) {
-        tokenNames.remove(token)?.let { nameOwners.remove(it) }
+        releaseNameLocked(token)
     }
 
     fun sessionClosed(token: String, session: WebSocketSession): Unit = synchronized(lock) {
@@ -241,12 +246,14 @@ class GameLobby(
         tokens.clear()
         nameOwners.clear()
         tokenNames.clear()
+        keyNames.clear()
         lobbyScope.cancel()
     }
 
     /** Caller already holds [lock]. */
     private fun releaseNameLocked(token: String) {
-        tokenNames.remove(token)?.let { nameOwners.remove(it) }
+        val name = tokenNames.remove(token) ?: return
+        if (nameOwners[name] == token) nameOwners.remove(name) // a keyed name stays with its owner
     }
 
     /** Every named room that still holds players — the page's room list. */

@@ -74,6 +74,8 @@ import kotlinx.browser.document
 import kotlinx.browser.localStorage
 import kotlinx.browser.window
 import kotlinx.serialization.encodeToString
+import org.khronos.webgl.Uint8Array
+import org.khronos.webgl.get
 import org.w3c.dom.Element
 import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
@@ -209,6 +211,18 @@ private fun legacyCopy(text: String, onDone: (Boolean) -> Unit) {
     }
 }
 
+private const val PLAYER_KEY = "tictactoe-player-key"
+
+/** A persistent secret that owns the player's name across sessions; travels only in the WS join query. */
+private fun loadOrCreatePlayerKey(): String {
+    localStorage.getItem(PLAYER_KEY)?.let { return it }
+    val bytes = Uint8Array(16)
+    window.asDynamic().crypto.getRandomValues(bytes)
+    val key = (0 until bytes.length).joinToString("") { i -> (bytes[i].toInt() and 0xFF).toString(16).padStart(2, '0') }
+    localStorage.setItem(PLAYER_KEY, key)
+    return key
+}
+
 private class GameClient {
     private val status = document.getElementById("status") as HTMLElement
     private val board = document.getElementById("board") as HTMLElement
@@ -255,6 +269,7 @@ private class GameClient {
 
     // the remembered name rides the join URL, so anonymous matchmaking can pair by rating
     private val storedName = localStorage.getItem(NAME_KEY)
+    private val playerKey = loadOrCreatePlayerKey()
     private val query = joinQuery(
         mapOf(
             "room" to room,
@@ -266,6 +281,7 @@ private class GameClient {
             "wins" to wins,
             "spectate" to spectate,
             "name" to storedName,
+            "key" to playerKey,
             "lang" to params.get("lang"),
         ),
     )

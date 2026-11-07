@@ -199,6 +199,43 @@ class GameLobbyTest {
     }
 
     @Test
+    fun `a keyed name stays owned after its session leaves`() = runBlocking {
+        val lobby = GameLobby(reconnectGraceMs = 50)
+        val session = FakeSession()
+        val first = assertNotNull(lobby.join(session, JoinSettings()))
+        assertTrue(lobby.claimName(first.token, "Аня", playerKey = "key-anya"))
+
+        lobby.sessionClosed(first.token, session)
+        delay(150) // the grace expired: the session is gone for good
+
+        val stranger = assertNotNull(lobby.join(FakeSession(), JoinSettings()))
+        assertFalse(lobby.claimName(stranger.token, "Аня", playerKey = "key-stranger"))
+        assertFalse(lobby.claimName(stranger.token, "Аня")) // keyless cannot take an owned name either
+
+        val returning = assertNotNull(lobby.join(FakeSession(), JoinSettings()))
+        assertTrue(lobby.claimName(returning.token, "аня", playerKey = "key-anya")) // the owner returns, case-insensitively
+        lobby.shutdownAll()
+    }
+
+    @Test
+    fun `a key owns exactly one name even across sessions`() = runBlocking {
+        val lobby = GameLobby(reconnectGraceMs = 50)
+        val session = FakeSession()
+        val first = assertNotNull(lobby.join(session, JoinSettings()))
+        assertTrue(lobby.claimName(first.token, "Аня", playerKey = "key-a"))
+
+        lobby.sessionClosed(first.token, session)
+        delay(150)
+
+        val second = assertNotNull(lobby.join(FakeSession(), JoinSettings()))
+        assertTrue(lobby.claimName(second.token, "Боря", playerKey = "key-a")) // renaming from a new session frees the old name
+        val stranger = assertNotNull(lobby.join(FakeSession(), JoinSettings(size = 5, winLength = 4)))
+        assertTrue(lobby.claimName(stranger.token, "Аня", playerKey = "key-b"))
+        assertFalse(lobby.claimName(stranger.token, "Боря", playerKey = "key-b")) // the new name stays owned
+        lobby.shutdownAll()
+    }
+
+    @Test
     fun `bot games never pair with each other`() {
         val lobby = GameLobby()
         val first = assertNotNull(lobby.join(FakeSession(), JoinSettings(size = 3, botLevel = BotLevel.NORMAL)))

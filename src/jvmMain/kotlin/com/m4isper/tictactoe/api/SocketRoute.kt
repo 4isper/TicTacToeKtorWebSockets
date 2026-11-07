@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory
 private val logger = LoggerFactory.getLogger("com.m4isper.tictactoe.api.SocketRoute")
 
 private val roomNamePattern = Regex("[A-Za-z0-9_-]{1,32}")
+private val playerKeyPattern = Regex("[A-Za-z0-9_-]{1,64}")
 private const val MAX_NAME_LENGTH = 20
 private const val MESSAGE_WINDOW_MS = 1_000L
 private const val MESSAGES_PER_WINDOW = 20
@@ -68,12 +69,12 @@ private suspend fun DefaultWebSocketServerSession.serveSession(
         sendError(ErrorReason.ROOM_IS_FULL)
         return
     }
-    val handler = SessionHandler(this, lobby, joined)
+    val handler = SessionHandler(this, lobby, joined, settings.playerKey)
     try {
         send(protocolJson.encodeToString<ServerEvent>(ServerEvent.Joined(joined.token, joined.symbol)))
         if (joined.symbol != null && settings.name != null) {
             // a name carried by the join URL claims itself like set_name would; a refusal just stays unnamed
-            if (!lobby.claimName(joined.token, settings.name)) {
+            if (!lobby.claimName(joined.token, settings.name, settings.playerKey)) {
                 sendError(ErrorReason.NAME_TAKEN)
             } else {
                 joined.game.setName(joined.symbol, settings.name)?.let { sendError(it) }
@@ -104,6 +105,7 @@ private class SessionHandler(
     private val session: DefaultWebSocketServerSession,
     private val lobby: GameLobby,
     initial: GameLobby.Joined,
+    private val playerKey: String?,
 ) {
     var binding: GameLobby.Joined = initial
         private set
@@ -148,7 +150,7 @@ private class SessionHandler(
                 val name = message.name.trim()
                 when {
                     name.isEmpty() || name.length > MAX_NAME_LENGTH -> ServerEvent.Error(ErrorReason.INVALID_NAME)
-                    !lobby.claimName(binding.token, name) -> ServerEvent.Error(ErrorReason.NAME_TAKEN)
+                    !lobby.claimName(binding.token, name, playerKey) -> ServerEvent.Error(ErrorReason.NAME_TAKEN)
                     else -> binding.game.setName(symbol, name)?.let(ServerEvent::Error)
                 }
             }
@@ -210,6 +212,8 @@ private suspend fun DefaultWebSocketServerSession.parseSettings(ratingOf: (Strin
     val rawName = params["name"]?.trim()?.takeIf { it.isNotEmpty() }
     if (rawName != null && rawName.length > MAX_NAME_LENGTH) sendError(ErrorReason.INVALID_NAME)
     val name = rawName?.takeIf { it.length <= MAX_NAME_LENGTH }
+    // a malformed key is ignored: the session stays keyless and its name claim is ephemeral
+    val playerKey = params["key"]?.takeIf { playerKeyPattern.matches(it) }
     return JoinSettings(
         room = room,
         size = board.size,
@@ -221,6 +225,7 @@ private suspend fun DefaultWebSocketServerSession.parseSettings(ratingOf: (Strin
         seriesTarget = seriesTarget,
         spectate = params["spectate"] == "1",
         name = name,
+        playerKey = playerKey,
         rating = name?.let(ratingOf),
     )
 }

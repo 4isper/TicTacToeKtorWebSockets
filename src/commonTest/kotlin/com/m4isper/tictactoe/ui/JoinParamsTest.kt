@@ -47,6 +47,12 @@ class JoinParamsTest {
     }
 
     @Test
+    fun `the player key rides the query next to the name`() {
+        val query = joinQuery(mapOf("name" to "Аня", "key" to "abc-123"))
+        assertEquals("name=%D0%90%D0%BD%D1%8F&key=abc-123", query)
+    }
+
+    @Test
     fun `nothing to send builds no query`() {
         assertEquals("", joinQuery(emptyMap()))
     }

@@ -142,6 +142,42 @@ class ApplicationTest {
     }
 
     @Test
+    fun `a keyed name cannot be taken after its owner leaves`() = testApplication {
+        application {
+            testModule(reconnectGraceMs = 50)
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?name=Аня&key=key-anya") {
+            receiveHandshake()
+            awaitStateWhere { it.playerNames[PlayerSymbol.X] == "Аня" }
+        }
+        delay(150) // the owner's grace expired: the session is gone
+
+        client.webSocket("/play?name=Аня&key=key-stranger") {
+            // the state broadcast is async and races the refusal: read until one of them wins
+            val outcome = withTimeout(5_000) {
+                var event: ServerEvent
+                do {
+                    event = receiveEvent()
+                } while (event != ServerEvent.Error(ErrorReason.NAME_TAKEN) &&
+                    !(event is ServerEvent.StateChanged && event.state.playerNames.containsValue("Аня"))
+                )
+                event
+            }
+            assertEquals(ServerEvent.Error(ErrorReason.NAME_TAKEN), outcome)
+        }
+        delay(150)
+
+        client.webSocket("/play?name=Аня&key=key-anya") {
+            receiveHandshake()
+            awaitStateWhere { it.playerNames[PlayerSymbol.X] == "Аня" } // the owner reclaimed it
+        }
+    }
+
+    @Test
     fun `first player receives game state after connect`() = testApplication {
         application {
             testModule()
