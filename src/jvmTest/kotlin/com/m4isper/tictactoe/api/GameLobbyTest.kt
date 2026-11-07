@@ -91,6 +91,35 @@ class GameLobbyTest {
     }
 
     @Test
+    fun `an expired grace leaves no pending job behind`() = runBlocking {
+        val lobby = GameLobby(reconnectGraceMs = 50)
+        val session = FakeSession()
+        val joined = assertNotNull(lobby.join(session, JoinSettings(room = "alpha")))
+
+        lobby.sessionClosed(joined.token, session)
+        assertEquals(1, lobby.pendingGraceCount()) // the slot is still held for a comeback
+
+        delay(150)
+        assertEquals(0, lobby.pendingGraceCount()) // expiry drops the job along with the token
+
+        lobby.shutdownAll()
+    }
+
+    @Test
+    fun `a reconnect cancels the pending grace`() {
+        val lobby = GameLobby(reconnectGraceMs = 50_000)
+        val session = FakeSession()
+        val joined = assertNotNull(lobby.join(session, JoinSettings(room = "alpha")))
+
+        lobby.sessionClosed(joined.token, session)
+        assertEquals(1, lobby.pendingGraceCount())
+        assertNotNull(lobby.reconnect(joined.token, FakeSession()))
+        assertEquals(0, lobby.pendingGraceCount())
+
+        lobby.shutdownAll()
+    }
+
+    @Test
     fun `the lobby refuses to grow past its game limit`() {
         val lobby = GameLobby(maxGames = 1)
         assertNotNull(lobby.join(FakeSession(), JoinSettings()))

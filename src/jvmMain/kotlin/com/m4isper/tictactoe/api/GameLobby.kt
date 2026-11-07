@@ -71,17 +71,18 @@ class GameLobby(
 ) {
     data class Joined(val game: TicTacToeGame, val symbol: PlayerSymbol?, val token: String)
 
+    /** A token owns its grace job: dropping the token drops the timer with it. */
     private data class TokenBinding(
         val game: TicTacToeGame,
         val symbol: PlayerSymbol?,
         val session: WebSocketSession,
+        var graceJob: Job? = null,
     )
 
     private val lock = Any()
     private val games = mutableListOf<TicTacToeGame>()
     private val rooms = mutableMapOf<String, TicTacToeGame>()
     private val tokens = mutableMapOf<String, TokenBinding>()
-    private val graceJobs = mutableMapOf<String, Job>()
     private val lobbyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // A claimed name belongs to one reconnect token, so a second session cannot
@@ -171,7 +172,7 @@ class GameLobby(
             return
         }
         if (!binding.game.detachSession(binding.symbol, session)) return
-        graceJobs[token] = lobbyScope.launch {
+        binding.graceJob = lobbyScope.launch {
             delay(reconnectGraceMs)
             synchronized(lock) {
                 val pending = tokens.remove(token) ?: return@launch
@@ -183,9 +184,15 @@ class GameLobby(
         }
     }
 
+    /** How many slots are still held for a comeback: a resource invariant, also handy for ops. */
+    internal fun pendingGraceCount(): Int = synchronized(lock) {
+        tokens.values.count { it.graceJob != null }
+    }
+
     fun reconnect(token: String, session: WebSocketSession): Joined? = synchronized(lock) {
         val binding = tokens[token] ?: return null
-        graceJobs.remove(token)?.cancel()
+        binding.graceJob?.cancel()
+        binding.graceJob = null
         if (binding.symbol == null) {
             binding.game.attachSpectator(session)
         } else {
@@ -196,7 +203,8 @@ class GameLobby(
 
     fun abandonJoin(token: String): Unit = synchronized(lock) {
         val binding = tokens.remove(token) ?: return
-        graceJobs.remove(token)?.cancel()
+        binding.graceJob?.cancel()
+        binding.graceJob = null
         releaseNameLocked(token)
         if (binding.symbol == null) {
             binding.game.detachSpectator(binding.session)
@@ -209,13 +217,12 @@ class GameLobby(
 
     /** A game nobody plays and nobody waits in — a spectator-only room — is retired. Caller holds [lock]. */
     private fun retireIfAbandoned(game: TicTacToeGame) {
-        val aSlotIsOnGrace = graceJobs.keys.any { tokens[it]?.game === game }
+        val aSlotIsOnGrace = tokens.values.any { it.game === game && it.graceJob != null }
         if (game.isEmpty() && !aSlotIsOnGrace) retire(game)
     }
 
     fun shutdownAll(): Unit = synchronized(lock) {
-        graceJobs.values.forEach { it.cancel() }
-        graceJobs.clear()
+        tokens.values.forEach { it.graceJob?.cancel() }
         (games + rooms.values).forEach { it.shutdown() }
         games.clear()
         rooms.clear()
