@@ -1,6 +1,7 @@
 package com.m4isper.tictactoe.protocol
 
 import com.m4isper.tictactoe.domain.ErrorReason
+import com.m4isper.tictactoe.domain.PlayerSymbol
 import kotlinx.serialization.encodeToString
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -38,5 +39,19 @@ class ProtocolTest {
         val json = protocolJson.encodeToString<ClientMessage>(ClientMessage.SetName("Дима"))
         assertEquals("""{"type":"set_name","name":"Дима"}""", json)
         assertEquals(ClientMessage.SetName("Дима"), protocolJson.decodeFromString(json))
+    }
+
+    @Test
+    fun `chat messages round-trip with their author`() {
+        val request = protocolJson.encodeToString<ClientMessage>(ClientMessage.Chat("привет"))
+        assertEquals("""{"type":"chat","text":"привет"}""", request)
+        assertEquals(ClientMessage.Chat("привет"), protocolJson.decodeFromString(request))
+
+        val event = protocolJson.encodeToString<ServerEvent>(ServerEvent.Chat(PlayerSymbol.X, "Аня", "привет"))
+        assertEquals("""{"type":"chat","from":"X","name":"Аня","text":"привет"}""", event)
+        assertEquals(ServerEvent.Chat(PlayerSymbol.X, "Аня", "привет"), protocolJson.decodeFromString(event))
+
+        val anonymous = protocolJson.encodeToString<ServerEvent>(ServerEvent.Chat(null, null, "hi"))
+        assertEquals("""{"type":"chat","from":null,"name":null,"text":"hi"}""", anonymous)
     }
 }

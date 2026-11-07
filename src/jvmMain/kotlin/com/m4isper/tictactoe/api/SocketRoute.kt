@@ -3,6 +3,7 @@ package com.m4isper.tictactoe.api
 import com.m4isper.tictactoe.domain.BotLevel
 import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.GameRules
+import com.m4isper.tictactoe.domain.normalizeChatText
 import com.m4isper.tictactoe.protocol.ClientMessage
 import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
@@ -110,6 +111,8 @@ private class SessionHandler(
             rejection?.let(ServerEvent::Error) // otherwise the reaction itself went out
         }
 
+        is ClientMessage.Chat -> handleChat(message.text, session)
+
         is ClientMessage.SetName -> when (val symbol = binding.symbol) {
             null -> ServerEvent.Error(ErrorReason.NOT_YOUR_TURN)
 
@@ -135,6 +138,14 @@ private class SessionHandler(
         }
 
         null -> ServerEvent.Error(ErrorReason.MALFORMED_MESSAGE)
+    }
+
+    /** Validates the line at the wire boundary, then lets the room broadcast it. */
+    private suspend fun handleChat(rawText: String, session: DefaultWebSocketServerSession): ServerEvent? {
+        val text = normalizeChatText(rawText) ?: return ServerEvent.Error(ErrorReason.INVALID_CHAT)
+        val name = binding.symbol?.let { binding.game.currentState().playerNames[it] }
+        binding.game.chat(binding.symbol, name, session, text)
+        return null // the chat line itself went out to the room
     }
 }
 

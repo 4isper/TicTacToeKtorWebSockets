@@ -50,3 +50,19 @@ fun hintText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> "Подсказка"
     Lang.EN -> "Hint"
 }
+fun chatTitle(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Чат"
+    Lang.EN -> "Chat"
+}
+fun chatPlaceholder(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Сообщение…"
+    Lang.EN -> "Message…"
+}
+fun chatSendText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Отправить"
+    Lang.EN -> "Send"
+}
+fun spectatorText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Зритель"
+    Lang.EN -> "Spectator"
+}

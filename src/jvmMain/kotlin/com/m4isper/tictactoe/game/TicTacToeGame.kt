@@ -64,10 +64,12 @@ class TicTacToeGame(
     private var clockO = clockBudgetMs ?: 0L
     private val roundMoves = mutableListOf<Cell>()
     private val lastReactionAt = ConcurrentHashMap<WebSocketSession, Long>()
+    private val lastChatAt = ConcurrentHashMap<WebSocketSession, Long>()
 
     private companion object {
         const val BOT_THINK_MS = 400L
         const val REACTION_COOLDOWN_MS = 1_000L
+        const val CHAT_COOLDOWN_MS = 500L
     }
 
     init {
@@ -106,6 +108,7 @@ class TicTacToeGame(
         } else {
             playerSockets.remove(player)
             lastReactionAt.remove(session)
+            lastChatAt.remove(session)
             // the slot is held for the reconnect grace: everyone sees the player went away
             publish(state.value.copy(awayPlayers = state.value.awayPlayers + player))
             true
@@ -123,7 +126,10 @@ class TicTacToeGame(
     }
 
     fun disconnectPlayer(player: PlayerSymbol): Unit = synchronized(lock) {
-        playerSockets.remove(player)?.let { lastReactionAt.remove(it) }
+        playerSockets.remove(player)?.let {
+            lastReactionAt.remove(it)
+            lastChatAt.remove(it)
+        }
         publish(
             state.value.copy(
                 connectionPlayers = state.value.connectionPlayers - player,
@@ -153,6 +159,7 @@ class TicTacToeGame(
     fun detachSpectator(session: WebSocketSession) {
         spectatorSockets.remove(session)
         lastReactionAt.remove(session)
+        lastChatAt.remove(session)
     }
 
     fun spectatorCount(): Int = spectatorSockets.size
@@ -168,23 +175,44 @@ class TicTacToeGame(
         val last = lastReactionAt[session] ?: 0L
         if (now - last < REACTION_COOLDOWN_MS) return null
         lastReactionAt[session] = now
+        broadcastWire(protocolJson.encodeToString<ServerEvent>(ServerEvent.Reaction(from, emoji)))
+        return null
+    }
 
-        val wire = protocolJson.encodeToString<ServerEvent>(ServerEvent.Reaction(from, emoji))
-        for (socket in playerSockets.values) {
+    /** Broadcasts a validated chat line to players and spectators; a repeat inside the cooldown is dropped. */
+    suspend fun chat(
+        from: PlayerSymbol?,
+        name: String?,
+        session: WebSocketSession,
+        text: String,
+    ) {
+        val now = System.currentTimeMillis()
+        val last = lastChatAt[session] ?: 0L
+        if (now - last < CHAT_COOLDOWN_MS) return
+        lastChatAt[session] = now
+        broadcastWire(protocolJson.encodeToString<ServerEvent>(ServerEvent.Chat(from, name, text)))
+    }
+
+    /** One wire string, every socket in the room: reactions and chat share the delivery path. */
+    private suspend fun broadcastWire(wire: String) {
+        for ((player, socket) in playerSockets) {
             try {
                 socket.send(wire)
             } catch (e: Exception) {
-                logger.warn("Failed to deliver a reaction to a player socket", e)
+                logger.warn("Failed to deliver a social event to a player socket", e)
+                synchronized(lock) {
+                    if (playerSockets[player] === socket) disconnectPlayer(player)
+                }
             }
         }
         for (socket in spectatorSockets) {
             try {
                 socket.send(wire)
             } catch (e: Exception) {
-                logger.warn("Failed to deliver a reaction to a spectator socket", e)
+                logger.warn("Failed to deliver a social event to a spectator socket", e)
+                spectatorSockets.remove(socket)
             }
         }
-        return null
     }
 
     suspend fun broadcast(state: GameState) {

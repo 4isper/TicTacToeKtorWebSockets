@@ -1,6 +1,7 @@
 package com.m4isper.tictactoe.api
 
 import com.m4isper.tictactoe.domain.GameRules
+import com.m4isper.tictactoe.domain.MAX_CHAT_LENGTH
 import com.m4isper.tictactoe.protocol.REACTION_EMOJIS
 import com.m4isper.tictactoe.stats.LeaderboardResponse
 import com.m4isper.tictactoe.stats.Scoreboard
@@ -8,6 +9,9 @@ import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.ThemeMode
 import com.m4isper.tictactoe.ui.botExhibitionText
 import com.m4isper.tictactoe.ui.botNoneText
+import com.m4isper.tictactoe.ui.chatPlaceholder
+import com.m4isper.tictactoe.ui.chatSendText
+import com.m4isper.tictactoe.ui.chatTitle
 import com.m4isper.tictactoe.ui.clockOffText
 import com.m4isper.tictactoe.ui.copyLinkText
 import com.m4isper.tictactoe.ui.createGameSubmit
@@ -707,6 +711,29 @@ private fun BODY.panels(pageLang: Lang, langParam: String?) {
             button(classes = "reaction") {
                 attributes["aria-label"] = emoji
                 +emoji
+            }
+        }
+    }
+    div {
+        id = "chat"
+        h2 { +chatTitle(pageLang) }
+        div {
+            id = "chat-log"
+            attributes["role"] = "log"
+            attributes["aria-live"] = "polite"
+            attributes["style"] = "height:140px;overflow-y:auto;background:var(--panel);border-radius:8px;padding:8px"
+        }
+        div {
+            attributes["style"] = "display:flex;gap:8px;margin-top:6px"
+            input(InputType.text) {
+                id = "chat-input"
+                placeholder = chatPlaceholder(pageLang)
+                attributes["aria-label"] = chatPlaceholder(pageLang)
+                maxLength = MAX_CHAT_LENGTH.toString()
+            }
+            button(classes = "secondary") {
+                id = "chat-send"
+                +chatSendText(pageLang)
             }
         }
     }

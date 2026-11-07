@@ -64,4 +64,7 @@ enum class ErrorReason {
 
     @SerialName("invalid wins")
     INVALID_WINS,
+
+    @SerialName("invalid chat")
+    INVALID_CHAT,
 }

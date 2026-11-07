@@ -288,5 +288,7 @@ class UiTextTest {
         assertEquals("X takes the series!", statusText(state, PlayerSymbol.O, Lang.EN))
         assertEquals("Неверная цель серии", errorText(ErrorReason.INVALID_WINS))
         assertEquals("Invalid series target", errorText(ErrorReason.INVALID_WINS, Lang.EN))
+        assertEquals("Пустое или слишком длинное сообщение", errorText(ErrorReason.INVALID_CHAT))
+        assertEquals("Empty or overly long message", errorText(ErrorReason.INVALID_CHAT, Lang.EN))
     }
 }

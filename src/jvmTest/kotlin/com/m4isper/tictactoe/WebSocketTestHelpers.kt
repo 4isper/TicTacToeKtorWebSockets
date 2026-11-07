@@ -101,6 +101,10 @@ internal suspend fun WebSocketSession.sendReact(emoji: String) {
     send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.React(emoji))))
 }
 
+internal suspend fun WebSocketSession.sendChat(text: String) {
+    send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.Chat(text))))
+}
+
 internal suspend fun WebSocketSession.sendSetName(name: String) {
     send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.SetName(name))))
 }

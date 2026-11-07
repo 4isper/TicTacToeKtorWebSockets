@@ -48,6 +48,7 @@ import com.m4isper.tictactoe.ui.shouldAlertTurn
 import com.m4isper.tictactoe.ui.soundCue
 import com.m4isper.tictactoe.ui.soundIcon
 import com.m4isper.tictactoe.ui.soundTitle
+import com.m4isper.tictactoe.ui.spectatorText
 import com.m4isper.tictactoe.ui.statusText
 import com.m4isper.tictactoe.ui.themeIcon
 import com.m4isper.tictactoe.ui.themeTitle
@@ -463,7 +464,39 @@ private class GameClient {
             }
 
             is ServerEvent.Reaction -> showReaction(event.emoji)
+
+            is ServerEvent.Chat -> appendChat(event)
         }
+    }
+
+    /** Chat lines are appended as text nodes, never injected as HTML. */
+    private fun appendChat(event: ServerEvent.Chat) {
+        val log = document.getElementById("chat-log") as? HTMLElement ?: return
+        val line = document.createElement("p") as HTMLElement
+        line.className = "chat-line"
+        line.textContent = "${event.name ?: spectatorText(lang)}: ${event.text}"
+        log.appendChild(line)
+        while (log.childElementCount > 50) log.firstElementChild?.remove()
+        log.asDynamic().scrollTop = log.asDynamic().scrollHeight
+    }
+
+    private fun installChat() {
+        (document.getElementById("chat-send") as? HTMLElement)?.let { button ->
+            button.onclick = { sendChatLine() }
+        }
+        (document.getElementById("chat-input") as? HTMLInputElement)?.let { input ->
+            input.onkeydown = { event ->
+                if (event.asDynamic().key == "Enter") sendChatLine()
+            }
+        }
+    }
+
+    private fun sendChatLine() {
+        val input = document.getElementById("chat-input") as? HTMLInputElement ?: return
+        val text = input.value
+        if (text.isBlank()) return
+        send(ClientMessage.Chat(text))
+        input.value = ""
     }
 
     private fun connect() {
@@ -547,6 +580,7 @@ private class GameClient {
         }
 
         installPlayerSearch()
+        installChat()
 
         panels.refreshLeaderboard()
         window.setInterval({ panels.refreshLeaderboard() }, 30_000) // the table also moves while nobody finishes a round

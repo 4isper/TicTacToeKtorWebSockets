@@ -146,6 +146,62 @@ class GameFeaturesTest {
     }
 
     @Test
+    fun `a chat message reaches the opponent with its author`() = testApplication {
+        application {
+            testModule()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=chat") {
+            receiveHandshake()
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=chat") {
+                    receiveHandshake()
+                    oReady.complete(Unit)
+
+                    assertEquals(ServerEvent.Chat(PlayerSymbol.X, null, "привет мир"), receiveEvent())
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            skipBroadcast() // [X, O]
+
+            sendChat("  привет\nмир  ")
+            assertEquals(ServerEvent.Chat(PlayerSymbol.X, null, "привет мир"), receiveEvent())
+
+            second.cancel()
+        }
+    }
+
+    @Test
+    fun `blank and overlong chat messages are refused`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=chat2") {
+            receiveHandshake()
+
+            sendChat("   ")
+            assertEquals(ServerEvent.Error(ErrorReason.INVALID_CHAT), receiveEvent())
+            sendChat("x".repeat(201))
+            assertEquals(ServerEvent.Error(ErrorReason.INVALID_CHAT), receiveEvent())
+        }
+    }
+
+    @Test
     fun `a second reaction inside the cooldown is dropped quietly`() = testApplication {
         application {
             testModule()

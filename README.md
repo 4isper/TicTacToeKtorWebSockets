@@ -44,8 +44,11 @@ Then open http://localhost:8080/ to play in the browser (the page is rendered wi
   {"type":"request_resign"}
   {"type":"request_undo"}
   {"type":"react","emoji":"👍"}
+  {"type":"chat","text":"привет"}
   {"type":"set_name","name":"Дима"}
   ```
+
+  `chat` carries one line of up to 200 characters; blank, overlong and line-break-heavy text answers `invalid chat`. The line is trimmed and its line breaks flattened before it reaches the room.
 
   `x` is the column and `y` is the row (`0`-based, `0..size-1`). A malformed or unknown message is answered with an `error` event and does not close the session. `set_name` trims the name and accepts 1–20 characters (`invalid name` otherwise); the name must also be unique among the connected players of the game, case-insensitively, and cannot be claimed by another live session (`name is taken` otherwise). Names travel in every `state` as `playerNames` (`{"X":"Дима"}`), survive round resets and are dropped when a player disconnects. The browser client remembers the last accepted name in `localStorage` and re-applies it automatically after a reload.
 - Server → client: a text frame per event, also discriminated by `type`:
@@ -53,9 +56,12 @@ Then open http://localhost:8080/ to play in the browser (the page is rendered wi
   ```json
   {"type":"state","state":{"field":[["X",null,null],["O",null,null],[null,null,null]],"connectionPlayers":["X","O"],"playerAtTurn":"O"}}
   {"type":"error","reason":"cell occupied"}
+  {"type":"chat","from":"X","name":"Аня","text":"привет"}
   ```
 
-  A `state` event is broadcast to both players on every accepted move, connection change and round restart. An `error` event (`reason`: `cell occupied`, `not your turn`, `round is over`, `cell out of bounds`, `malformed message`, `unknown token`, `stale session`, `name is taken`, `invalid turn time`, `invalid bot level`, `invalid reaction`, `nothing to undo`, `invalid clock`) is sent only to the player whose action caused it, and a rejected move does not close the session.
+  Chat lines reach both players and every spectator; `from` and `name` are `null` for an unnamed side. A repeat inside 0.5 s is dropped quietly.
+
+  A `state` event is broadcast to both players on every accepted move, connection change and round restart. An `error` event (`reason`: `cell occupied`, `not your turn`, `round is over`, `cell out of bounds`, `malformed message`, `unknown token`, `stale session`, `name is taken`, `invalid turn time`, `invalid bot level`, `invalid reaction`, `nothing to undo`, `invalid clock`, `invalid chat`) is sent only to the player whose action caused it, and a rejected move does not close the session.
   Every field of `state` is always present in the JSON, including defaults (`winningPlayer: null`, `isBoardFull: false`, `playerAtTurn: "X"`) — no omitted-fields special cases.
 - Reconnect: right after connecting every player receives `{"type":"joined","token":"<uuid>","symbol":"X"}`. If the connection drops, the player's slot is held for 10 seconds (`reconnectGraceMs`); reconnecting with `{"type":"reconnect","token":"<uuid>"}` rebinds the session to the same game and symbol and answers with the current `state`. After the grace expires the slot is freed (the next joiner takes the symbol) and the token stops working. A client that reconnects with an unknown token stays in the game it was handed on connect. Every `state` also carries `awayPlayers` — the players whose connection dropped but whose slot is still held — announced the moment the drop is noticed; the page shows a plate with the ten-second countdown while its opponent is away.
 - A won or full round resets the board automatically 5 seconds later (the opening turn alternates between rounds); the `score` object (`{"X":<wins>,"O":<wins>}`) accumulates across rounds for as long as the same two players stay connected. While the round is over, every `state` carries `roundRestartInMs` (remaining milliseconds until the automatic reset) and, once a player asks, `rematchPlayers` — the client may send `{"type":"request_rematch"}` to reset early, and the board resets as soon as every connected player has asked. Asking while a round is still running answers `round is not over`.
