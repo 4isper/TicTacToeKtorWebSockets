@@ -120,7 +120,7 @@ internal fun statsAfter(
 }
 
 /** A named opponent's tally moves with the result; practice rounds against bots count nowhere. */
-private fun Map<String, HeadToHead>.bump(opponent: String?, result: RoundResult): Map<String, HeadToHead> {
+internal fun Map<String, HeadToHead>.bump(opponent: String?, result: RoundResult): Map<String, HeadToHead> {
     if (opponent == null) return this
     val tally = this[opponent] ?: HeadToHead()
     val updated = when (result) {
