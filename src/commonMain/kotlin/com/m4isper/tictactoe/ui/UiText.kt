@@ -79,6 +79,7 @@ fun errorText(
         ErrorReason.INVALID_CLOCK -> "Неверное время на партию"
         ErrorReason.INVALID_WINS -> "Неверная цель серии"
         ErrorReason.INVALID_CHAT -> "Пустое или слишком длинное сообщение"
+        ErrorReason.CONNECTION_LIMIT -> "Слишком много соединений — попробуйте позже"
     }
 
     Lang.EN -> when (reason) {
@@ -103,6 +104,7 @@ fun errorText(
         ErrorReason.INVALID_CLOCK -> "Invalid game clock"
         ErrorReason.INVALID_WINS -> "Invalid series target"
         ErrorReason.INVALID_CHAT -> "Empty or overly long message"
+        ErrorReason.CONNECTION_LIMIT -> "Too many connections — try again later"
     }
 }
 

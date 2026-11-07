@@ -216,11 +216,11 @@ class TicTacToeGame(
     }
 
     suspend fun broadcast(state: GameState) {
+        // one encoding for the whole room: up to 22 recipients used to re-encode the same snapshot
+        val wire = protocolJson.encodeToString<ServerEvent>(ServerEvent.StateChanged(state))
         for ((player, socket) in playerSockets) {
             try {
-                socket.send(
-                    protocolJson.encodeToString<ServerEvent>(ServerEvent.StateChanged(state)),
-                )
+                socket.send(wire)
             } catch (e: Exception) {
                 logger.warn("Failed to broadcast game state to a player socket", e)
                 synchronized(lock) {
@@ -230,9 +230,7 @@ class TicTacToeGame(
         }
         for (socket in spectatorSockets) {
             try {
-                socket.send(
-                    protocolJson.encodeToString<ServerEvent>(ServerEvent.StateChanged(state)),
-                )
+                socket.send(wire)
             } catch (e: Exception) {
                 logger.warn("Failed to broadcast game state to a spectator socket", e)
                 spectatorSockets.remove(socket)

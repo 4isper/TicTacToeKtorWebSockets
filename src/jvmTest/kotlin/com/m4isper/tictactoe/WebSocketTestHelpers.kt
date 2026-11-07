@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe
 
+import com.m4isper.tictactoe.api.ServerLimits
 import com.m4isper.tictactoe.domain.Cell
 import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.PlayerSymbol
@@ -30,9 +31,13 @@ import java.nio.file.Files
 import kotlin.test.*
 
 /** A module whose scoreboard lives in a temp file, so the tests never touch the real leaderboard. */
-internal fun Application.testModule(reconnectGraceMs: Long = 10_000L) = module(
+internal fun Application.testModule(
+    reconnectGraceMs: Long = 10_000L,
+    limits: ServerLimits = ServerLimits(),
+) = module(
     scoreboard = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard-test", ".json").toFile())),
     reconnectGraceMs = reconnectGraceMs,
+    limits = limits,
 )
 
 internal suspend fun WebSocketSession.skipBroadcast() {

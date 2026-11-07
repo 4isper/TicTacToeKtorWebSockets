@@ -197,6 +197,9 @@ class GameLobby(
         tokens.values.count { it.graceJob != null }
     }
 
+    /** Live games, for the readiness snapshot. */
+    internal fun gameCount(): Int = synchronized(lock) { games.size + rooms.size }
+
     fun reconnect(token: String, session: WebSocketSession): Joined? = synchronized(lock) {
         val binding = tokens[token] ?: return null
         binding.graceJob?.cancel()

@@ -6,7 +6,9 @@ import com.m4isper.tictactoe.domain.GameRules
 import com.m4isper.tictactoe.domain.normalizeChatText
 import com.m4isper.tictactoe.protocol.ClientMessage
 import com.m4isper.tictactoe.protocol.ServerEvent
+import com.m4isper.tictactoe.protocol.isOriginAllowed
 import com.m4isper.tictactoe.protocol.protocolJson
+import io.ktor.http.HttpHeaders
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
@@ -30,44 +32,70 @@ private data class TimeSettings(val turn: Int, val clock: Int)
 fun Route.socket(
     lobby: GameLobby,
     ratingOf: (String) -> Int?,
+    connections: ConnectionLimiter = ConnectionLimiter(8, 400),
+    allowedOrigins: List<String> = emptyList(),
 ) {
     route("/play") {
         webSocket {
-            val settings = parseSettings(ratingOf) ?: return@webSocket
-            val joined = lobby.join(this, settings) ?: run {
-                sendError(ErrorReason.ROOM_IS_FULL)
+            val headers = call.request.headers
+            val host = headers[HttpHeaders.XForwardedHost] ?: headers[HttpHeaders.Host] ?: call.request.local.serverHost
+            val scheme = headers[HttpHeaders.XForwardedProto] ?: call.request.local.scheme
+            if (!isOriginAllowed(headers[HttpHeaders.Origin], host, scheme, allowedOrigins)) {
+                close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "origin not allowed"))
                 return@webSocket
             }
-            val handler = SessionHandler(this, lobby, joined)
+            val ip = call.request.local.remoteHost
+            if (!connections.acquire(ip)) {
+                sendError(ErrorReason.CONNECTION_LIMIT)
+                return@webSocket
+            }
             try {
-                send(protocolJson.encodeToString<ServerEvent>(ServerEvent.Joined(joined.token, joined.symbol)))
-                if (joined.symbol != null && settings.name != null) {
-                    // a name carried by the join URL claims itself like set_name would; a refusal just stays unnamed
-                    if (!lobby.claimName(joined.token, settings.name)) {
-                        sendError(ErrorReason.NAME_TAKEN)
-                    } else {
-                        joined.game.setName(joined.symbol, settings.name)?.let { sendError(it) }
-                    }
-                }
-                if (joined.symbol == null) {
-                    // spectators get no join broadcast of their own — hand them the current state
-                    send(protocolJson.encodeToString<ServerEvent>(ServerEvent.StateChanged(joined.game.currentState())))
-                }
-
-                val limiter = MessageRateLimiter()
-                incoming.consumeEach { frame ->
-                    if (frame !is Frame.Text) return@consumeEach
-                    if (!limiter.allow()) return@consumeEach
-                    val message = runCatching { protocolJson.decodeFromString<ClientMessage>(frame.readText()) }
-                        .getOrNull()
-                    handler.handle(message)?.let { send(protocolJson.encodeToString<ServerEvent>(it)) }
-                }
-            } catch (e: Exception) {
-                logger.error("WebSocket session failed for player {}", handler.binding.symbol, e)
+                serveSession(lobby, ratingOf)
             } finally {
-                lobby.sessionClosed(handler.binding.token, this)
+                connections.release(ip)
             }
         }
+    }
+}
+
+/** Everything after the handshake guards: join, greet, dispatch frames, release the lobby slot. */
+private suspend fun DefaultWebSocketServerSession.serveSession(
+    lobby: GameLobby,
+    ratingOf: (String) -> Int?,
+) {
+    val settings = parseSettings(ratingOf) ?: return
+    val joined = lobby.join(this, settings) ?: run {
+        sendError(ErrorReason.ROOM_IS_FULL)
+        return
+    }
+    val handler = SessionHandler(this, lobby, joined)
+    try {
+        send(protocolJson.encodeToString<ServerEvent>(ServerEvent.Joined(joined.token, joined.symbol)))
+        if (joined.symbol != null && settings.name != null) {
+            // a name carried by the join URL claims itself like set_name would; a refusal just stays unnamed
+            if (!lobby.claimName(joined.token, settings.name)) {
+                sendError(ErrorReason.NAME_TAKEN)
+            } else {
+                joined.game.setName(joined.symbol, settings.name)?.let { sendError(it) }
+            }
+        }
+        if (joined.symbol == null) {
+            // spectators get no join broadcast of their own — hand them the current state
+            send(protocolJson.encodeToString<ServerEvent>(ServerEvent.StateChanged(joined.game.currentState())))
+        }
+
+        val limiter = MessageRateLimiter()
+        incoming.consumeEach { frame ->
+            if (frame !is Frame.Text) return@consumeEach
+            if (!limiter.allow()) return@consumeEach
+            val message = runCatching { protocolJson.decodeFromString<ClientMessage>(frame.readText()) }
+                .getOrNull()
+            handler.handle(message)?.let { send(protocolJson.encodeToString<ServerEvent>(it)) }
+        }
+    } catch (e: Exception) {
+        logger.error("WebSocket session failed for player {}", handler.binding.symbol, e)
+    } finally {
+        lobby.sessionClosed(handler.binding.token, this)
     }
 }
 

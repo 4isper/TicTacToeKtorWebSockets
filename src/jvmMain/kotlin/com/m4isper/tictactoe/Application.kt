@@ -1,6 +1,7 @@
 package com.m4isper.tictactoe
 
 import com.m4isper.tictactoe.api.GameLobby
+import com.m4isper.tictactoe.api.ServerLimits
 import com.m4isper.tictactoe.api.webUi
 import com.m4isper.tictactoe.domain.BotLevel
 import com.m4isper.tictactoe.game.TicTacToeGame
@@ -52,12 +53,19 @@ fun Application.module(
             )
         },
     reconnectGraceMs: Long = 10_000L,
+    limits: ServerLimits = ServerLimits.fromEnvironment(),
 ) {
-    val lobby = GameLobby(newGame, reconnectGraceMs, ratingOf = scoreboard::ratingOf)
+    val lobby = GameLobby(
+        newGame,
+        reconnectGraceMs,
+        maxGames = limits.maxGames,
+        maxSpectatorsPerGame = limits.maxSpectatorsPerGame,
+        ratingOf = scoreboard::ratingOf,
+    )
     monitor.subscribe(ApplicationStopped) { lobby.shutdownAll() }
     configureSockets()
     configureSerialization()
     configureMonitoring()
-    configureRouting(lobby, scoreboard::ratingOf)
+    configureRouting(lobby, scoreboard::ratingOf, limits)
     webUi(scoreboard, lobby)
 }

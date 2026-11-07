@@ -67,4 +67,7 @@ enum class ErrorReason {
 
     @SerialName("invalid chat")
     INVALID_CHAT,
+
+    @SerialName("too many connections")
+    CONNECTION_LIMIT,
 }

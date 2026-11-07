@@ -25,8 +25,7 @@ data class ServerLimits(
                 .orEmpty(),
         )
 
-        private fun ((String) -> String?).int(name: String, default: Int, range: IntRange): Int =
-            this(name)?.trim()?.toIntOrNull()?.coerceIn(range) ?: default
+        private fun ((String) -> String?).int(name: String, default: Int, range: IntRange): Int = this(name)?.trim()?.toIntOrNull()?.coerceIn(range) ?: default
     }
 }
 

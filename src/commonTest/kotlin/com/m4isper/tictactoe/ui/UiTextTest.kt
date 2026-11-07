@@ -290,5 +290,7 @@ class UiTextTest {
         assertEquals("Invalid series target", errorText(ErrorReason.INVALID_WINS, Lang.EN))
         assertEquals("Пустое или слишком длинное сообщение", errorText(ErrorReason.INVALID_CHAT))
         assertEquals("Empty or overly long message", errorText(ErrorReason.INVALID_CHAT, Lang.EN))
+        assertEquals("Слишком много соединений — попробуйте позже", errorText(ErrorReason.CONNECTION_LIMIT))
+        assertEquals("Too many connections — try again later", errorText(ErrorReason.CONNECTION_LIMIT, Lang.EN))
     }
 }
