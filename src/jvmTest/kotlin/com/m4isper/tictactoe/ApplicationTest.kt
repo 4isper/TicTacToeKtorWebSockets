@@ -462,7 +462,10 @@ class ApplicationTest {
         xClient.webSocket("/play") {
             receiveHandshake()
             sendReconnect(token!!)
-            val state = receiveState()
+            // the rebind is announced with a fresh Joined; the reattach broadcast may race it
+            val events = listOf(receiveEvent(), receiveEvent())
+            assertTrue(events.any { it == ServerEvent.Joined(token, PlayerSymbol.X) }, "reclaim Joined, got: $events")
+            val state = (events.first { it is ServerEvent.StateChanged } as ServerEvent.StateChanged).state
             assertEquals(PlayerSymbol.X, state.playerAtTurn)
             assertEquals(listOf(PlayerSymbol.X, PlayerSymbol.O), state.connectionPlayers)
             assertEquals(PlayerSymbol.X, state.field[0][0])
@@ -492,7 +495,8 @@ class ApplicationTest {
                     receiveHandshake()
                     sendReconnect(joined.token)
                     // wait for the server to confirm the rebind before unblocking the zombie
-                    assertTrue(receiveEvent() is ServerEvent.StateChanged)
+                    val confirm = receiveEvent()
+                    assertTrue(confirm is ServerEvent.Joined || confirm is ServerEvent.StateChanged, "rebind confirm, got: $confirm")
                     reconnected.complete(Unit)
                     awaitCancellation()
                 }

@@ -163,6 +163,8 @@ private class SessionHandler(
             } else {
                 lobby.abandonJoin(binding.token)
                 binding = rebound
+                // the fresh join may have landed as a spectator: re-announce the reclaimed symbol
+                session.send(protocolJson.encodeToString<ServerEvent>(ServerEvent.Joined(rebound.token, rebound.symbol)))
                 ServerEvent.StateChanged(rebound.game.currentState())
             }
         }

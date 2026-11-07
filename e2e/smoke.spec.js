@@ -24,6 +24,24 @@ test('two players share one board, the win scores and the round resets', async (
   await opponent.close();
 });
 
+test('a reload inside the grace keeps the seat and the turn', async ({ page, browser }) => {
+  const room = 'e2e-reload-' + Date.now();
+  await page.goto('/?room=' + room);
+  const opponent = await browser.newPage();
+  await opponent.goto('/?room=' + room);
+
+  await cell(page, 0, 0).click();
+  await expect(cell(opponent, 0, 0)).toHaveText('X');
+  await cell(opponent, 1, 0).click();
+  await expect(cell(page, 1, 0)).toHaveText('O');
+
+  await page.reload();
+  await expect(cell(page, 0, 0)).toHaveText('X');
+  await cell(page, 0, 1).click(); // still X and still my turn after the reconnect
+  await expect(cell(opponent, 0, 1)).toHaveText('X');
+  await opponent.close();
+});
+
 test('a practice bot answers the opening move', async ({ page }) => {
   await page.goto('/?room=e2e-bot-' + Date.now() + '&bot=easy');
   await cell(page, 0, 0).click();
