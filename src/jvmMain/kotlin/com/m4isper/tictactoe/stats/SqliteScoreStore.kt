@@ -30,27 +30,41 @@ class SqliteScoreStore(file: File) : ScoreStore {
         }
     }
 
-    override fun addResult(
-        name: String,
-        result: RoundResult,
-        opponent: String?,
-        atMs: Long,
-        moves: List<Cell>,
-        boardSize: Int,
-        rating: Int?,
-        ratingAfter: Int?,
-    ): Unit = synchronized(connection) {
-        val next = statsAfter(loadAllLocked()[name], result, opponent, atMs, moves, boardSize, rating, ratingAfter)
-        connection
-            .prepareStatement(
-                "INSERT INTO player_stats(name, data) VALUES (?, ?) " +
-                    "ON CONFLICT(name) DO UPDATE SET data = excluded.data",
-            )
-            .use { statement ->
-                statement.setString(1, name)
-                statement.setString(2, json.encodeToString(next))
-                statement.executeUpdate()
-            }
+    override fun applyResults(results: List<ResultUpdate>): Unit = synchronized(connection) {
+        if (results.isEmpty()) return
+        val all = loadAllLocked().toMutableMap()
+        connection.autoCommit = false
+        try {
+            connection
+                .prepareStatement(
+                    "INSERT INTO player_stats(name, data) VALUES (?, ?) " +
+                        "ON CONFLICT(name) DO UPDATE SET data = excluded.data",
+                )
+                .use { upsert ->
+                    results.forEach { result ->
+                        val next = statsAfter(
+                            all[result.name],
+                            result.result,
+                            result.opponent,
+                            result.atMs,
+                            result.moves,
+                            result.boardSize,
+                            result.rating,
+                            result.ratingAfter,
+                        )
+                        all[result.name] = next
+                        upsert.setString(1, result.name)
+                        upsert.setString(2, json.encodeToString(next))
+                        upsert.executeUpdate()
+                    }
+                }
+            connection.commit()
+        } catch (error: Exception) {
+            connection.rollback()
+            throw error
+        } finally {
+            connection.autoCommit = true
+        }
     }
 
     override fun loadAll(): Map<String, PlayerStats> = synchronized(connection) { loadAllLocked() }

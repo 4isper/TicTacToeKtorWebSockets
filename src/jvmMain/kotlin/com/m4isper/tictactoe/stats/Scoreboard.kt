@@ -66,20 +66,38 @@ private data class StoredScores(val players: Map<String, PlayerStats> = emptyMap
 
 enum class RoundResult { WIN, LOSS, DRAW }
 
+/** One side of a finished round; the store applies the whole list as one write. */
+data class ResultUpdate(
+    val name: String,
+    val result: RoundResult,
+    val opponent: String? = null,
+    val atMs: Long = System.currentTimeMillis(),
+    val moves: List<Cell> = emptyList(),
+    val boardSize: Int = 3,
+    val rating: Int? = null,
+    val ratingAfter: Int? = null,
+)
+
 interface ScoreStore {
-    fun addResult(
-        name: String,
-        result: RoundResult,
-        opponent: String? = null,
-        atMs: Long = System.currentTimeMillis(),
-        moves: List<Cell> = emptyList(),
-        boardSize: Int = 3,
-        rating: Int? = null,
-        ratingAfter: Int? = null,
-    )
+    /** Both sides of a round land together, or neither does. */
+    fun applyResults(results: List<ResultUpdate>)
 
     fun loadAll(): Map<String, PlayerStats>
 }
+
+/** A single result is a batch of one — still one atomic write. */
+fun ScoreStore.addResult(
+    name: String,
+    result: RoundResult,
+    opponent: String? = null,
+    atMs: Long = System.currentTimeMillis(),
+    moves: List<Cell> = emptyList(),
+    boardSize: Int = 3,
+    rating: Int? = null,
+    ratingAfter: Int? = null,
+): Unit = applyResults(
+    listOf(ResultUpdate(name, result, opponent, atMs, moves, boardSize, rating, ratingAfter)),
+)
 
 private const val HISTORY_LIMIT = 200
 
@@ -161,18 +179,21 @@ class JsonScoreStore(private val file: File) : ScoreStore {
         }
     }
 
-    override fun addResult(
-        name: String,
-        result: RoundResult,
-        opponent: String?,
-        atMs: Long,
-        moves: List<Cell>,
-        boardSize: Int,
-        rating: Int?,
-        ratingAfter: Int?,
-    ): Unit = synchronized(lock) {
-        players[name] = statsAfter(players[name], result, opponent, atMs, moves, boardSize, rating, ratingAfter)
-        persistLocked()
+    override fun applyResults(results: List<ResultUpdate>): Unit = synchronized(lock) {
+        if (results.isEmpty()) return
+        results.forEach { result ->
+            players[result.name] = statsAfter(
+                players[result.name],
+                result.result,
+                result.opponent,
+                result.atMs,
+                result.moves,
+                result.boardSize,
+                result.rating,
+                result.ratingAfter,
+            )
+        }
+        persistLocked() // one atomic rename covers both sides of the round
     }
 
     override fun loadAll(): Map<String, PlayerStats> = synchronized(lock) { players.toMap() }
@@ -207,11 +228,12 @@ class Scoreboard(private val store: ScoreStore) {
         val oName = playerNames[PlayerSymbol.O]
         val (xNext, oNext) = nextRatings(all, xName, oName, winner)
 
+        val results = mutableListOf<ResultUpdate>()
         if (winner == null) {
             val named = playerNames.values.toList()
             named.forEach { name ->
                 val next = if (name == xName) xNext else oNext
-                store.addResult(
+                results += ResultUpdate(
                     name,
                     RoundResult.DRAW,
                     opponent = named.firstOrNull { it != name },
@@ -226,9 +248,10 @@ class Scoreboard(private val store: ScoreStore) {
             val loserName = playerNames[winner.other]
             val winnerNext = if (winner == PlayerSymbol.X) xNext else oNext
             val loserNext = if (winner == PlayerSymbol.X) oNext else xNext
-            winnerName?.let { store.addResult(it, RoundResult.WIN, loserName, moves = moves, boardSize = boardSize, rating = winnerNext, ratingAfter = winnerNext) }
-            loserName?.let { store.addResult(it, RoundResult.LOSS, winnerName, moves = moves, boardSize = boardSize, rating = loserNext, ratingAfter = loserNext) }
+            winnerName?.let { results += ResultUpdate(it, RoundResult.WIN, loserName, moves = moves, boardSize = boardSize, rating = winnerNext, ratingAfter = winnerNext) }
+            loserName?.let { results += ResultUpdate(it, RoundResult.LOSS, winnerName, moves = moves, boardSize = boardSize, rating = loserNext, ratingAfter = loserNext) }
         }
+        if (results.isNotEmpty()) store.applyResults(results)
     }
 
     /**

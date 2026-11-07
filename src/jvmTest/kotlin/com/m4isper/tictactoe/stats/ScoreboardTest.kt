@@ -290,4 +290,39 @@ class ScoreboardTest {
 
         assertTrue(stats.opponents.isEmpty())
     }
+
+    @Test
+    fun `both sides of a round reach the store in a single atomic batch`() {
+        val store = RecordingStore()
+        Scoreboard(store).recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), winner = PlayerSymbol.X)
+
+        assertEquals(1, store.batches.size) // one write, not two that a crash could split
+        assertEquals(listOf("Аня", "Боря"), store.batches.single().map { it.name })
+        assertEquals(1020, store.loadAll().getValue("Аня").rating)
+        assertEquals(980, store.loadAll().getValue("Боря").rating)
+    }
+
+    /** Watches the store boundary: a round must be one operation, never a sequence of half-rounds. */
+    private class RecordingStore : ScoreStore {
+        val batches = mutableListOf<List<ResultUpdate>>()
+        private val players = mutableMapOf<String, PlayerStats>()
+
+        override fun applyResults(results: List<ResultUpdate>) {
+            batches += results
+            results.forEach { result ->
+                players[result.name] = statsAfter(
+                    players[result.name],
+                    result.result,
+                    result.opponent,
+                    result.atMs,
+                    result.moves,
+                    result.boardSize,
+                    result.rating,
+                    result.ratingAfter,
+                )
+            }
+        }
+
+        override fun loadAll(): Map<String, PlayerStats> = players.toMap()
+    }
 }
