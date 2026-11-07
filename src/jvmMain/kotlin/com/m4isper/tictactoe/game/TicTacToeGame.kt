@@ -51,6 +51,9 @@ class TicTacToeGame(
     private val spectatorSockets = ConcurrentHashMap.newKeySet<WebSocketSession>()
 
     private val gameScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    // negamax is CPU-bound: keep deep searches off the pool that serves broadcasts and timers
+    private val botScope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(2))
     private var roundRestartJob: Job? = null
     private var roundRestartDeadline = 0L
     private var bot: PlayerSymbol? = null
@@ -408,6 +411,7 @@ class TicTacToeGame(
 
     fun shutdown() {
         gameScope.cancel()
+        botScope.cancel()
         // close rather than cancel: the recorder still drains the rounds already won
         completedRounds.close()
     }
@@ -589,7 +593,7 @@ class TicTacToeGame(
         val level = levelFor(symbol) ?: return
         if (current.isRoundOver) return
         botMoveJob?.cancel()
-        botMoveJob = gameScope.launch {
+        botMoveJob = botScope.launch {
             delay(BOT_THINK_MS)
             val snapshot = synchronized(lock) {
                 if (levelFor(symbol) == null) return@launch
