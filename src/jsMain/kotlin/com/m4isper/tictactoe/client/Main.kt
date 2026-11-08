@@ -82,17 +82,42 @@ import org.w3c.dom.HTMLElement
 import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.HTMLTextAreaElement
 import org.w3c.dom.WebSocket
+import org.w3c.dom.Worker
 import org.w3c.dom.events.Event
 import org.w3c.dom.url.URLSearchParams
 import kotlin.js.Date
+import kotlin.js.json
 
 private var deferredInstallPrompt: Event? = null
 
 fun main() {
+    // the same bundle is loaded as a Web Worker for the hint search: no window, no DOM
+    if (js("typeof window") == "undefined") {
+        hintWorkerMain()
+        return
+    }
     val lang = clientLang()
     registerServiceWorker(lang)
     captureInstallPrompt(lang)
     GameClient().start()
+}
+
+/** Worker mode of the bundle: answer a hint request with the hard bot's suggested cell. */
+private fun hintWorkerMain() {
+    val scope = js("self")
+    scope.onmessage = { event: dynamic ->
+        val data = event.data
+        val size = data.size as Int
+        val field = (0 until size).map { y ->
+            (0 until size).map { x ->
+                val cell = data.field[y][x]
+                if (cell == null) null else PlayerSymbol.valueOf(cell as String)
+            }
+        }
+        val me = PlayerSymbol.valueOf(data.symbol as String)
+        val move = BotBrain.chooseMove(field, me, data.winLength as Int, BotLevel.HARD)
+        scope.postMessage(move?.let { json("x" to it.x, "y" to it.y) })
+    }
 }
 
 /** One language decision, shared by the page and the PWA notices. */
@@ -305,6 +330,7 @@ private class GameClient {
     )
 
     private var socket: WebSocket? = null
+    private var hintWorker: Worker? = null
     private var mySymbol: PlayerSymbol? = null
     private var pendingReconnectToken: String? = null
     private var retry = 0
@@ -546,19 +572,32 @@ private class GameClient {
     }
 
     /**
-     * Runs the same search the hard bot plays, locally — the brain ships in the shared
-     * code. The deferral lets the button repaint first; a deep search on a big board
-     * freezes the tab for under a second.
+     * Runs the same search the hard bot plays, but inside a Web Worker so a deep
+     * search on a big board cannot freeze the tab. The bundle re-runs in worker
+     * mode (no window) and answers with the suggested cell.
      */
     private fun requestHint() {
         val state = lastState ?: return
         val me = mySymbol ?: return
         hintButton.disabled = true
-        window.setTimeout({
-            val move = BotBrain.chooseMove(state.field, me, state.winLength, BotLevel.HARD)
+        val worker = hintWorker ?: Worker("/static/app.js").also { hintWorker = it }
+        worker.onmessage = { event ->
             hintButton.disabled = false
-            move?.let { boardRenderer.showHint(it.x, it.y) }
-        }, 50)
+            val data = event.data.asDynamic()
+            // a hint for a stale board is useless: only show it while the state is unchanged
+            if (data != null && lastState === state) boardRenderer.showHint(data.x as Int, data.y as Int)
+        }
+        worker.onerror = {
+            hintButton.disabled = false
+        }
+        worker.postMessage(
+            json(
+                "field" to state.field.map { row -> row.map { it?.name }.toTypedArray() }.toTypedArray(),
+                "size" to state.field.size,
+                "winLength" to state.winLength,
+                "symbol" to me.name,
+            ),
+        )
     }
 
     private fun updateStatus(previous: GameState?, state: GameState) {
