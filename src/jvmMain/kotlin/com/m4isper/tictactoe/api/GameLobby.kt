@@ -7,6 +7,7 @@ import com.m4isper.tictactoe.game.TicTacToeGame
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable
+import org.slf4j.LoggerFactory
 import java.util.UUID
 
 @Serializable
@@ -70,6 +71,9 @@ class GameLobby(
     private val maxSpectatorsPerGame: Int = 20,
     /** Looks a named player's rating up — the scoreboard, in production. */
     private val ratingOf: (String) -> Int? = { null },
+    /** When set, named rooms and key-owned names survive a restart through this store. */
+    private val store: LobbyStore? = null,
+    private val persistIntervalMs: Long = 2_000L,
 ) {
     data class Joined(val game: TicTacToeGame, val symbol: PlayerSymbol?, val token: String)
 
@@ -93,6 +97,30 @@ class GameLobby(
     private val nameOwners = mutableMapOf<String, String>() // lowercased name -> player key or token
     private val tokenNames = mutableMapOf<String, String>() // token -> lowercased name
     private val keyNames = mutableMapOf<String, String>() // player key -> lowercased name; one name per key
+
+    private val logger = LoggerFactory.getLogger(GameLobby::class.java)
+
+    init {
+        if (store != null) {
+            store.load()?.let { persisted ->
+                persisted.names.forEach { (key, name) ->
+                    nameOwners[name] = key
+                    keyNames[key] = name
+                }
+                persisted.rooms.forEach { room ->
+                    val game = newGame(room.boardSize, room.winLength, room.botLevel, room.secondBotLevel, room.turnSeconds, room.clockSeconds, room.seriesTarget)
+                    game.restoreFrom(room.snapshot)
+                    rooms[room.name] = game
+                }
+            }
+            lobbyScope.launch {
+                while (isActive) {
+                    delay(persistIntervalMs)
+                    persistNow()
+                }
+            }
+        }
+    }
 
     fun join(
         session: WebSocketSession,
@@ -238,16 +266,44 @@ class GameLobby(
         retire(game)
     }
 
-    fun shutdownAll(): Unit = synchronized(lock) {
-        tokens.values.forEach { it.graceJob?.cancel() }
-        (games + rooms.values).forEach { it.shutdown() }
-        games.clear()
-        rooms.clear()
-        tokens.clear()
-        nameOwners.clear()
-        tokenNames.clear()
-        keyNames.clear()
-        lobbyScope.cancel()
+    fun shutdownAll() {
+        persistNow() // a graceful stop saves the latest rooms and names
+        synchronized(lock) {
+            tokens.values.forEach { it.graceJob?.cancel() }
+            (games + rooms.values).forEach { it.shutdown() }
+            games.clear()
+            rooms.clear()
+            tokens.clear()
+            nameOwners.clear()
+            tokenNames.clear()
+            keyNames.clear()
+            lobbyScope.cancel()
+        }
+    }
+
+    /** Snapshots the named rooms and key-owned names to the store; a no-op without one. */
+    private fun persistNow() {
+        val store = store ?: return
+        val persisted = synchronized(lock) {
+            PersistedLobby(
+                rooms = rooms.map { (name, game) ->
+                    PersistedRoom(
+                        name = name,
+                        boardSize = game.boardSize,
+                        winLength = game.winLength,
+                        botLevel = game.botLevel,
+                        secondBotLevel = game.secondBotLevel,
+                        turnSeconds = (game.turnTimeoutMs / 1000L).toInt(),
+                        clockSeconds = game.clockBudgetMs?.let { (it / 1000L).toInt() } ?: 0,
+                        seriesTarget = game.seriesTarget ?: 0,
+                        snapshot = game.snapshot(),
+                    )
+                },
+                names = keyNames.toMap(),
+            )
+        }
+        runCatching { store.save(persisted) }
+            .onFailure { logger.warn("Failed to persist the lobby", it) }
     }
 
     /** Caller already holds [lock]. */

@@ -38,6 +38,7 @@ internal fun Application.testModule(
     scoreboard = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard-test", ".json").toFile())),
     reconnectGraceMs = reconnectGraceMs,
     limits = limits,
+    lobbyStore = null, // tests keep the lobby in memory; persistence has its own suite
 )
 
 internal suspend fun WebSocketSession.skipBroadcast() {

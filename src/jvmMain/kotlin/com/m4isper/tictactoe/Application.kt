@@ -1,6 +1,8 @@
 package com.m4isper.tictactoe
 
 import com.m4isper.tictactoe.api.GameLobby
+import com.m4isper.tictactoe.api.JsonLobbyStore
+import com.m4isper.tictactoe.api.LobbyStore
 import com.m4isper.tictactoe.api.ServerLimits
 import com.m4isper.tictactoe.api.webUi
 import com.m4isper.tictactoe.domain.BotLevel
@@ -24,6 +26,8 @@ private fun defaultScoreboard(): Scoreboard {
     val store = if (file.extension == "db" || file.extension == "sqlite") SqliteScoreStore(file) else JsonScoreStore(file)
     return Scoreboard(store)
 }
+
+private fun defaultLobbyStore(): LobbyStore = JsonLobbyStore(File(System.getenv("LOBBY_FILE") ?: "data/lobby.json"))
 
 fun Application.module() {
     module(scoreboard = defaultScoreboard())
@@ -54,6 +58,7 @@ fun Application.module(
         },
     reconnectGraceMs: Long = 10_000L,
     limits: ServerLimits = ServerLimits.fromEnvironment(),
+    lobbyStore: LobbyStore? = defaultLobbyStore(),
 ) {
     val lobby = GameLobby(
         newGame,
@@ -61,6 +66,7 @@ fun Application.module(
         maxGames = limits.maxGames,
         maxSpectatorsPerGame = limits.maxSpectatorsPerGame,
         ratingOf = scoreboard::ratingOf,
+        store = lobbyStore,
     )
     monitor.subscribe(ApplicationStopped) { lobby.shutdownAll() }
     configureSockets()

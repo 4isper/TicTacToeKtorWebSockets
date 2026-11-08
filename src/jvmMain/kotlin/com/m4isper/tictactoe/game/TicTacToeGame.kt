@@ -440,6 +440,40 @@ class TicTacToeGame(
 
     fun currentState(): GameState = state.value
 
+    /** The durable essence of the round, for surviving a server restart; live connections and timers are excluded. */
+    fun snapshot(): GameSnapshot = synchronized(lock) {
+        GameSnapshot(
+            state = state.value.copy(
+                connectionPlayers = emptyList(),
+                awayPlayers = emptyList(),
+                playerNames = emptyMap(),
+                turnRemainingMs = null,
+                roundRestartInMs = null,
+                rematchPlayers = emptyList(),
+                drawPlayers = emptyList(),
+                undoOfferBy = null,
+                clocks = emptyMap(),
+            ),
+            roundStarter = roundStarter,
+            moves = roundMoves.toList(),
+            clockX = clockX,
+            clockO = clockO,
+        )
+    }
+
+    /** Resumes a persisted round in an empty room; timers stay idle until players rejoin, then arm fresh. */
+    fun restoreFrom(snapshot: GameSnapshot) = synchronized(lock) {
+        roundStarter = snapshot.roundStarter
+        roundMoves.clear()
+        roundMoves.addAll(snapshot.moves)
+        clockX = snapshot.clockX
+        clockO = snapshot.clockO
+        state.value = snapshot.state
+        if (snapshot.state.isRoundOver) {
+            beginFreshRoundLocked() // a round that ended before the restart resumes as the next one
+        }
+    }
+
     private fun rejectionReason(
         player: PlayerSymbol,
         session: WebSocketSession,
@@ -525,15 +559,13 @@ class TicTacToeGame(
         }
         state.value = withClocks
         stateChanges.trySend(withClocks)
-        if (roundJustEnded(previous, withClocks)) {
+        if (!previous.isRoundOver && withClocks.isRoundOver) {
             completedRounds.trySend(
                 CompletedRound(withClocks.playerNames, withClocks.winningPlayer, roundMoves.toList(), boardSize),
             )
         }
         scheduleBotMoveIfNeeded(withClocks)
     }
-
-    private fun roundJustEnded(previous: GameState, next: GameState): Boolean = !previous.isRoundOver && next.isRoundOver
 
     /** Forfeits the round to the opponent when the current player stalls past the deadline — turn budget or clock. */
     private fun armTurnTimerLocked(current: GameState) {
