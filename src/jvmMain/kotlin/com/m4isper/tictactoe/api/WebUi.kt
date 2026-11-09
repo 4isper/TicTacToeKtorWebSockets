@@ -396,7 +396,7 @@ private fun CssBuilder.layoutStyles() {
     rule("#chat-input::placeholder") {
         color = Color("var(--placeholder)")
     }
-    rule("#rematch, #draw, #resign, #hint") {
+    rule("#rematch, #draw, #undo, #resign, #hint") {
         display = Display.none
         margin = Margin(vertical = 4.px)
     }

@@ -26,3 +26,12 @@ test('replay controls wear the theme too', async ({ page }) => {
     expect(bg).toBe(PANEL);
   }
 });
+
+// No game state ever arrives in the shared-replay view: action buttons that
+// only a live state can enable must stay hidden there (and before first state).
+test('the undo button stays hidden while no game state calls for it', async ({ page }) => {
+  const frag = 'r=' + Buffer.from(JSON.stringify({ s: 3, w: 3, m: [[0, 0], [1, 0], [0, 1]] })).toString('base64url');
+  await page.goto(BASE + '/?lang=en#' + frag);
+  await expect(page.locator('#shared-replay')).toBeVisible();
+  await expect(page.locator('#undo')).toBeHidden();
+});
