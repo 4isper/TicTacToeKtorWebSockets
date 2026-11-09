@@ -239,6 +239,21 @@ private fun legacyCopy(text: String, onDone: (Boolean) -> Unit) {
 
 private const val PLAYER_KEY = "tictactoe-player-key"
 
+/** A list row that acts on click is a button for the keyboard too: focusable, named role, Enter/Space. */
+private fun HTMLElement.makeButtonLike(onActivate: () -> Unit) {
+    tabIndex = 0
+    setAttribute("role", "button")
+    style.cursor = "pointer"
+    onclick = { onActivate() }
+    onkeydown = { event ->
+        val key = event.asDynamic().key as? String
+        if (key == "Enter" || key == " ") {
+            event.preventDefault()
+            onActivate()
+        }
+    }
+}
+
 /** A persistent secret that owns the player's name across sessions; travels only in the WS join query. */
 private fun loadOrCreatePlayerKey(): String {
     localStorage.getItem(PLAYER_KEY)?.let { return it }
@@ -876,10 +891,12 @@ private class TurnAlert(private val lang: Lang) {
     private val baseTitle = window.document.title
     private var permissionAsked = false
 
-    /** Notification permission needs one user gesture; the first click anywhere is as good as any. */
+    /** Notification permission needs a user gesture; the first move on the board is the deliberate one. */
     fun install() {
-        document.addEventListener("pointerdown", {
+        document.addEventListener("pointerdown", { event ->
             if (permissionAsked) return@addEventListener
+            val target = event.target as? HTMLElement ?: return@addEventListener
+            if (target.closest("#board") == null) return@addEventListener
             permissionAsked = true
             try {
                 window.asDynamic().Notification?.requestPermission()
@@ -1019,9 +1036,8 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                     entries.forEachIndexed { index, entry ->
                         val li = document.createElement("li") as HTMLElement
                         li.textContent = "${index + 1}. ${entry.name} — ${entry.stats.rating} · ${entry.stats.wins} : ${entry.stats.losses} : ${entry.stats.draws}"
-                        li.style.cursor = "pointer"
                         li.title = entry.name as String
-                        li.onclick = { showProfile(entry.name as String) }
+                        li.makeButtonLike { showProfile(entry.name as String) }
                         rows.appendChild(li)
                     }
                 }
@@ -1057,8 +1073,7 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                             if (series != null) append(", ${seriesTargetText(series, lang)}")
                         }
                         li.textContent = "${room.name} — ${room.players}/2 · $details"
-                        li.style.cursor = "pointer"
-                        li.onclick = {
+                        li.makeButtonLike {
                             val langSuffix = langParam?.let { "&lang=${urlEncode(it)}" } ?: ""
                             window.location.href = "${window.location.pathname}?room=${urlEncode(room.name as String)}$langSuffix"
                         }
@@ -1096,9 +1111,8 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                         val stamp = "${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')} " +
                             "${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}"
                         li.textContent = "${resultMark(rec.result as String)} ${if (opponent != null) "vs $opponent · " else ""}$stamp"
-                        li.style.cursor = "pointer"
                         li.title = replayHintText(lang)
-                        li.onclick = { showReplay(rec, replayDiv) }
+                        li.makeButtonLike { showReplay(rec, replayDiv) }
                         ul.appendChild(li)
                     }
                     profileDiv.appendChild(title)
