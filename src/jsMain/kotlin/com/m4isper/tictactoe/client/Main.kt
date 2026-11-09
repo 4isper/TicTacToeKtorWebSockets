@@ -633,6 +633,8 @@ private class GameClient {
             }
 
             is ServerEvent.StateChanged -> {
+                // the world moved on: a refusal of an earlier action is stale now
+                showError("")
                 pendingReconnectToken?.let { localStorage.setItem(tokenKey, it) }
                 pendingReconnectToken = null
                 // the server is the source of truth: cache the name it attributes to me
