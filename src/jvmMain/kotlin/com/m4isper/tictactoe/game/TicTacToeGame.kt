@@ -559,7 +559,9 @@ class TicTacToeGame(
         } else {
             withTurn
         }
-        state.value = withClocks.copy(moves = roundMoves.toList(), botPlayers = botPlayersLocked())
+        // bot slots are read under the lock, like every publish caller
+        val bots = if (secondBotLevel != null) listOf(PlayerSymbol.X, PlayerSymbol.O) else listOfNotNull(bot)
+        state.value = withClocks.copy(moves = roundMoves.toList(), botPlayers = bots)
         stateChanges.trySend(state.value)
         if (!previous.isRoundOver && state.value.isRoundOver) {
             completedRounds.trySend(
@@ -658,12 +660,6 @@ class TicTacToeGame(
         secondBotLevel != null -> emptyList()
         bot != null -> state.value.connectionPlayers.filter { it != bot }
         else -> state.value.connectionPlayers
-    }
-
-    /** The slots bots hold right now; always read under the lock, like every publish caller. */
-    private fun botPlayersLocked(): List<PlayerSymbol> = when {
-        secondBotLevel != null -> listOf(PlayerSymbol.X, PlayerSymbol.O)
-        else -> listOfNotNull(bot)
     }
 
     private fun attachExhibitionBotsLocked() {
