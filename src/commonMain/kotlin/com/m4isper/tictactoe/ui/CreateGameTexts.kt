@@ -60,6 +60,18 @@ fun botNoneText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.EN -> "none"
 }
 
+/** A bot level's display label; the wire value (easy/normal/hard) stays untouched. */
+fun botLevelText(level: String, lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> when (level) {
+        "easy" -> "лёгкий"
+        "normal" -> "средний"
+        "hard" -> "сложный"
+        else -> level
+    }
+
+    Lang.EN -> level
+}
+
 fun botExhibitionText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> "выставка (2 бота)"
     Lang.EN -> "exhibition (2 bots)"

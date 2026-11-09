@@ -8,6 +8,7 @@ import com.m4isper.tictactoe.stats.Scoreboard
 import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.ThemeMode
 import com.m4isper.tictactoe.ui.botExhibitionText
+import com.m4isper.tictactoe.ui.botLevelText
 import com.m4isper.tictactoe.ui.botNoneText
 import com.m4isper.tictactoe.ui.chatPlaceholder
 import com.m4isper.tictactoe.ui.chatSendText
@@ -895,15 +896,15 @@ private fun FORM.createTimeFields(pageLang: Lang) {
             }
             option {
                 value = "easy"
-                +"easy"
+                +botLevelText("easy", pageLang)
             }
             option {
                 value = "normal"
-                +"normal"
+                +botLevelText("normal", pageLang)
             }
             option {
                 value = "hard"
-                +"hard"
+                +botLevelText("hard", pageLang)
             }
             option {
                 value = "2"

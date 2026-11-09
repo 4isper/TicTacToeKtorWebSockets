@@ -17,6 +17,7 @@ import com.m4isper.tictactoe.ui.SoundCue
 import com.m4isper.tictactoe.ui.ThemeMode
 import com.m4isper.tictactoe.ui.autoplayText
 import com.m4isper.tictactoe.ui.botLabel
+import com.m4isper.tictactoe.ui.botLevelText
 import com.m4isper.tictactoe.ui.cellNotation
 import com.m4isper.tictactoe.ui.clockText
 import com.m4isper.tictactoe.ui.connectingText
@@ -69,6 +70,7 @@ import com.m4isper.tictactoe.ui.turnSecondsText
 import com.m4isper.tictactoe.ui.undoButtonText
 import com.m4isper.tictactoe.ui.updateNoticeText
 import com.m4isper.tictactoe.ui.urlEncode
+import com.m4isper.tictactoe.ui.winLengthText
 import kotlinx.browser.document
 import kotlinx.browser.localStorage
 import kotlinx.browser.window
@@ -1064,9 +1066,9 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                         val li = document.createElement("li") as HTMLElement
                         val details = buildString {
                             append("${room.boardSize}×${room.boardSize}")
-                            if (room.winLength != room.boardSize) append(", win ${room.winLength}")
+                            if (room.winLength != room.boardSize) append(", ${winLengthText(room.winLength as Int, lang)}")
                             val level = room.botLevel as? String
-                            if (level != null) append(", ${botLabel(lang)}: $level")
+                            if (level != null) append(", ${botLabel(lang)}: ${botLevelText(level, lang)}")
                             val seconds = room.turnSeconds as? Int
                             if (seconds != null && seconds != 30) append(", ${turnSecondsText(seconds, lang)}")
                             val series = room.seriesTarget as? Int
