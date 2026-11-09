@@ -546,7 +546,9 @@ private class GameClient {
 
     private fun updateDrawButton(state: GameState) {
         val roundOver = state.isRoundOver
-        drawButton.style.display = if (!roundOver && mySymbol != null && state.connectionPlayers.size >= 2) "block" else "none"
+        // a bot never agrees to a draw: the offer only makes sense between humans
+        val visible = !roundOver && mySymbol != null && state.connectionPlayers.size >= 2 && state.botPlayers.isEmpty()
+        drawButton.style.display = if (visible) "block" else "none"
         val iOffered = mySymbol != null && mySymbol in state.drawPlayers
         val opponentOffered = state.drawPlayers.any { it != mySymbol }
         drawButton.textContent = drawButtonText(iOffered, opponentOffered, lang)

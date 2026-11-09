@@ -17,6 +17,8 @@ data class GameState(
     val winningCells: List<Cell> = emptyList(),
     val isBoardFull: Boolean = false,
     val connectionPlayers: List<PlayerSymbol> = emptyList(),
+    /** Connected slots held by bots right now; human-only actions (a draw offer) need this empty. */
+    val botPlayers: List<PlayerSymbol> = emptyList(),
     /** Players whose connection dropped but whose slot is held for the reconnect grace. */
     val awayPlayers: List<PlayerSymbol> = emptyList(),
     val score: Map<PlayerSymbol, Int> = mapOf(PlayerSymbol.X to 0, PlayerSymbol.O to 0),

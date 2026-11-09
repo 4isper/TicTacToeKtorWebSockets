@@ -573,6 +573,25 @@ class TicTacToeGameTest {
     }
 
     @Test
+    fun `the state names the bot slots so clients can hide human-only actions`() = runBlocking {
+        val game = TicTacToeGame(botLevel = BotLevel.EASY)
+        val xSession = FakeSession()
+        game.connectPlayer(xSession)
+        assertEquals(listOf(PlayerSymbol.O), game.currentState().botPlayers)
+
+        // a joining human takes the bot's slot
+        val oSession = FakeSession()
+        game.connectPlayer(oSession)
+        assertEquals(emptyList(), game.currentState().botPlayers)
+        game.shutdown()
+
+        val exhibition = TicTacToeGame(botLevel = BotLevel.NORMAL, secondBotLevel = BotLevel.NORMAL)
+        exhibition.connectPlayer(FakeSession()) // a joiner only watches
+        assertEquals(listOf(PlayerSymbol.X, PlayerSymbol.O), exhibition.currentState().botPlayers)
+        exhibition.shutdown()
+    }
+
+    @Test
     fun `a takeback needs the last mover to ask and the opponent to approve`() = runBlocking {
         val game = TicTacToeGame()
         val xSession = FakeSession()

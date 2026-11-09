@@ -454,6 +454,7 @@ class TicTacToeGame(
                 undoOfferBy = null,
                 clocks = emptyMap(),
                 moves = emptyList(), // the snapshot's own moves field carries the round record
+                botPlayers = emptyList(), // bots reattach when players rejoin
             ),
             roundStarter = roundStarter,
             moves = roundMoves.toList(),
@@ -558,7 +559,7 @@ class TicTacToeGame(
         } else {
             withTurn
         }
-        state.value = withClocks.copy(moves = roundMoves.toList())
+        state.value = withClocks.copy(moves = roundMoves.toList(), botPlayers = botPlayersLocked())
         stateChanges.trySend(state.value)
         if (!previous.isRoundOver && state.value.isRoundOver) {
             completedRounds.trySend(
@@ -657,6 +658,12 @@ class TicTacToeGame(
         secondBotLevel != null -> emptyList()
         bot != null -> state.value.connectionPlayers.filter { it != bot }
         else -> state.value.connectionPlayers
+    }
+
+    /** The slots bots hold right now; always read under the lock, like every publish caller. */
+    private fun botPlayersLocked(): List<PlayerSymbol> = when {
+        secondBotLevel != null -> listOf(PlayerSymbol.X, PlayerSymbol.O)
+        else -> listOfNotNull(bot)
     }
 
     private fun attachExhibitionBotsLocked() {

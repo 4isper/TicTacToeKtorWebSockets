@@ -29,3 +29,17 @@ test('the move log survives a reload', async ({ page }) => {
   await expect(page.locator('#board .cell').nth(4)).toHaveText('X');
   await expect(page.locator('#moves li')).toHaveCount(2);
 });
+
+// A draw needs two humans to agree; a bot never votes, so the offer is a dead end.
+test('the draw button only shows against a human', async ({ page, browser }) => {
+  await page.goto(BASE + '/?room=e2e-draw-' + Date.now() + '&bot=easy&lang=en');
+  await expect(page.locator('#board .cell').first()).toBeEnabled({ timeout: 10_000 });
+  await expect(page.locator('#draw')).toBeHidden();
+
+  const room = 'e2e-draw2-' + Date.now();
+  await page.goto(BASE + '/?room=' + room + '&lang=en');
+  const guest = await browser.newPage();
+  await guest.goto(BASE + '/?room=' + room + '&lang=en');
+  await expect(page.locator('#draw')).toBeVisible();
+  await guest.close();
+});
