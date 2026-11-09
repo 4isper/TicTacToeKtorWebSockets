@@ -399,7 +399,35 @@ private fun CssBuilder.layoutStyles() {
     }
     rule("#rematch, #draw, #undo, #resign, #hint") {
         display = Display.none
+    }
+    rule(".action-row") {
+        display = Display.flex
+        flexWrap = FlexWrap.wrap
+        gap = 8.px
+        justifyContent = JustifyContent.center
         margin = Margin(vertical = 4.px)
+    }
+    rule("#create, #chat, #rooms, #leaderboard, #profile") {
+        width = 100.pct
+        maxWidth = 560.px
+    }
+    rule("#chat-log, #moves, #board") {
+        put("scrollbar-width", "thin")
+        put("scrollbar-color", "var(--muted) transparent")
+    }
+    rule("#chat-log::-webkit-scrollbar, #moves::-webkit-scrollbar, #board::-webkit-scrollbar") {
+        put("width", "8px")
+        put("height", "8px")
+    }
+    rule("#chat-log::-webkit-scrollbar-thumb, #moves::-webkit-scrollbar-thumb, #board::-webkit-scrollbar-thumb") {
+        backgroundColor = Color("var(--muted)")
+        borderRadius = 4.px
+    }
+    rule("#chat-log::-webkit-scrollbar-thumb:hover, #moves::-webkit-scrollbar-thumb:hover, #board::-webkit-scrollbar-thumb:hover") {
+        backgroundColor = Color("var(--accent)")
+    }
+    rule("#chat-log::-webkit-scrollbar-track, #moves::-webkit-scrollbar-track, #board::-webkit-scrollbar-track") {
+        backgroundColor = Color("transparent")
     }
     nameRowStyles()
     rule("#turn-bar") {
@@ -522,6 +550,7 @@ private fun CssBuilder.boardStyles() {
         height = 26.px
         backgroundColor = Color("var(--panel)")
         color = Color("var(--text)")
+        borderRadius = 4.px
         fontSize = 13.px
         lineHeight = LineHeight("26px")
         textAlign = TextAlign.center
@@ -732,25 +761,27 @@ private fun BODY.controls(pageLang: Lang) {
         }
     }
     div { id = "connection-actions" }
-    button(classes = "secondary") {
-        id = "rematch"
-        +rematchButtonText(waiting = false, lang = pageLang)
-    }
-    button(classes = "secondary") {
-        id = "draw"
-        +drawButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
-    }
-    button(classes = "secondary") {
-        id = "undo"
-        +undoButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
-    }
-    button(classes = "secondary") {
-        id = "resign"
-        +resignButtonText(pageLang)
-    }
-    button(classes = "secondary") {
-        id = "hint"
-        +hintText(pageLang)
+    div(classes = "action-row") {
+        button(classes = "secondary") {
+            id = "rematch"
+            +rematchButtonText(waiting = false, lang = pageLang)
+        }
+        button(classes = "secondary") {
+            id = "draw"
+            +drawButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
+        }
+        button(classes = "secondary") {
+            id = "undo"
+            +undoButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
+        }
+        button(classes = "secondary") {
+            id = "resign"
+            +resignButtonText(pageLang)
+        }
+        button(classes = "secondary") {
+            id = "hint"
+            +hintText(pageLang)
+        }
     }
 }
 

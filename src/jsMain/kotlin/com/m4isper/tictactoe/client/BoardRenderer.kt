@@ -149,6 +149,6 @@ internal class BoardRenderer(
 
     private companion object {
         const val MIN_TOUCH_PX = 44
-        const val MAX_CELL_PX = 76
+        const val MAX_CELL_PX = 96
     }
 }

@@ -170,6 +170,8 @@ private fun showUpdateNotice(lang: Lang) {
     notice.appendChild(reload)
     notice.appendChild(dismiss)
     document.body?.appendChild(notice)
+    // the notice spans the bottom edge: lift the install button above it
+    (document.getElementById("install-button") as? HTMLElement)?.style?.bottom = "64px"
 }
 
 private fun captureInstallPrompt(lang: Lang) {
@@ -194,6 +196,7 @@ private fun showInstallButton(lang: Lang) {
             button.remove()
         }
     }
+    if (document.getElementById("pwa-notice") != null) button.style.bottom = "64px"
     document.body?.appendChild(button)
 }
 
@@ -385,6 +388,10 @@ private class GameClient {
         board.style.display = "none"
         turnBar.style.display = "none"
         (document.getElementById("reactions") as? HTMLElement)?.style?.display = "none"
+        // no connection in this view: the name and chat controls would be dead
+        (document.getElementById("name") as? HTMLElement)?.style?.display = "none"
+        (document.getElementById("set-name") as? HTMLElement)?.style?.display = "none"
+        (document.getElementById("chat") as? HTMLElement)?.style?.display = "none"
 
         // rebuild the final position so the header can announce the outcome
         var field: List<List<PlayerSymbol?>> = GameRules.emptyField(replay.boardSize)
@@ -1250,6 +1257,8 @@ private class ReplayView(
 
         boardDiv.style.display = "grid"
         boardDiv.style.setProperty("grid-template-columns", "repeat($boardSize, 26px)")
+        boardDiv.style.setProperty("gap", "2px")
+        boardDiv.style.justifyContent = "center"
 
         prev.onclick = {
             stopPlaying()
