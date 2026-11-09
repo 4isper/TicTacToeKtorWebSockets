@@ -158,9 +158,11 @@ private fun showUpdateNotice(lang: Lang) {
     val text = document.createElement("span") as HTMLElement
     text.textContent = updateNoticeText(lang)
     val reload = document.createElement("button") as HTMLButtonElement
+    reload.className = "secondary"
     reload.textContent = reloadText(lang)
     reload.onclick = { window.location.reload() }
     val dismiss = document.createElement("button") as HTMLButtonElement
+    dismiss.className = "secondary"
     dismiss.textContent = dismissText(lang)
     dismiss.onclick = { notice.remove() }
     notice.appendChild(text)
@@ -394,6 +396,7 @@ private class GameClient {
         panels.mountReplay(host, replay.boardSize, replay.moves)
 
         val back = document.createElement("button") as HTMLButtonElement
+        back.className = "secondary"
         back.textContent = when (lang) {
             Lang.RU -> "← К игре"
             Lang.EN -> "← Back to the game"
@@ -1132,10 +1135,12 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
         val current = (data.page ?: js("0")) as Int
         val row = document.createElement("div") as HTMLElement
         val older = document.createElement("button") as HTMLButtonElement
+        older.className = "secondary"
         older.textContent = "‹"
         older.disabled = current >= pages - 1
         older.onclick = { showProfile(name, current + 1) }
         val newer = document.createElement("button") as HTMLButtonElement
+        newer.className = "secondary"
         newer.textContent = "›"
         newer.disabled = current <= 0
         newer.onclick = { showProfile(name, current - 1) }
@@ -1207,11 +1212,15 @@ private class ReplayView(
     private val boardDiv = document.createElement("div") as HTMLElement
 
     init {
+        prev.className = "secondary"
+        next.className = "secondary"
+        play.className = "secondary"
         prev.textContent = "‹"
         next.textContent = "›"
         play.textContent = "▶"
         play.title = autoplayText(lang)
         val share = document.createElement("button") as HTMLButtonElement
+        share.className = "secondary"
         share.textContent = "🔗"
         share.title = copyLinkText(lang)
         val controls = document.createElement("div") as HTMLElement

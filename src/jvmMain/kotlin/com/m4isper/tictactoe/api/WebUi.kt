@@ -356,13 +356,6 @@ private fun CssBuilder.themeStyles() {
     }
     rule("#copy-link") {
         margin = Margin(vertical = 8.px)
-        padding = Padding(horizontal = 14.px, vertical = 8.px)
-        fontSize = 15.px
-        backgroundColor = Color("var(--panel)")
-        color = Color("var(--text)")
-        borderWidth = 0.px
-        borderRadius = 8.px
-        cursor = Cursor.pointer
     }
 }
 
@@ -379,9 +372,7 @@ private fun CssBuilder.lightPalette() {
 }
 
 private fun CssBuilder.layoutStyles() {
-    rule("#rematch, #draw, #resign, #hint") {
-        display = Display.none
-        margin = Margin(vertical = 4.px)
+    rule(".secondary") {
         padding = Padding(horizontal = 14.px, vertical = 8.px)
         fontSize = 15.px
         backgroundColor = Color("var(--panel)")
@@ -390,9 +381,24 @@ private fun CssBuilder.layoutStyles() {
         borderRadius = 8.px
         cursor = Cursor.pointer
     }
-    rule("#rematch:disabled, #draw:disabled, #resign:disabled, #hint:disabled") {
+    rule(".secondary:disabled") {
         opacity = 0.6
         cursor = Cursor.default
+    }
+    rule("#chat-input") {
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        borderWidth = 0.px
+        borderRadius = 8.px
+        padding = Padding(horizontal = 10.px, vertical = 8.px)
+        fontSize = 15.px
+    }
+    rule("#chat-input::placeholder") {
+        color = Color("var(--placeholder)")
+    }
+    rule("#rematch, #draw, #resign, #hint") {
+        display = Display.none
+        margin = Margin(vertical = 4.px)
     }
     nameRowStyles()
     rule("#turn-bar") {
@@ -453,15 +459,6 @@ private fun CssBuilder.nameRowStyles() {
     }
     rule("#name::placeholder, #player-search::placeholder") {
         color = Color("var(--placeholder)")
-    }
-    rule("#set-name") {
-        padding = Padding(horizontal = 14.px, vertical = 8.px)
-        fontSize = 15.px
-        backgroundColor = Color("var(--panel)")
-        color = Color("var(--text)")
-        borderWidth = 0.px
-        borderRadius = 8.px
-        cursor = Cursor.pointer
     }
 }
 
