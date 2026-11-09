@@ -165,6 +165,17 @@ class ClientLogicTest {
     }
 
     @Test
+    fun `a finished round leaves no clickable cells for either side`() {
+        val state = GameState(
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            playerAtTurn = PlayerSymbol.O,
+            winningPlayer = PlayerSymbol.X,
+        )
+        assertTrue(cellViews(null, state, PlayerSymbol.O).all { it.disabled })
+        assertTrue(cellViews(null, state, PlayerSymbol.X).all { it.disabled })
+    }
+
+    @Test
     fun `the fresh move pops until the next state`() {
         val before = GameState(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O))
         val moved = before.copy(field = Boards.fieldWith(listOf(Cell(1, 1) to PlayerSymbol.X)), playerAtTurn = PlayerSymbol.O)

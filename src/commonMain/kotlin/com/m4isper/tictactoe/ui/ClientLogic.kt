@@ -50,7 +50,8 @@ fun cellViews(
                     if (fresh.any { it.x == x && it.y == y }) append(" pop last-move")
                 },
                 ariaLabel = cellAriaText(x, y, cell, lang),
-                disabled = cell != null || mySymbol == null || state.connectionPlayers.size < 2 || state.playerAtTurn != mySymbol,
+                disabled = cell != null || mySymbol == null || state.connectionPlayers.size < 2 ||
+                    state.playerAtTurn != mySymbol || state.isRoundOver,
             )
         }
     }

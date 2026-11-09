@@ -52,6 +52,18 @@ fun dismissText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.EN -> "Dismiss"
 }
 
+/** A live round must not be abandoned by one careless click on the quick-play link. */
+fun leaveGameText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Покинуть текущую партию и начать новую?"
+    Lang.EN -> "Leave this game and start a new one?"
+}
+
+/** Resigning changes the score and the rating, so it gets its own confirmation. */
+fun resignConfirmText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Сдаться? Соперник получит победу, раунд будет засчитан как поражение."
+    Lang.EN -> "Resign? The opponent wins the round and it counts as a loss."
+}
+
 fun installText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> "Установить приложение"
     Lang.EN -> "Install app"
