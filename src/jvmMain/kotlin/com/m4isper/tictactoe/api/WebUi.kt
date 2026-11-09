@@ -126,8 +126,9 @@ private const val ICON_SVG =
         """<g stroke="#e8e8f0" stroke-width="7"><circle cx="66" cy="66" r="13" fill="none"/></g></svg>"""
 
 private const val SERVICE_WORKER_JS =
-    """const CACHE = "ttt-v2"; const OFFLINE_URL = "/offline";""" +
+    """const CACHE = "ttt-v3"; const OFFLINE_URL = "/offline";""" +
         """const SHELL = ["/", "/styles.css", "/static/app.js", "/manifest.webmanifest", "/icon.svg", "/icon-192.png", "/icon-512.png", OFFLINE_URL];""" +
+        """const LIVE = ["/rooms", "/leaderboard", "/player"];""" +
         """self.addEventListener("install", function (e) {""" +
         """e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); })); });""" +
         """self.addEventListener("activate", function (e) {""" +
@@ -140,9 +141,16 @@ private const val SERVICE_WORKER_JS =
         """return caches.match(e.request).then(function (page) { return page || caches.match(OFFLINE_URL); });""" +
         """})); return; }""" +
         """if (e.request.method !== "GET") return;""" +
+        """var url = new URL(e.request.url);""" +
+        """if (url.origin !== self.location.origin) return;""" +
+        """if (LIVE.indexOf(url.pathname) !== -1) {""" +
+        """e.respondWith(fetch(e.request).then(function (res) {""" +
+        """if (res && res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(e.request, copy); }); }""" +
+        """return res; }).catch(function () {""" +
+        """return caches.match(e.request).then(function (hit) { return hit || Response.error(); }); })); return; }""" +
         """e.respondWith(caches.match(e.request).then(function (hit) {""" +
         """return hit || fetch(e.request).then(function (res) {""" +
-        """if (res && res.ok && new URL(e.request.url).origin === self.location.origin) {""" +
+        """if (res && res.ok) {""" +
         """var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(e.request, copy); }); }""" +
         """return res; }); })); });"""
 
