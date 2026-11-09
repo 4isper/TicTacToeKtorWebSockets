@@ -1,5 +1,6 @@
 package com.m4isper.tictactoe
 
+import com.m4isper.tictactoe.api.ServerLimits
 import com.m4isper.tictactoe.domain.Cell
 import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.PlayerSymbol
@@ -30,9 +31,14 @@ import java.nio.file.Files
 import kotlin.test.*
 
 /** A module whose scoreboard lives in a temp file, so the tests never touch the real leaderboard. */
-internal fun Application.testModule(reconnectGraceMs: Long = 10_000L) = module(
+internal fun Application.testModule(
+    reconnectGraceMs: Long = 10_000L,
+    limits: ServerLimits = ServerLimits(),
+) = module(
     scoreboard = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard-test", ".json").toFile())),
     reconnectGraceMs = reconnectGraceMs,
+    limits = limits,
+    lobbyStore = null, // tests keep the lobby in memory; persistence has its own suite
 )
 
 internal suspend fun WebSocketSession.skipBroadcast() {
@@ -93,8 +99,16 @@ internal suspend fun WebSocketSession.sendRequestUndo() {
     send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.RequestUndo)))
 }
 
+internal suspend fun WebSocketSession.sendRequestResign() {
+    send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.RequestResign)))
+}
+
 internal suspend fun WebSocketSession.sendReact(emoji: String) {
     send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.React(emoji))))
+}
+
+internal suspend fun WebSocketSession.sendChat(text: String) {
+    send(Frame.Text(protocolJson.encodeToString<ClientMessage>(ClientMessage.Chat(text))))
 }
 
 internal suspend fun WebSocketSession.sendSetName(name: String) {

@@ -1,6 +1,9 @@
 package com.m4isper.tictactoe
 
 import com.m4isper.tictactoe.api.GameLobby
+import com.m4isper.tictactoe.api.JsonLobbyStore
+import com.m4isper.tictactoe.api.LobbyStore
+import com.m4isper.tictactoe.api.ServerLimits
 import com.m4isper.tictactoe.api.webUi
 import com.m4isper.tictactoe.domain.BotLevel
 import com.m4isper.tictactoe.game.TicTacToeGame
@@ -24,14 +27,24 @@ private fun defaultScoreboard(): Scoreboard {
     return Scoreboard(store)
 }
 
+private fun defaultLobbyStore(): LobbyStore = JsonLobbyStore(File(System.getenv("LOBBY_FILE") ?: "data/lobby.json"))
+
 fun Application.module() {
     module(scoreboard = defaultScoreboard())
 }
 
 fun Application.module(
     scoreboard: Scoreboard = defaultScoreboard(),
-    newGame: (boardSize: Int, winLength: Int, botLevel: BotLevel?, secondBotLevel: BotLevel?, turnSeconds: Int, clockSeconds: Int) -> TicTacToeGame =
-        { boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds ->
+    newGame: (
+        boardSize: Int,
+        winLength: Int,
+        botLevel: BotLevel?,
+        secondBotLevel: BotLevel?,
+        turnSeconds: Int,
+        clockSeconds: Int,
+        seriesTarget: Int,
+    ) -> TicTacToeGame =
+        { boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds, seriesTarget ->
             TicTacToeGame(
                 boardSize = boardSize,
                 winLength = winLength,
@@ -39,16 +52,26 @@ fun Application.module(
                 secondBotLevel = secondBotLevel,
                 turnTimeoutMs = turnSeconds * 1000L,
                 clockBudgetMs = clockSeconds.takeIf { it > 0 }?.let { it * 1000L },
+                seriesTarget = seriesTarget.takeIf { it > 0 },
                 onRoundOver = scoreboard::recordRound,
             )
         },
     reconnectGraceMs: Long = 10_000L,
+    limits: ServerLimits = ServerLimits.fromEnvironment(),
+    lobbyStore: LobbyStore? = defaultLobbyStore(),
 ) {
-    val lobby = GameLobby(newGame, reconnectGraceMs)
+    val lobby = GameLobby(
+        newGame,
+        reconnectGraceMs,
+        maxGames = limits.maxGames,
+        maxSpectatorsPerGame = limits.maxSpectatorsPerGame,
+        ratingOf = scoreboard::ratingOf,
+        store = lobbyStore,
+    )
     monitor.subscribe(ApplicationStopped) { lobby.shutdownAll() }
     configureSockets()
     configureSerialization()
     configureMonitoring()
-    configureRouting(lobby)
+    configureRouting(lobby, scoreboard::ratingOf, limits)
     webUi(scoreboard, lobby)
 }

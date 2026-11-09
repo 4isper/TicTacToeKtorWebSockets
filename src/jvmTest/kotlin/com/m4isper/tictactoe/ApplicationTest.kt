@@ -58,6 +58,28 @@ class ApplicationTest {
     }
 
     @Test
+    fun `the page offers a quick play link and a create-game form`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient { }
+
+        val russian = client.get("/").bodyAsText()
+        assertTrue("id=\"quick-play\"" in russian, "quick play link missing, got: $russian")
+        assertTrue("id=\"player-search\"" in russian, "player search missing, got: $russian")
+        assertTrue("<form action=\"/\"" in russian, "create-game form missing, got: $russian")
+        listOf("room", "size", "win", "turn", "clock", "bot").forEach { field ->
+            assertTrue("name=\"$field\"" in russian, "form field $field missing")
+        }
+
+        val english = client.get("/?lang=en").bodyAsText()
+        assertTrue("Quick play" in english)
+        assertTrue("Create a game" in english)
+        // an explicit lang rides the form submission as a hidden field
+        assertTrue("name=\"lang\"" in english)
+    }
+
+    @Test
     fun `named wins reach the leaderboard endpoint`() = testApplication {
         application {
             testModule()
@@ -108,8 +130,8 @@ class ApplicationTest {
         assertEquals(HttpStatusCode.OK, profile.status)
         assertTrue("Боря" in profile.bodyAsText(), "history should name the opponent: ${profile.bodyAsText()}")
         assertTrue("WIN" in profile.bodyAsText())
-        assertTrue("\"rating\":1016" in profile.bodyAsText(), "the win should pay elo: ${profile.bodyAsText()}")
-        assertTrue("\"ratingAfter\":1016" in profile.bodyAsText())
+        assertTrue("\"rating\":1020" in profile.bodyAsText(), "the win should pay elo: ${profile.bodyAsText()}")
+        assertTrue("\"ratingAfter\":1020" in profile.bodyAsText())
         assertTrue(
             "\"moves\":[{\"x\":0,\"y\":0},{\"x\":1,\"y\":0},{\"x\":0,\"y\":1},{\"x\":1,\"y\":1},{\"x\":0,\"y\":2}]" in profile.bodyAsText(),
             "the record should carry the replay: ${profile.bodyAsText()}",
@@ -117,6 +139,42 @@ class ApplicationTest {
         assertTrue("\"boardSize\":3" in profile.bodyAsText())
 
         assertEquals(HttpStatusCode.NotFound, client.get("/player?name=Кто-то").status)
+    }
+
+    @Test
+    fun `a keyed name cannot be taken after its owner leaves`() = testApplication {
+        application {
+            testModule(reconnectGraceMs = 50)
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?name=Аня&key=key-anya") {
+            receiveHandshake()
+            awaitStateWhere { it.playerNames[PlayerSymbol.X] == "Аня" }
+        }
+        delay(150) // the owner's grace expired: the session is gone
+
+        client.webSocket("/play?name=Аня&key=key-stranger") {
+            // the state broadcast is async and races the refusal: read until one of them wins
+            val outcome = withTimeout(5_000) {
+                var event: ServerEvent
+                do {
+                    event = receiveEvent()
+                } while (event != ServerEvent.Error(ErrorReason.NAME_TAKEN) &&
+                    !(event is ServerEvent.StateChanged && event.state.playerNames.containsValue("Аня"))
+                )
+                event
+            }
+            assertEquals(ServerEvent.Error(ErrorReason.NAME_TAKEN), outcome)
+        }
+        delay(150)
+
+        client.webSocket("/play?name=Аня&key=key-anya") {
+            receiveHandshake()
+            awaitStateWhere { it.playerNames[PlayerSymbol.X] == "Аня" } // the owner reclaimed it
+        }
     }
 
     @Test
@@ -404,7 +462,10 @@ class ApplicationTest {
         xClient.webSocket("/play") {
             receiveHandshake()
             sendReconnect(token!!)
-            val state = receiveState()
+            // the rebind is announced with a fresh Joined; the reattach broadcast may race it
+            val events = listOf(receiveEvent(), receiveEvent())
+            assertTrue(events.any { it == ServerEvent.Joined(token, PlayerSymbol.X) }, "reclaim Joined, got: $events")
+            val state = (events.first { it is ServerEvent.StateChanged } as ServerEvent.StateChanged).state
             assertEquals(PlayerSymbol.X, state.playerAtTurn)
             assertEquals(listOf(PlayerSymbol.X, PlayerSymbol.O), state.connectionPlayers)
             assertEquals(PlayerSymbol.X, state.field[0][0])
@@ -434,7 +495,8 @@ class ApplicationTest {
                     receiveHandshake()
                     sendReconnect(joined.token)
                     // wait for the server to confirm the rebind before unblocking the zombie
-                    assertTrue(receiveEvent() is ServerEvent.StateChanged)
+                    val confirm = receiveEvent()
+                    assertTrue(confirm is ServerEvent.Joined || confirm is ServerEvent.StateChanged, "rebind confirm, got: $confirm")
                     reconnected.complete(Unit)
                     awaitCancellation()
                 }

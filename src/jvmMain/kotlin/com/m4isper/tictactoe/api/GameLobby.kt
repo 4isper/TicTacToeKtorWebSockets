@@ -7,6 +7,7 @@ import com.m4isper.tictactoe.game.TicTacToeGame
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable
+import org.slf4j.LoggerFactory
 import java.util.UUID
 
 @Serializable
@@ -18,14 +19,43 @@ data class RoomInfo(
     val winLength: Int,
     val botLevel: BotLevel? = null,
     val turnSeconds: Int,
+    val seriesTarget: Int? = null,
 )
 
 @Serializable
 data class RoomsResponse(val rooms: List<RoomInfo> = emptyList())
 
+/** Everything one connection asks of the lobby: which room, what board and clocks, and whether to only watch. */
+data class JoinSettings(
+    val room: String? = null,
+    val size: Int = GameRules.DEFAULT_BOARD_SIZE,
+    val winLength: Int = GameRules.DEFAULT_BOARD_SIZE,
+    val botLevel: BotLevel? = null,
+    val secondBotLevel: BotLevel? = null,
+    val turnSeconds: Int = GameRules.DEFAULT_TURN_SECONDS,
+    val clockSeconds: Int = 0,
+    val seriesTarget: Int = 0,
+    /** Only meaningful with a room: attach as a spectator instead of claiming the first free slot. */
+    val spectate: Boolean = false,
+    /** A name carried by the join URL; claimed like `set_name` would, a refusal leaves the session unnamed. */
+    val name: String? = null,
+    /** A persistent player secret from the client's localStorage; owns the name across sessions. */
+    val playerKey: String? = null,
+    /** The joiner's current Elo, when they are named — anonymous matchmaking prefers the closest rated player. */
+    val rating: Int? = null,
+)
+
 class GameLobby(
-    private val newGame: (boardSize: Int, winLength: Int, botLevel: BotLevel?, secondBotLevel: BotLevel?, turnSeconds: Int, clockSeconds: Int) -> TicTacToeGame =
-        { boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds ->
+    private val newGame: (
+        boardSize: Int,
+        winLength: Int,
+        botLevel: BotLevel?,
+        secondBotLevel: BotLevel?,
+        turnSeconds: Int,
+        clockSeconds: Int,
+        seriesTarget: Int,
+    ) -> TicTacToeGame =
+        { boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds, seriesTarget ->
             TicTacToeGame(
                 boardSize = boardSize,
                 winLength = winLength,
@@ -33,46 +63,73 @@ class GameLobby(
                 secondBotLevel = secondBotLevel,
                 turnTimeoutMs = turnSeconds * 1000L,
                 clockBudgetMs = clockSeconds.takeIf { it > 0 }?.let { it * 1000L },
+                seriesTarget = seriesTarget.takeIf { it > 0 },
             )
         },
     private val reconnectGraceMs: Long = 10_000L,
     private val maxGames: Int = 100,
     private val maxSpectatorsPerGame: Int = 20,
+    /** Looks a named player's rating up — the scoreboard, in production. */
+    private val ratingOf: (String) -> Int? = { null },
+    /** When set, named rooms and key-owned names survive a restart through this store. */
+    private val store: LobbyStore? = null,
+    private val persistIntervalMs: Long = 2_000L,
 ) {
     data class Joined(val game: TicTacToeGame, val symbol: PlayerSymbol?, val token: String)
 
+    /** A token owns its grace job: dropping the token drops the timer with it. */
     private data class TokenBinding(
         val game: TicTacToeGame,
         val symbol: PlayerSymbol?,
         val session: WebSocketSession,
+        var graceJob: Job? = null,
     )
 
     private val lock = Any()
     private val games = mutableListOf<TicTacToeGame>()
     private val rooms = mutableMapOf<String, TicTacToeGame>()
     private val tokens = mutableMapOf<String, TokenBinding>()
-    private val graceJobs = mutableMapOf<String, Job>()
     private val lobbyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // A claimed name belongs to one reconnect token, so a second session cannot
-    // play (and change the Elo rating) under somebody else's name.
-    private val nameOwners = mutableMapOf<String, String>() // lowercased name -> token
+    // A claimed name belongs to a persistent player key when the client sends one, so the
+    // owner keeps it (and its Elo) across sessions; a keyless claim belongs to the live
+    // token only and is freed on disconnect.
+    private val nameOwners = mutableMapOf<String, String>() // lowercased name -> player key or token
     private val tokenNames = mutableMapOf<String, String>() // token -> lowercased name
+    private val keyNames = mutableMapOf<String, String>() // player key -> lowercased name; one name per key
+
+    private val logger = LoggerFactory.getLogger(GameLobby::class.java)
+
+    init {
+        if (store != null) {
+            store.load()?.let { persisted ->
+                persisted.names.forEach { (key, name) ->
+                    nameOwners[name] = key
+                    keyNames[key] = name
+                }
+                persisted.rooms.forEach { room ->
+                    val game = newGame(room.boardSize, room.winLength, room.botLevel, room.secondBotLevel, room.turnSeconds, room.clockSeconds, room.seriesTarget)
+                    game.restoreFrom(room.snapshot)
+                    rooms[room.name] = game
+                }
+            }
+            lobbyScope.launch {
+                while (isActive) {
+                    delay(persistIntervalMs)
+                    persistNow()
+                }
+            }
+        }
+    }
 
     fun join(
         session: WebSocketSession,
-        room: String? = null,
-        boardSize: Int = GameRules.DEFAULT_BOARD_SIZE,
-        winLength: Int = boardSize,
-        botLevel: BotLevel? = null,
-        secondBotLevel: BotLevel? = null,
-        turnSeconds: Int = GameRules.DEFAULT_TURN_SECONDS,
-        clockSeconds: Int = 0,
+        settings: JoinSettings,
     ): Joined? = synchronized(lock) {
-        val game = findOrCreateGame(room, boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds)
-            ?: return null
-        val symbol = game.connectPlayer(session)
-        if (symbol == null && (room == null || game.spectatorCount() >= maxSpectatorsPerGame)) return null
+        val game = findOrCreateGame(settings) ?: return null
+        val spectating = settings.spectate && settings.room != null
+        val symbol = if (spectating) null else game.connectPlayer(session)
+        if (symbol == null && (settings.room == null || game.spectatorCount() >= maxSpectatorsPerGame)) return null
         val token = UUID.randomUUID().toString()
         tokens[token] = TokenBinding(game, symbol, session)
         if (symbol == null) game.attachSpectator(session)
@@ -80,43 +137,70 @@ class GameLobby(
     }
 
     /** Null when a new game would push the lobby past its cap. Caller holds [lock]. */
-    private fun findOrCreateGame(
-        room: String?,
-        boardSize: Int,
-        winLength: Int,
-        botLevel: BotLevel?,
-        secondBotLevel: BotLevel?,
-        turnSeconds: Int,
-        clockSeconds: Int,
-    ): TicTacToeGame? {
-        if (room == null) {
+    private fun findOrCreateGame(settings: JoinSettings): TicTacToeGame? {
+        if (settings.room == null) {
             // pair anonymous joiners only with identical settings, or their size/win/bot would be silently ignored
-            games.firstOrNull { !it.isFull() && it.matches(boardSize, winLength, botLevel, turnSeconds, clockSeconds) }
-                ?.let { return it }
+            val candidates = games.filter {
+                !it.isFull() && it.matches(
+                    settings.size,
+                    settings.winLength,
+                    settings.botLevel,
+                    settings.turnSeconds,
+                    settings.clockSeconds,
+                    settings.seriesTarget,
+                    settings.secondBotLevel,
+                )
+            }
+            bestCandidate(candidates, settings.rating)?.let { return it }
         } else {
-            rooms[room]?.let { return it }
+            rooms[settings.room]?.let { return it }
         }
         if (games.size + rooms.size >= maxGames) return null
-        val game = newGame(boardSize, winLength, botLevel, secondBotLevel, turnSeconds, clockSeconds)
-        if (room == null) games.add(game) else rooms[room] = game
+        val game = newGame(settings.size, settings.winLength, settings.botLevel, settings.secondBotLevel, settings.turnSeconds, settings.clockSeconds, settings.seriesTarget)
+        if (settings.room == null) games.add(game) else rooms[settings.room] = game
         return game
     }
 
-    /** A name stays with the token that claimed it; another live session cannot take it. */
-    fun claimName(token: String, name: String): Boolean = synchronized(lock) {
-        val key = name.lowercase()
-        val owner = nameOwners[key]
-        if (owner != null && owner != token) return false
-        tokenNames[token]?.let { previous ->
-            if (previous != key) nameOwners.remove(previous)
+    /**
+     * FIFO for an unrated joiner; a rated one prefers the candidate whose connected
+     * players sit closest in rating, and a rated candidate over an anonymous one —
+     * a named side wants a rated round, which only another named side can give.
+     * Caller holds [lock].
+     */
+    private fun bestCandidate(candidates: List<TicTacToeGame>, joinerRating: Int?): TicTacToeGame? {
+        if (joinerRating == null) return candidates.firstOrNull()
+        return candidates.minByOrNull { candidate ->
+            val state = candidate.currentState()
+            val ratings = state.connectionPlayers.mapNotNull { state.playerNames[it]?.let(ratingOf) }
+            if (ratings.isEmpty()) {
+                UNRATED_CANDIDATE
+            } else {
+                kotlin.math.abs(ratings.sum() / ratings.size.toDouble() - joinerRating)
+            }
         }
-        nameOwners[key] = token
+    }
+
+    private companion object {
+        /** Any rated candidate beats this, so the order among anonymous candidates stays FIFO. */
+        const val UNRATED_CANDIDATE = Double.MAX_VALUE
+    }
+
+    /** A name stays with its player key (or, keyless, with the live token); a stranger cannot take it. */
+    fun claimName(token: String, name: String, playerKey: String? = null): Boolean = synchronized(lock) {
+        val key = name.lowercase()
+        val self = playerKey ?: token
+        val owner = nameOwners[key]
+        if (owner != null && owner != self) return false
+        val previous = if (playerKey != null) keyNames[playerKey] else tokenNames[token]
+        if (previous != null && previous != key) nameOwners.remove(previous)
+        nameOwners[key] = self
         tokenNames[token] = key
+        if (playerKey != null) keyNames[playerKey] = key
         true
     }
 
     fun releaseName(token: String): Unit = synchronized(lock) {
-        tokenNames.remove(token)?.let { nameOwners.remove(it) }
+        releaseNameLocked(token)
     }
 
     fun sessionClosed(token: String, session: WebSocketSession): Unit = synchronized(lock) {
@@ -125,24 +209,34 @@ class GameLobby(
             tokens.remove(token)
             releaseNameLocked(token)
             binding.game.detachSpectator(session)
+            retireIfUnused(binding.game)
             return
         }
         if (!binding.game.detachSession(binding.symbol, session)) return
-        graceJobs[token] = lobbyScope.launch {
+        binding.graceJob = lobbyScope.launch {
             delay(reconnectGraceMs)
             synchronized(lock) {
                 val pending = tokens.remove(token) ?: return@launch
                 val symbol = pending.symbol ?: return@launch
                 releaseNameLocked(token)
                 pending.game.disconnectPlayer(symbol)
-                if (pending.game.isEmpty()) retire(pending.game)
+                retireIfUnused(pending.game)
             }
         }
     }
 
+    /** How many slots are still held for a comeback: a resource invariant, also handy for ops. */
+    internal fun pendingGraceCount(): Int = synchronized(lock) {
+        tokens.values.count { it.graceJob != null }
+    }
+
+    /** Live games, for the readiness snapshot. */
+    internal fun gameCount(): Int = synchronized(lock) { games.size + rooms.size }
+
     fun reconnect(token: String, session: WebSocketSession): Joined? = synchronized(lock) {
         val binding = tokens[token] ?: return null
-        graceJobs.remove(token)?.cancel()
+        binding.graceJob?.cancel()
+        binding.graceJob = null
         if (binding.symbol == null) {
             binding.game.attachSpectator(session)
         } else {
@@ -153,31 +247,69 @@ class GameLobby(
 
     fun abandonJoin(token: String): Unit = synchronized(lock) {
         val binding = tokens.remove(token) ?: return
-        graceJobs.remove(token)?.cancel()
+        binding.graceJob?.cancel()
+        binding.graceJob = null
         releaseNameLocked(token)
         if (binding.symbol == null) {
             binding.game.detachSpectator(binding.session)
+            retireIfUnused(binding.game)
             return
         }
         binding.game.disconnectPlayer(binding.symbol)
-        if (binding.game.isEmpty()) retire(binding.game)
+        retireIfUnused(binding.game)
     }
 
-    fun shutdownAll(): Unit = synchronized(lock) {
-        graceJobs.values.forEach { it.cancel() }
-        graceJobs.clear()
-        (games + rooms.values).forEach { it.shutdown() }
-        games.clear()
-        rooms.clear()
-        tokens.clear()
-        nameOwners.clear()
-        tokenNames.clear()
-        lobbyScope.cancel()
+    /** Bots do not keep a game alive; a slot still held for a comeback does. Caller holds [lock]. */
+    private fun retireIfUnused(game: TicTacToeGame) {
+        if (!game.isBotOnly()) return
+        if (tokens.values.any { it.game === game && it.graceJob != null }) return
+        retire(game)
+    }
+
+    fun shutdownAll() {
+        persistNow() // a graceful stop saves the latest rooms and names
+        synchronized(lock) {
+            tokens.values.forEach { it.graceJob?.cancel() }
+            (games + rooms.values).forEach { it.shutdown() }
+            games.clear()
+            rooms.clear()
+            tokens.clear()
+            nameOwners.clear()
+            tokenNames.clear()
+            keyNames.clear()
+            lobbyScope.cancel()
+        }
+    }
+
+    /** Snapshots the named rooms and key-owned names to the store; a no-op without one. */
+    private fun persistNow() {
+        val store = store ?: return
+        val persisted = synchronized(lock) {
+            PersistedLobby(
+                rooms = rooms.map { (name, game) ->
+                    PersistedRoom(
+                        name = name,
+                        boardSize = game.boardSize,
+                        winLength = game.winLength,
+                        botLevel = game.botLevel,
+                        secondBotLevel = game.secondBotLevel,
+                        turnSeconds = (game.turnTimeoutMs / 1000L).toInt(),
+                        clockSeconds = game.clockBudgetMs?.let { (it / 1000L).toInt() } ?: 0,
+                        seriesTarget = game.seriesTarget ?: 0,
+                        snapshot = game.snapshot(),
+                    )
+                },
+                names = keyNames.toMap(),
+            )
+        }
+        runCatching { store.save(persisted) }
+            .onFailure { logger.warn("Failed to persist the lobby", it) }
     }
 
     /** Caller already holds [lock]. */
     private fun releaseNameLocked(token: String) {
-        tokenNames.remove(token)?.let { nameOwners.remove(it) }
+        val name = tokenNames.remove(token) ?: return
+        if (nameOwners[name] == token) nameOwners.remove(name) // a keyed name stays with its owner
     }
 
     /** Every named room that still holds players — the page's room list. */
@@ -193,6 +325,7 @@ class GameLobby(
                 winLength = game.winLength,
                 botLevel = game.botLevel,
                 turnSeconds = (game.turnTimeoutMs / 1000L).toInt(),
+                seriesTarget = game.seriesTarget,
             )
         }.sortedBy { it.name }
     }

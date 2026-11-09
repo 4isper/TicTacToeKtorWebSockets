@@ -1,19 +1,52 @@
 package com.m4isper.tictactoe.api
 
+import com.m4isper.tictactoe.domain.GameRules
+import com.m4isper.tictactoe.domain.MAX_CHAT_LENGTH
 import com.m4isper.tictactoe.protocol.REACTION_EMOJIS
 import com.m4isper.tictactoe.stats.LeaderboardResponse
 import com.m4isper.tictactoe.stats.Scoreboard
 import com.m4isper.tictactoe.ui.Lang
+import com.m4isper.tictactoe.ui.ThemeMode
+import com.m4isper.tictactoe.ui.botExhibitionText
+import com.m4isper.tictactoe.ui.botNoneText
+import com.m4isper.tictactoe.ui.chatPlaceholder
+import com.m4isper.tictactoe.ui.chatSendText
+import com.m4isper.tictactoe.ui.chatTitle
+import com.m4isper.tictactoe.ui.clockOffText
 import com.m4isper.tictactoe.ui.copyLinkText
+import com.m4isper.tictactoe.ui.createGameSubmit
+import com.m4isper.tictactoe.ui.createGameTitle
+import com.m4isper.tictactoe.ui.detectLang
 import com.m4isper.tictactoe.ui.drawButtonText
+import com.m4isper.tictactoe.ui.fieldBotText
+import com.m4isper.tictactoe.ui.fieldClockText
+import com.m4isper.tictactoe.ui.fieldRoomText
+import com.m4isper.tictactoe.ui.fieldSeriesText
+import com.m4isper.tictactoe.ui.fieldSizeText
+import com.m4isper.tictactoe.ui.fieldTurnText
+import com.m4isper.tictactoe.ui.fieldWinText
+import com.m4isper.tictactoe.ui.hintText
 import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.namePlaceholder
+import com.m4isper.tictactoe.ui.okText
 import com.m4isper.tictactoe.ui.parseLang
+import com.m4isper.tictactoe.ui.profileNotFoundText
+import com.m4isper.tictactoe.ui.quickPlayText
+import com.m4isper.tictactoe.ui.reactionLabel
 import com.m4isper.tictactoe.ui.rematchButtonText
+import com.m4isper.tictactoe.ui.resignButtonText
 import com.m4isper.tictactoe.ui.roomsTitle
+import com.m4isper.tictactoe.ui.searchPlaceholder
+import com.m4isper.tictactoe.ui.seriesOffText
+import com.m4isper.tictactoe.ui.seriesTargetText
 import com.m4isper.tictactoe.ui.soundIcon
 import com.m4isper.tictactoe.ui.soundTitle
+import com.m4isper.tictactoe.ui.themeColor
+import com.m4isper.tictactoe.ui.themeIcon
+import com.m4isper.tictactoe.ui.themeTitle
 import com.m4isper.tictactoe.ui.undoButtonText
+import com.m4isper.tictactoe.ui.urlEncode
+import com.m4isper.tictactoe.ui.winPlaceholderText
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.html.*
@@ -23,22 +56,33 @@ import io.ktor.server.routing.*
 import kotlinx.css.*
 import kotlinx.css.properties.*
 import kotlinx.html.BODY
+import kotlinx.html.FORM
+import kotlinx.html.FormMethod
 import kotlinx.html.HEAD
 import kotlinx.html.HTML
 import kotlinx.html.InputType
+import kotlinx.html.a
 import kotlinx.html.body
 import kotlinx.html.button
 import kotlinx.html.div
+import kotlinx.html.form
 import kotlinx.html.h1
 import kotlinx.html.h2
 import kotlinx.html.head
+import kotlinx.html.hiddenInput
 import kotlinx.html.id
 import kotlinx.html.input
+import kotlinx.html.label
 import kotlinx.html.lang
 import kotlinx.html.link
 import kotlinx.html.meta
+import kotlinx.html.numberInput
+import kotlinx.html.ol
+import kotlinx.html.option
 import kotlinx.html.p
 import kotlinx.html.script
+import kotlinx.html.select
+import kotlinx.html.textInput
 import kotlinx.html.title
 import kotlinx.html.ul
 import kotlinx.serialization.SerialName
@@ -82,13 +126,25 @@ private const val ICON_SVG =
         """<g stroke="#e8e8f0" stroke-width="7"><circle cx="66" cy="66" r="13" fill="none"/></g></svg>"""
 
 private const val SERVICE_WORKER_JS =
-    """const OFFLINE_URL = "/offline";""" +
+    """const CACHE = "ttt-v2"; const OFFLINE_URL = "/offline";""" +
+        """const SHELL = ["/", "/styles.css", "/static/app.js", "/manifest.webmanifest", "/icon.svg", "/icon-192.png", "/icon-512.png", OFFLINE_URL];""" +
         """self.addEventListener("install", function (e) {""" +
-        """e.waitUntil(caches.open("ttt-v1").then(function (c) { return c.add(OFFLINE_URL); })); self.skipWaiting(); });""" +
-        """self.addEventListener("activate", function (e) { self.clients.claim(); });""" +
+        """e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); })); });""" +
+        """self.addEventListener("activate", function (e) {""" +
+        """e.waitUntil(caches.keys().then(function (keys) {""" +
+        """return Promise.all(keys.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));""" +
+        """}).then(function () { return self.clients.claim(); })); });""" +
         """self.addEventListener("fetch", function (e) {""" +
         """if (e.request.mode === "navigate") {""" +
-        """e.respondWith(fetch(e.request).catch(function () { return caches.match(OFFLINE_URL); })); } });"""
+        """e.respondWith(fetch(e.request).catch(function () {""" +
+        """return caches.match(e.request).then(function (page) { return page || caches.match(OFFLINE_URL); });""" +
+        """})); return; }""" +
+        """if (e.request.method !== "GET") return;""" +
+        """e.respondWith(caches.match(e.request).then(function (hit) {""" +
+        """return hit || fetch(e.request).then(function (res) {""" +
+        """if (res && res.ok && new URL(e.request.url).origin === self.location.origin) {""" +
+        """var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(e.request, copy); }); }""" +
+        """return res; }); })); });"""
 
 private const val OFFLINE_HTML =
     """<!doctype html><html lang="ru"><head><meta charset="utf-8">""" +
@@ -144,7 +200,8 @@ private fun Route.apiRoutes(
     }
 
     get("/player") {
-        val profile = scoreboard.profile(call.request.queryParameters["name"])
+        val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 0
+        val profile = scoreboard.profile(call.request.queryParameters["name"], page)
         if (profile == null) {
             call.respond(HttpStatusCode.NotFound)
         } else {
@@ -209,8 +266,11 @@ private fun Route.assetRoutes() {
 private fun Route.pageRoute() {
     get("/") {
         val room = call.request.queryParameters["room"]
-        val pageLang = parseLang(call.request.queryParameters["lang"])
-        call.respondHtml { page(pageLang, room) }
+        // an explicit lang parameter wins; otherwise the browser's own preference decides
+        val langParam = call.request.queryParameters["lang"]?.takeIf { it.isNotBlank() }
+        val pageLang = langParam?.let(::parseLang)
+            ?: detectLang(call.request.headers[HttpHeaders.AcceptLanguage])
+        call.respondHtml { page(pageLang, room, langParam) }
     }
 }
 
@@ -218,7 +278,30 @@ private fun CssBuilder.styles() {
     themeStyles()
     layoutStyles()
     boardStyles()
+    moveListStyles()
+    createStyles()
     effectStyles()
+}
+
+/** The running move list beside the board. */
+private fun CssBuilder.moveListStyles() {
+    rule("#moves") {
+        display = Display.flex
+        flexWrap = FlexWrap.wrap
+        gap = 4.px
+        margin = Margin(vertical = 6.px)
+        padding = Padding(horizontal = 0.px)
+        listStyleType = ListStyleType.none
+        maxHeight = 90.px
+        overflowY = Overflow.auto
+    }
+    rule("#moves li") {
+        backgroundColor = Color("var(--panel)")
+        borderRadius = 6.px
+        padding = Padding(horizontal = 8.px, vertical = 2.px)
+        fontSize = 13.px
+        color = Color("var(--muted)")
+    }
 }
 
 private fun CssBuilder.themeStyles() {
@@ -233,17 +316,10 @@ private fun CssBuilder.themeStyles() {
         put("--placeholder", "#6a6a85")
     }
     rule("@media (prefers-color-scheme: light)") {
-        rule(":root") {
-            put("--bg", "#f4f4f8")
-            put("--panel", "#ffffff")
-            put("--text", "#1a1a24")
-            put("--muted", "#6a6a85")
-            put("--accent", "#4a6fd4")
-            put("--win", "#2e7d4f")
-            put("--danger", "#c0392b")
-            put("--placeholder", "#9a9ab8")
-        }
+        // the automatic light theme spares a manually chosen dark one
+        rule(":root:not([data-theme=\"dark\"])") { lightPalette() }
     }
+    rule(":root[data-theme=\"light\"]") { lightPalette() }
     rule("body") {
         fontFamily = "system-ui, sans-serif"
         display = Display.flex
@@ -282,8 +358,20 @@ private fun CssBuilder.themeStyles() {
     }
 }
 
+/** The light palette, shared by the automatic (media query) and the manual (`data-theme`) selectors. */
+private fun CssBuilder.lightPalette() {
+    put("--bg", "#f4f4f8")
+    put("--panel", "#ffffff")
+    put("--text", "#1a1a24")
+    put("--muted", "#6a6a85")
+    put("--accent", "#4a6fd4")
+    put("--win", "#2e7d4f")
+    put("--danger", "#c0392b")
+    put("--placeholder", "#9a9ab8")
+}
+
 private fun CssBuilder.layoutStyles() {
-    rule("#rematch, #draw") {
+    rule("#rematch, #draw, #resign, #hint") {
         display = Display.none
         margin = Margin(vertical = 4.px)
         padding = Padding(horizontal = 14.px, vertical = 8.px)
@@ -294,35 +382,11 @@ private fun CssBuilder.layoutStyles() {
         borderRadius = 8.px
         cursor = Cursor.pointer
     }
-    rule("#rematch:disabled, #draw:disabled") {
+    rule("#rematch:disabled, #draw:disabled, #resign:disabled, #hint:disabled") {
         opacity = 0.6
         cursor = Cursor.default
     }
-    rule(".name-row") {
-        display = Display.flex
-        gap = 4.px
-        margin = Margin(vertical = 4.px)
-    }
-    rule("#name") {
-        backgroundColor = Color("var(--panel)")
-        color = Color("var(--text)")
-        borderWidth = 0.px
-        borderRadius = 8.px
-        padding = Padding(horizontal = 10.px, vertical = 8.px)
-        fontSize = 15.px
-    }
-    rule("#name::placeholder") {
-        color = Color("var(--placeholder)")
-    }
-    rule("#set-name") {
-        padding = Padding(horizontal = 14.px, vertical = 8.px)
-        fontSize = 15.px
-        backgroundColor = Color("var(--panel)")
-        color = Color("var(--text)")
-        borderWidth = 0.px
-        borderRadius = 8.px
-        cursor = Cursor.pointer
-    }
+    nameRowStyles()
     rule("#turn-bar") {
         display = Display.none
         height = 6.px
@@ -336,6 +400,73 @@ private fun CssBuilder.layoutStyles() {
         height = 100.pct
         backgroundColor = Color("var(--accent)")
         transition += Transition("width", 250.ms, Timing.linear)
+    }
+    sparklineStyles()
+    rule(":focus-visible") {
+        put("outline", "3px solid var(--accent)")
+        put("outline-offset", "2px")
+    }
+    rule("@media (prefers-reduced-motion: reduce)") {
+        rule(".cell.winning, .cell.pop, .reaction-bubble, #turn-bar-fill") {
+            put("animation", "none")
+            put("transition", "none")
+        }
+    }
+    rule(".pwa-notice, #install-button") {
+        position = Position.fixed
+        put("bottom", "12px")
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        padding = Padding(horizontal = 12.px, vertical = 8.px)
+        put("z-index", "50")
+    }
+    rule(".pwa-notice") {
+        put("left", "12px")
+        put("right", "12px")
+        display = Display.flex
+        gap = 8.px
+    }
+}
+
+private fun CssBuilder.nameRowStyles() {
+    rule(".name-row") {
+        display = Display.flex
+        gap = 4.px
+        margin = Margin(vertical = 4.px)
+    }
+    rule("#name, #player-search") {
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        borderWidth = 0.px
+        borderRadius = 8.px
+        padding = Padding(horizontal = 10.px, vertical = 8.px)
+        fontSize = 15.px
+    }
+    rule("#name::placeholder, #player-search::placeholder") {
+        color = Color("var(--placeholder)")
+    }
+    rule("#set-name") {
+        padding = Padding(horizontal = 14.px, vertical = 8.px)
+        fontSize = 15.px
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        borderWidth = 0.px
+        borderRadius = 8.px
+        cursor = Cursor.pointer
+    }
+}
+
+private fun CssBuilder.sparklineStyles() {
+    rule(".sparkline") {
+        width = 100.pct
+        height = 30.px
+        margin = Margin(vertical = 4.px)
+    }
+    rule(".sparkline polyline") {
+        // the svg properties are outside kotlinx.css's vocabulary
+        put("fill", "none")
+        put("stroke", "var(--accent)")
+        put("stroke-width", "2px")
     }
 }
 
@@ -354,6 +485,10 @@ private fun CssBuilder.boardStyles() {
     rule(".cell:disabled") {
         cursor = Cursor.default
         opacity = 0.85
+    }
+    rule(".cell.hint") {
+        put("outline", "3px solid var(--accent)")
+        put("outline-offset", "-3px")
     }
     rule(".cell.pop") {
         animation += Animation("cell-pop", 180.ms, Timing.easeOut)
@@ -385,9 +520,59 @@ private fun CssBuilder.boardStyles() {
     }
 }
 
+/** The create-game form and the quick-play link. */
+private fun CssBuilder.createStyles() {
+    rule("#quick-play") {
+        display = Display.inlineBlock
+        margin = Margin(vertical = 6.px)
+        padding = Padding(horizontal = 14.px, vertical = 8.px)
+        fontSize = 15.px
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        borderRadius = 8.px
+        textDecoration = TextDecoration.none
+    }
+    rule("#create") {
+        margin = Margin(vertical = 12.px)
+    }
+    rule("#create form") {
+        display = Display.flex
+        flexWrap = FlexWrap.wrap
+        gap = 8.px
+        alignItems = Align.flexEnd
+        margin = Margin(vertical = 8.px)
+    }
+    rule("#create label") {
+        display = Display.flex
+        flexDirection = FlexDirection.column
+        gap = 2.px
+        fontSize = 12.px
+        color = Color("var(--muted)")
+    }
+    rule("#create input, #create select") {
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        borderWidth = 0.px
+        borderRadius = 8.px
+        padding = Padding(horizontal = 8.px, vertical = 6.px)
+        fontSize = 14.px
+        width = 96.px
+    }
+    rule("#create button") {
+        padding = Padding(horizontal = 14.px, vertical = 8.px)
+        fontSize = 15.px
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--text)")
+        borderWidth = 0.px
+        borderRadius = 8.px
+        cursor = Cursor.pointer
+    }
+}
+
 private fun CssBuilder.effectStyles() {
     rule("#board") {
         position = Position.relative
+        put("overflow-x", "auto") // a 10x10 board keeps 44px touch targets on narrow screens
     }
     rule("#reactions") {
         display = Display.flex
@@ -439,17 +624,17 @@ private fun CssBuilder.effectStyles() {
     }
 }
 
-private fun HTML.page(pageLang: Lang, room: String?) {
+private fun HTML.page(pageLang: Lang, room: String?, langParam: String?) {
     lang = when (pageLang) {
         Lang.RU -> "ru"
         Lang.EN -> "en"
     }
     head { pageHead(pageLang) }
     body {
-        pageHeading(pageLang, room)
+        pageHeading(pageLang, room, langParam)
         controls(pageLang)
         boardArea()
-        panels(pageLang)
+        panels(pageLang, langParam)
         script(src = "/static/app.js") {}
     }
 }
@@ -457,10 +642,13 @@ private fun HTML.page(pageLang: Lang, room: String?) {
 private fun HEAD.pageHead(pageLang: Lang) {
     meta { charset = "utf-8" }
     meta(name = "viewport", content = "width=device-width, initial-scale=1")
-    meta(name = "theme-color", content = "#f4f4f8") {
+    meta(name = "theme-color", content = themeColor(ThemeMode.AUTO, prefersLight = true)) {
         attributes["media"] = "(prefers-color-scheme: light)"
+        attributes["id"] = "theme-color-light"
     }
-    meta(name = "theme-color", content = "#14141f")
+    meta(name = "theme-color", content = themeColor(ThemeMode.AUTO, prefersLight = false)) {
+        attributes["id"] = "theme-color-dark"
+    }
     link(rel = "manifest", href = "/manifest.webmanifest")
     link(rel = "icon", href = "/icon.svg")
     title {
@@ -472,12 +660,16 @@ private fun HEAD.pageHead(pageLang: Lang) {
     link(rel = "stylesheet", href = "/styles.css")
 }
 
-private fun BODY.pageHeading(pageLang: Lang, room: String?) {
+private fun BODY.pageHeading(pageLang: Lang, room: String?, langParam: String?) {
     h1 {
         +"${when (pageLang) {
             Lang.RU -> "Крестики-нолики"
             Lang.EN -> "Tic-tac-toe"
         }}"
+    }
+    a(href = if (langParam == null) "/" else "/?lang=${urlEncode(langParam)}") {
+        id = "quick-play"
+        +quickPlayText(pageLang)
     }
     room?.let {
         p {
@@ -494,25 +686,43 @@ private fun BODY.pageHeading(pageLang: Lang, room: String?) {
 }
 
 private fun BODY.controls(pageLang: Lang) {
-    div { id = "status" }
-    div { id = "score" }
-    div { id = "clocks" }
+    div {
+        id = "status"
+        attributes.putAll(mapOf("role" to "status", "aria-live" to "polite"))
+    }
+    div {
+        id = "score"
+        attributes.putAll(mapOf("role" to "status", "aria-live" to "polite"))
+    }
+    div {
+        id = "clocks"
+        attributes.putAll(mapOf("role" to "timer", "aria-live" to "off"))
+    }
     div(classes = "name-row") {
         input(InputType.text) {
             id = "name"
             placeholder = namePlaceholder(pageLang)
+            attributes["aria-label"] = namePlaceholder(pageLang)
             maxLength = "20"
         }
         button(classes = "secondary") {
             id = "set-name"
-            +"ОК"
+            +okText(pageLang)
         }
         button(classes = "secondary") {
             id = "sound"
             title = soundTitle(muted = false, lang = pageLang)
+            attributes["aria-label"] = soundTitle(muted = false, lang = pageLang)
             +soundIcon(muted = false)
         }
+        button(classes = "secondary") {
+            id = "theme"
+            title = themeTitle(ThemeMode.AUTO, lang = pageLang)
+            attributes["aria-label"] = themeTitle(ThemeMode.AUTO, lang = pageLang)
+            +themeIcon(ThemeMode.AUTO)
+        }
     }
+    div { id = "connection-actions" }
     button(classes = "secondary") {
         id = "rematch"
         +rematchButtonText(waiting = false, lang = pageLang)
@@ -525,6 +735,14 @@ private fun BODY.controls(pageLang: Lang) {
         id = "undo"
         +undoButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
     }
+    button(classes = "secondary") {
+        id = "resign"
+        +resignButtonText(pageLang)
+    }
+    button(classes = "secondary") {
+        id = "hint"
+        +hintText(pageLang)
+    }
 }
 
 private fun BODY.boardArea() {
@@ -533,20 +751,49 @@ private fun BODY.boardArea() {
         div { id = "turn-bar-fill" }
     }
     div { id = "board" }
-    div { id = "error" }
+    ol { id = "moves" }
+    div {
+        id = "error"
+        attributes["role"] = "alert"
+        attributes["aria-live"] = "assertive"
+    }
     div {
         id = "shared-replay"
         attributes["style"] = "display:none"
     }
 }
 
-private fun BODY.panels(pageLang: Lang) {
+private fun BODY.panels(pageLang: Lang, langParam: String?) {
+    createGameForm(pageLang, langParam)
     div {
         id = "reactions"
         REACTION_EMOJIS.forEach { emoji ->
             button(classes = "reaction") {
-                attributes["aria-label"] = emoji
+                attributes["aria-label"] = reactionLabel(emoji, pageLang)
                 +emoji
+            }
+        }
+    }
+    div {
+        id = "chat"
+        h2 { +chatTitle(pageLang) }
+        div {
+            id = "chat-log"
+            attributes["role"] = "log"
+            attributes["aria-live"] = "polite"
+            attributes["style"] = "height:140px;overflow-y:auto;background:var(--panel);border-radius:8px;padding:8px"
+        }
+        div {
+            attributes["style"] = "display:flex;gap:8px;margin-top:6px"
+            input(InputType.text) {
+                id = "chat-input"
+                placeholder = chatPlaceholder(pageLang)
+                attributes["aria-label"] = chatPlaceholder(pageLang)
+                maxLength = MAX_CHAT_LENGTH.toString()
+            }
+            button(classes = "secondary") {
+                id = "chat-send"
+                +chatSendText(pageLang)
             }
         }
     }
@@ -558,7 +805,118 @@ private fun BODY.panels(pageLang: Lang) {
     div {
         id = "leaderboard"
         h2 { +leaderboardTitle(pageLang) }
+        input(InputType.text) {
+            id = "player-search"
+            placeholder = searchPlaceholder(pageLang)
+            attributes["aria-label"] = searchPlaceholder(pageLang)
+            maxLength = "20"
+        }
         ul { id = "leaderboard-rows" }
     }
     div { id = "profile" }
+}
+
+/** A GET form that composes a join link: the browser navigates, the client drops blank fields. */
+private fun BODY.createGameForm(pageLang: Lang, langParam: String?) {
+    div {
+        id = "create"
+        h2 { +createGameTitle(pageLang) }
+        form(action = "/", method = FormMethod.get) {
+            langParam?.let { hiddenInput(name = "lang") { value = it } }
+            createBoardFields(pageLang)
+            createTimeFields(pageLang)
+            button {
+                +createGameSubmit(pageLang)
+            }
+        }
+    }
+}
+
+/** Room, board and win line — the same names the room link and /play accept. */
+private fun FORM.createBoardFields(pageLang: Lang) {
+    label {
+        +fieldRoomText(pageLang)
+        textInput(name = "room") {
+            maxLength = "32"
+            pattern = "[A-Za-z0-9_-]{1,32}"
+        }
+    }
+    label {
+        +fieldSizeText(pageLang)
+        numberInput(name = "size") {
+            min = GameRules.MIN_BOARD_SIZE.toString()
+            max = GameRules.MAX_BOARD_SIZE.toString()
+            value = GameRules.DEFAULT_BOARD_SIZE.toString()
+        }
+    }
+    label {
+        +fieldWinText(pageLang)
+        numberInput(name = "win") {
+            min = GameRules.MIN_WIN_LENGTH.toString()
+            max = GameRules.MAX_BOARD_SIZE.toString()
+            placeholder = winPlaceholderText(pageLang)
+        }
+    }
+}
+
+/** Turn and game-clock budgets, the practice bot level and the series target. */
+private fun FORM.createTimeFields(pageLang: Lang) {
+    label {
+        +fieldTurnText(pageLang)
+        numberInput(name = "turn") {
+            min = GameRules.MIN_TURN_SECONDS.toString()
+            max = GameRules.MAX_TURN_SECONDS.toString()
+            value = GameRules.DEFAULT_TURN_SECONDS.toString()
+        }
+    }
+    label {
+        +fieldClockText(pageLang)
+        numberInput(name = "clock") {
+            min = GameRules.MIN_CLOCK_SECONDS.toString()
+            max = GameRules.MAX_CLOCK_SECONDS.toString()
+            placeholder = clockOffText(pageLang)
+        }
+    }
+    label {
+        +fieldBotText(pageLang)
+        select {
+            name = "bot"
+            option {
+                value = ""
+                +botNoneText(pageLang)
+            }
+            option {
+                value = "easy"
+                +"easy"
+            }
+            option {
+                value = "normal"
+                +"normal"
+            }
+            option {
+                value = "hard"
+                +"hard"
+            }
+            option {
+                value = "2"
+                +botExhibitionText(pageLang)
+            }
+        }
+    }
+    label {
+        +fieldSeriesText(pageLang)
+        select {
+            name = "wins"
+            option {
+                value = ""
+                +seriesOffText(pageLang)
+            }
+            for (target in listOf(2, 3, 5)) {
+                option {
+                    value = target.toString()
+                    +seriesTargetText(target, pageLang)
+                }
+            }
+        }
+    }
 }

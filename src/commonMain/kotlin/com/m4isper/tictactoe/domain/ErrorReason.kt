@@ -61,4 +61,13 @@ enum class ErrorReason {
 
     @SerialName("invalid clock")
     INVALID_CLOCK,
+
+    @SerialName("invalid wins")
+    INVALID_WINS,
+
+    @SerialName("invalid chat")
+    INVALID_CHAT,
+
+    @SerialName("too many connections")
+    CONNECTION_LIMIT,
 }

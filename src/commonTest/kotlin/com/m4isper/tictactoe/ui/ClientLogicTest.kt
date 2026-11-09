@@ -113,6 +113,144 @@ class ClientLogicTest {
         assertFalse(isTurnTransition(oTurn, oTurn.copy(turnRemainingMs = 28_000))) // same turn: keep the deadline
         assertFalse(isTurnTransition(xTurn, xTurn)) // same turn
     }
+
+    @Test
+    fun `my turn in a running game asks for a background alert`() {
+        val state = GameState(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O), playerAtTurn = PlayerSymbol.X)
+        assertTrue(shouldAlertTurn(state, PlayerSymbol.X))
+        assertFalse(shouldAlertTurn(state, PlayerSymbol.O))
+        assertFalse(shouldAlertTurn(state, null)) // a spectator never moves
+    }
+
+    @Test
+    fun `a finished round or a missing opponent never alerts`() {
+        val won = GameState(
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            playerAtTurn = PlayerSymbol.X,
+            winningPlayer = PlayerSymbol.X,
+        )
+        assertFalse(shouldAlertTurn(won, PlayerSymbol.X))
+        val waiting = GameState(connectionPlayers = listOf(PlayerSymbol.X), playerAtTurn = PlayerSymbol.X)
+        assertFalse(shouldAlertTurn(waiting, PlayerSymbol.X))
+    }
+
+    @Test
+    fun `coordinates read as column letter and row number`() {
+        assertEquals("a1", cellNotation(x = 0, y = 0))
+        assertEquals("c3", cellNotation(x = 2, y = 2))
+        assertEquals("e10", cellNotation(x = 4, y = 9))
+    }
+
+    @Test
+    fun `the move log appends fresh moves`() {
+        val before = GameState(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)))
+        val after = before.copy(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X, Cell(1, 0) to PlayerSymbol.O)))
+        assertEquals(listOf(Cell(0, 0), Cell(1, 0)), updatedMoveLog(before, after, listOf(Cell(0, 0))))
+    }
+
+    @Test
+    fun `an approved takeback drops the undone move`() {
+        val full = GameState(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X, Cell(1, 0) to PlayerSymbol.O)))
+        val reverted = full.copy(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)))
+        assertEquals(listOf(Cell(0, 0)), updatedMoveLog(full, reverted, listOf(Cell(0, 0), Cell(1, 0))))
+    }
+
+    @Test
+    fun `a round reset empties the move log`() {
+        val over = GameState(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)), winningPlayer = PlayerSymbol.X)
+        val fresh = GameState()
+        assertTrue(updatedMoveLog(over, fresh, listOf(Cell(0, 0))).isEmpty())
+    }
+
+    @Test
+    fun `a cell view renders the mark and disables taken cells`() {
+        val state = GameState(
+            field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)),
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            playerAtTurn = PlayerSymbol.O,
+        )
+        val views = cellViews(previous = null, state, mySymbol = PlayerSymbol.O)
+        assertEquals(9, views.size)
+        assertEquals("X", views[0].text)
+        assertTrue(views[0].disabled)
+        assertEquals("", views[4].text)
+        assertFalse(views[4].disabled) // my turn: empty cells are clickable
+    }
+
+    @Test
+    fun `a spectator and a waiting player can click nothing`() {
+        val state = GameState(connectionPlayers = listOf(PlayerSymbol.X), playerAtTurn = PlayerSymbol.X)
+        assertTrue(cellViews(null, state, mySymbol = null).all { it.disabled }) // spectator
+        assertTrue(cellViews(null, state, mySymbol = PlayerSymbol.O).all { it.disabled }) // opponent slot empty
+        assertTrue(cellViews(null, state, mySymbol = PlayerSymbol.X).all { it.disabled }) // no opponent yet
+    }
+
+    @Test
+    fun `the fresh move pops until the next state`() {
+        val before = GameState(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O))
+        val moved = before.copy(field = Boards.fieldWith(listOf(Cell(1, 1) to PlayerSymbol.X)), playerAtTurn = PlayerSymbol.O)
+        val after = moved.copy(field = Boards.fieldWith(listOf(Cell(1, 1) to PlayerSymbol.X, Cell(0, 0) to PlayerSymbol.O)), playerAtTurn = PlayerSymbol.X)
+        assertEquals("cell pop last-move", cellViews(before, moved, PlayerSymbol.O)[4].cssClass)
+        assertEquals("cell", cellViews(moved, after, PlayerSymbol.X)[4].cssClass) // an older stone pops no more
+    }
+
+    @Test
+    fun `winning cells carry the winning class`() {
+        val field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X, Cell(1, 0) to PlayerSymbol.X, Cell(2, 0) to PlayerSymbol.X))
+        val state = GameState(field = field, winningPlayer = PlayerSymbol.X, winningCells = listOf(Cell(0, 0), Cell(1, 0), Cell(2, 0)))
+        val views = cellViews(null, state, mySymbol = null)
+        assertEquals("cell winning", views[0].cssClass)
+        assertEquals("cell winning", views[1].cssClass)
+        assertEquals("cell", views[5].cssClass)
+    }
+
+    @Test
+    fun `a move changes exactly one cell view`() {
+        val before = GameState(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O))
+        val after = before.copy(field = Boards.fieldWith(listOf(Cell(2, 1) to PlayerSymbol.X)), playerAtTurn = PlayerSymbol.O)
+        val beforeViews = cellViews(before, before, PlayerSymbol.O)
+        val afterViews = cellViews(before, after, PlayerSymbol.O)
+        val changedContent = beforeViews.zip(afterViews).count { (old, new) -> old.text != new.text || old.cssClass != new.cssClass }
+        assertEquals(1, changedContent)
+        assertFalse(afterViews[7].disabled)
+        assertTrue(beforeViews[7].disabled)
+    }
+
+    @Test
+    fun `the aria label follows the language`() {
+        val state = GameState(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)))
+        assertTrue(cellViews(null, state, null, Lang.RU)[0].ariaLabel.startsWith("Ряд 1"))
+        assertTrue(cellViews(null, state, null, Lang.EN)[0].ariaLabel.startsWith("Row 1"))
+    }
+
+    @Test
+    fun `a hint shows on my turn in a practice round`() {
+        val practice = GameState(
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            playerNames = mapOf(PlayerSymbol.X to "Бот-тренер"),
+            playerAtTurn = PlayerSymbol.O,
+        )
+        assertTrue(hintAvailable(practice, PlayerSymbol.O)) // one side unnamed: nothing rated to protect
+        assertFalse(hintAvailable(practice, PlayerSymbol.X)) // not this side's turn
+    }
+
+    @Test
+    fun `a rated round hides the hint`() {
+        val rated = GameState(
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            playerNames = mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"),
+        )
+        assertFalse(hintAvailable(rated, PlayerSymbol.X))
+    }
+
+    @Test
+    fun `a hint needs a running round and both players`() {
+        val over = GameState(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O), winningPlayer = PlayerSymbol.X)
+        assertFalse(hintAvailable(over, PlayerSymbol.O))
+        val solo = GameState(connectionPlayers = listOf(PlayerSymbol.X))
+        assertFalse(hintAvailable(solo, PlayerSymbol.X))
+        assertFalse(hintAvailable(GameState(), null)) // a spectator never asks
+    }
 }
 
 private object Boards {

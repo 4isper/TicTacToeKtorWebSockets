@@ -1,0 +1,78 @@
+package com.m4isper.tictactoe.ui
+
+import com.m4isper.tictactoe.protocol.REACTION_EMOJIS
+
+/** How many automatic reconnects happen before we ask the player to retry by hand. */
+const val MAX_AUTO_RETRIES = 10
+
+private const val MAX_RETRY_DELAY_MS = 5_000L
+private const val STEP_RETRY_DELAY_MS = 1_000L
+
+/** Linear backoff capped at five seconds; the attempt number is one-based. */
+fun retryDelayMs(attempt: Int): Long = (attempt.coerceAtLeast(1).toLong() * STEP_RETRY_DELAY_MS).coerceAtMost(MAX_RETRY_DELAY_MS)
+
+/** A spoken label for an icon-only reaction button, keyed by the canonical emoji list. */
+fun reactionLabel(emoji: String, lang: Lang = Lang.RU): String {
+    val labels = when (lang) {
+        Lang.RU -> listOf("Нравится", "Сердце", "Смех", "Удивление")
+        Lang.EN -> listOf("Thumbs up", "Heart", "Laughing", "Surprised")
+    }
+    return labels.getOrElse(REACTION_EMOJIS.indexOf(emoji)) {
+        if (lang == Lang.RU) "Реакция" else "Reaction"
+    }
+}
+
+fun connectingText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Подключение…"
+    Lang.EN -> "Connecting…"
+}
+
+fun reconnectingText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Переподключение…"
+    Lang.EN -> "Reconnecting…"
+}
+
+fun retryNowText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Повторить"
+    Lang.EN -> "Retry now"
+}
+
+fun updateNoticeText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Доступно обновление — перезагрузите страницу"
+    Lang.EN -> "Update available — reload"
+}
+
+fun reloadText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Перезагрузить"
+    Lang.EN -> "Reload"
+}
+
+fun dismissText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Скрыть"
+    Lang.EN -> "Dismiss"
+}
+
+fun installText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Установить приложение"
+    Lang.EN -> "Install app"
+}
+
+fun copyFailedText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Не удалось скопировать"
+    Lang.EN -> "Copy failed"
+}
+
+fun okText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "ОК"
+    Lang.EN -> "OK"
+}
+
+private const val LIGHT_THEME_COLOR = "#f4f4f8"
+private const val DARK_THEME_COLOR = "#14141f"
+
+/** The two theme-color meta values: the light-scheme tag and the default dark tag. */
+fun themeColor(theme: ThemeMode, prefersLight: Boolean): String = when (theme) {
+    ThemeMode.AUTO -> if (prefersLight) LIGHT_THEME_COLOR else DARK_THEME_COLOR
+    ThemeMode.LIGHT -> LIGHT_THEME_COLOR
+    ThemeMode.DARK -> DARK_THEME_COLOR
+}

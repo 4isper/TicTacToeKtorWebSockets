@@ -11,8 +11,10 @@ import com.m4isper.tictactoe.stats.JsonScoreStore
 import com.m4isper.tictactoe.stats.Scoreboard
 import io.ktor.client.plugins.websocket.*
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.testing.*
@@ -49,6 +51,29 @@ class GameFeaturesTest {
             assertTrue("\"winLength\":4" in body, body)
             assertTrue("\"botLevel\":\"hard\"" in body, body)
             assertTrue("\"turnSeconds\":60" in body, body)
+        }
+    }
+
+    @Test
+    fun `a series target rides the room list and a bad one is refused`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=series&wins=3") {
+            receiveHandshake()
+
+            val body = client.get("/rooms").bodyAsText()
+            assertTrue("\"seriesTarget\":3" in body, body)
+        }
+
+        client.webSocket("/play?room=seriesbad&wins=11") {
+            val event = receiveEvent()
+            assertTrue(event is ServerEvent.Error, "expected an error, got $event")
+            assertEquals(ErrorReason.INVALID_WINS, (event as ServerEvent.Error).reason)
         }
     }
 
@@ -121,6 +146,62 @@ class GameFeaturesTest {
     }
 
     @Test
+    fun `a chat message reaches the opponent with its author`() = testApplication {
+        application {
+            testModule()
+        }
+        val xClient = createClient {
+            install(WebSockets)
+        }
+        val oClient = createClient {
+            install(WebSockets)
+        }
+
+        xClient.webSocket("/play?room=chat") {
+            receiveHandshake()
+
+            val oReady = CompletableDeferred<Unit>()
+            val scope = CoroutineScope(coroutineContext)
+            val second = scope.launch {
+                oClient.webSocket("/play?room=chat") {
+                    receiveHandshake()
+                    oReady.complete(Unit)
+
+                    assertEquals(ServerEvent.Chat(PlayerSymbol.X, null, "привет мир"), receiveEvent())
+                    awaitCancellation()
+                }
+            }
+            oReady.await()
+
+            skipBroadcast() // [X, O]
+
+            sendChat("  привет\nмир  ")
+            assertEquals(ServerEvent.Chat(PlayerSymbol.X, null, "привет мир"), receiveEvent())
+
+            second.cancel()
+        }
+    }
+
+    @Test
+    fun `blank and overlong chat messages are refused`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+
+        client.webSocket("/play?room=chat2") {
+            receiveHandshake()
+
+            sendChat("   ")
+            assertEquals(ServerEvent.Error(ErrorReason.INVALID_CHAT), receiveEvent())
+            sendChat("x".repeat(201))
+            assertEquals(ServerEvent.Error(ErrorReason.INVALID_CHAT), receiveEvent())
+        }
+    }
+
+    @Test
     fun `a second reaction inside the cooldown is dropped quietly`() = testApplication {
         application {
             testModule()
@@ -164,6 +245,29 @@ class GameFeaturesTest {
     }
 
     @Test
+    fun `the page follows the accept-language header unless the url says otherwise`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient { }
+
+        val en = client.get("/") {
+            header(HttpHeaders.AcceptLanguage, "en-US,en;q=0.9")
+        }.bodyAsText()
+        assertTrue("Your name" in en, "the header should pick the English page: ${en.take(400)}")
+
+        val ru = client.get("/") {
+            header(HttpHeaders.AcceptLanguage, "ru-RU,ru;q=0.9,en;q=0.8")
+        }.bodyAsText()
+        assertTrue("Ваше имя" in ru, "the header should pick the Russian page: ${ru.take(400)}")
+
+        val forced = client.get("/?lang=ru") {
+            header(HttpHeaders.AcceptLanguage, "en-US,en;q=0.9")
+        }.bodyAsText()
+        assertTrue("Ваше имя" in forced, "an explicit lang parameter should beat the header: ${forced.take(400)}")
+    }
+
+    @Test
     fun `the page adapts to the light scheme`() = testApplication {
         application {
             testModule()
@@ -176,6 +280,21 @@ class GameFeaturesTest {
 
         val page = client.get("/").bodyAsText()
         assertTrue("(prefers-color-scheme: light)" in page, "expected a light theme-color meta: ${page.take(500)}")
+    }
+
+    @Test
+    fun `the page offers a manual theme override`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient { }
+
+        val page = client.get("/").bodyAsText()
+        assertTrue("id=\"theme\"" in page, "the page should carry a theme toggle: $page")
+
+        val css = client.get("/styles.css").bodyAsText()
+        assertTrue("""root[data-theme="light"]""" in css, "a forced light palette should exist: $css")
+        assertTrue("""root:not([data-theme="dark"])""" in css, "the auto light palette should spare an explicit dark: $css")
     }
 
     @Test

@@ -11,6 +11,7 @@ fun statusText(
     lang: Lang = Lang.RU,
 ): String = when (lang) {
     Lang.RU -> when {
+        state.seriesWinner != null -> "${displayName(state, state.seriesWinner)} берёт серию!"
         state.winningPlayer != null -> "Победил ${displayName(state, state.winningPlayer)}!"
         state.isDrawAgreed -> "Ничья по соглашению!"
         state.isBoardFull -> "Ничья!"
@@ -20,6 +21,7 @@ fun statusText(
     }
 
     Lang.EN -> when {
+        state.seriesWinner != null -> "${displayName(state, state.seriesWinner)} takes the series!"
         state.winningPlayer != null -> "${displayName(state, state.winningPlayer)} won!"
         state.isDrawAgreed -> "Draw by agreement!"
         state.isBoardFull -> "Draw!"
@@ -41,7 +43,14 @@ fun scoreText(
         Lang.RU -> "Счёт"
         Lang.EN -> "Score"
     }
-    return "$label — X $x : $o O"
+    val series = state.seriesTarget?.let { " · ${seriesTargetText(it, lang)}" }.orEmpty()
+    return "$label — X $x : $o O$series"
+}
+
+/** The series goal, as the score line and the room list phrase it. */
+fun seriesTargetText(target: Int, lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "до $target побед"
+    Lang.EN -> "first to $target"
 }
 
 fun errorText(
@@ -68,6 +77,9 @@ fun errorText(
         ErrorReason.INVALID_REACTION -> "Неизвестная реакция"
         ErrorReason.NOTHING_TO_UNDO -> "Отменять нечего"
         ErrorReason.INVALID_CLOCK -> "Неверное время на партию"
+        ErrorReason.INVALID_WINS -> "Неверная цель серии"
+        ErrorReason.INVALID_CHAT -> "Пустое или слишком длинное сообщение"
+        ErrorReason.CONNECTION_LIMIT -> "Слишком много соединений — попробуйте позже"
     }
 
     Lang.EN -> when (reason) {
@@ -90,6 +102,9 @@ fun errorText(
         ErrorReason.INVALID_REACTION -> "Unknown reaction"
         ErrorReason.NOTHING_TO_UNDO -> "Nothing to undo"
         ErrorReason.INVALID_CLOCK -> "Invalid game clock"
+        ErrorReason.INVALID_WINS -> "Invalid series target"
+        ErrorReason.INVALID_CHAT -> "Empty or overly long message"
+        ErrorReason.CONNECTION_LIMIT -> "Too many connections — try again later"
     }
 }
 
@@ -107,50 +122,6 @@ fun timerSuffix(
 ): String = when (lang) {
     Lang.RU -> " · ${ceil(msLeft / 1000.0).toInt()} с"
     Lang.EN -> " · ${ceil(msLeft / 1000.0).toInt()}s"
-}
-
-fun rematchButtonText(
-    waiting: Boolean,
-    lang: Lang = Lang.RU,
-): String = when (lang) {
-    Lang.RU -> if (waiting) "Ожидание соперника…" else "Играть снова"
-    Lang.EN -> if (waiting) "Waiting for the opponent…" else "Play again"
-}
-
-fun drawButtonText(
-    iOffered: Boolean,
-    opponentOffered: Boolean,
-    lang: Lang = Lang.RU,
-): String = when (lang) {
-    Lang.RU -> when {
-        opponentOffered -> "Принять ничью"
-        iOffered -> "Предложение отправлено…"
-        else -> "Предложить ничью"
-    }
-
-    Lang.EN -> when {
-        opponentOffered -> "Accept draw"
-        iOffered -> "Offer sent…"
-        else -> "Offer a draw"
-    }
-}
-
-fun undoButtonText(
-    iOffered: Boolean,
-    opponentOffered: Boolean,
-    lang: Lang = Lang.RU,
-): String = when (lang) {
-    Lang.RU -> when {
-        opponentOffered -> "Разрешить отмену"
-        iOffered -> "Ожидание согласия…"
-        else -> "Отменить ход"
-    }
-
-    Lang.EN -> when {
-        opponentOffered -> "Allow the takeback"
-        iOffered -> "Waiting for approval…"
-        else -> "Undo my move"
-    }
 }
 
 fun copyLinkText(lang: Lang = Lang.RU): String = when (lang) {
@@ -193,11 +164,6 @@ fun turnSecondsText(seconds: Int, lang: Lang = Lang.RU): String = when (lang) {
     Lang.EN -> "${seconds}s"
 }
 
-fun replayHintText(lang: Lang = Lang.RU): String = when (lang) {
-    Lang.RU -> "Показать партию"
-    Lang.EN -> "Replay this match"
-}
-
 fun cellAriaText(
     x: Int,
     y: Int,
@@ -227,6 +193,21 @@ fun soundTitle(muted: Boolean, lang: Lang = Lang.RU): String = when (lang) {
 fun connectionLostText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> "Соединение потеряно, переподключение…"
     Lang.EN -> "Connection lost, reconnecting…"
+}
+
+/** The plate shown while the opponent is away: a countdown while the reconnect grace lasts, then plain waiting. */
+fun opponentLostText(secondsLeft: Int?, lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> if (secondsLeft == null) {
+        "Соперник отключился, ждём…"
+    } else {
+        "Соперник отключился — вернётся за $secondsLeft с…"
+    }
+
+    Lang.EN -> if (secondsLeft == null) {
+        "The opponent dropped, waiting…"
+    } else {
+        "The opponent dropped — back in ${secondsLeft}s…"
+    }
 }
 
 fun connectionErrorText(lang: Lang = Lang.RU): String = when (lang) {

@@ -116,15 +116,101 @@ class TicTacToeGameTest {
         val restarted = game.currentState()
         assertNull(restarted.winningPlayer)
         assertEquals(mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), restarted.score)
+        assertEquals(PlayerSymbol.O, restarted.playerAtTurn) // the opening alternates between rounds
 
+        game.finishTurn(PlayerSymbol.O, oSession, 2, 0)
         game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
-        game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 2, 1)
         game.finishTurn(PlayerSymbol.X, xSession, 0, 1)
-        game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 0) // O must not finish its own column first
         game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
 
         assertEquals(mapOf(PlayerSymbol.X to 2, PlayerSymbol.O to 0), game.currentState().score)
         game.shutdown()
+    }
+
+    @Test
+    fun `reaching the series target decides the series and resets the score on the fresh round`() = runBlocking {
+        val game = TicTacToeGame(roundRestartDelayMs = 50, seriesTarget = 1)
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 0, 1)
+        game.finishTurn(PlayerSymbol.X, xSession, 1, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
+        game.finishTurn(PlayerSymbol.X, xSession, 2, 0)
+
+        val decided = game.currentState()
+        assertEquals(PlayerSymbol.X, decided.winningPlayer)
+        assertEquals(PlayerSymbol.X, decided.seriesWinner)
+        assertEquals(1, decided.seriesTarget)
+
+        withTimeout(2_000) {
+            while (game.currentState().isRoundOver) delay(10)
+        }
+        val fresh = game.currentState()
+        assertEquals(0, fresh.score[PlayerSymbol.X])
+        assertEquals(0, fresh.score[PlayerSymbol.O])
+        assertNull(fresh.seriesWinner)
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `a win below the series target keeps the series open`() = runBlocking {
+        val game = TicTacToeGame(roundRestartDelayMs = 50, seriesTarget = 2)
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 0, 1)
+        game.finishTurn(PlayerSymbol.X, xSession, 1, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
+        game.finishTurn(PlayerSymbol.X, xSession, 2, 0)
+
+        val won = game.currentState()
+        assertEquals(PlayerSymbol.X, won.winningPlayer)
+        assertEquals(1, won.score[PlayerSymbol.X])
+        assertNull(won.seriesWinner)
+
+        game.shutdown()
+    }
+
+    @Test
+    fun `anonymous pairing only matches the same series target`() {
+        val game = TicTacToeGame(seriesTarget = 3)
+        assertTrue(game.matches(boardSize = 3, winLength = 3, botLevel = null, turnSeconds = 30, seriesTarget = 3))
+        assertFalse(game.matches(boardSize = 3, winLength = 3, botLevel = null, turnSeconds = 30, seriesTarget = 0))
+        game.shutdown()
+    }
+
+    @Test
+    fun `anonymous pairing never drops the exhibition flag`() {
+        val exhibition = TicTacToeGame(botLevel = BotLevel.NORMAL, secondBotLevel = BotLevel.NORMAL)
+        assertTrue(
+            exhibition.matches(
+                boardSize = 3,
+                winLength = 3,
+                botLevel = BotLevel.NORMAL,
+                turnSeconds = 30,
+                secondBotLevel = BotLevel.NORMAL,
+            ),
+        )
+        assertFalse(
+            exhibition.matches(
+                boardSize = 3,
+                winLength = 3,
+                botLevel = BotLevel.NORMAL,
+                turnSeconds = 30,
+                secondBotLevel = null,
+            ),
+        )
+        exhibition.shutdown()
     }
 
     @Test
@@ -435,17 +521,18 @@ class TicTacToeGameTest {
 
         assertEquals(listOf(Cell(0, 0), Cell(1, 0), Cell(0, 1), Cell(1, 1), Cell(0, 2)), withTimeout(2_000) { reported.receive() })
 
-        // the next round records fresh moves, not the old ones
+        // the next round records fresh moves, not the old ones; O opens now
         assertNull(game.requestRematch(PlayerSymbol.X, xSession))
         assertNull(game.requestRematch(PlayerSymbol.O, oSession))
-        game.finishTurn(PlayerSymbol.X, xSession, 2, 2)
         game.finishTurn(PlayerSymbol.O, oSession, 1, 2)
-        game.finishTurn(PlayerSymbol.X, xSession, 2, 0)
+        game.finishTurn(PlayerSymbol.X, xSession, 2, 2)
         game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
+        game.finishTurn(PlayerSymbol.X, xSession, 2, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 0, 0) // O must not finish its own column first
         game.finishTurn(PlayerSymbol.X, xSession, 2, 1)
 
         assertEquals(
-            listOf(Cell(2, 2), Cell(1, 2), Cell(2, 0), Cell(1, 0), Cell(2, 1)),
+            listOf(Cell(1, 2), Cell(2, 2), Cell(1, 0), Cell(2, 0), Cell(0, 0), Cell(2, 1)),
             withTimeout(2_000) { reported.receive() },
         )
         assertNull(withTimeoutOrNull(200) { reported.receive() }, "each round is reported exactly once")

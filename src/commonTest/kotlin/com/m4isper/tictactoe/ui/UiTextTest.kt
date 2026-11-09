@@ -97,6 +97,15 @@ class UiTextTest {
     }
 
     @Test
+    fun `the opponent-lost plate counts down and then just waits`() {
+        assertEquals("Соперник отключился — вернётся за 10 с…", opponentLostText(10))
+        assertEquals("Соперник отключился — вернётся за 1 с…", opponentLostText(1))
+        assertEquals("Соперник отключился, ждём…", opponentLostText(null))
+        assertEquals("The opponent dropped — back in 10s…", opponentLostText(10, Lang.EN))
+        assertEquals("The opponent dropped, waiting…", opponentLostText(null, Lang.EN))
+    }
+
+    @Test
     fun `draw button follows the offers`() {
         assertEquals("Предложить ничью", drawButtonText(iOffered = false, opponentOffered = false))
         assertEquals("Предложение отправлено…", drawButtonText(iOffered = true, opponentOffered = false))
@@ -186,5 +195,102 @@ class UiTextTest {
         assertEquals("Invalid game clock", errorText(ErrorReason.INVALID_CLOCK, Lang.EN))
         assertEquals("Play again", rematchButtonText(waiting = false, Lang.EN))
         assertEquals("Copy link", copyLinkText(Lang.EN))
+    }
+
+    @Test
+    fun `create-game form texts in russian`() {
+        assertEquals("Создать игру", createGameTitle())
+        assertEquals("Создать", createGameSubmit())
+        assertEquals("Комната", fieldRoomText())
+        assertEquals("Доска", fieldSizeText())
+        assertEquals("Линия", fieldWinText())
+        assertEquals("Ход, с", fieldTurnText())
+        assertEquals("Часы, с", fieldClockText())
+        assertEquals("Бот", fieldBotText())
+        assertEquals("Серия", fieldSeriesText())
+        assertEquals("нет", seriesOffText())
+        assertEquals("нет", botNoneText())
+        assertEquals("выставка (2 бота)", botExhibitionText())
+        assertEquals("вся доска", winPlaceholderText())
+        assertEquals("выкл", clockOffText())
+    }
+
+    @Test
+    fun `create-game form texts in english`() {
+        assertEquals("Create a game", createGameTitle(Lang.EN))
+        assertEquals("Create", createGameSubmit(Lang.EN))
+        assertEquals("Room", fieldRoomText(Lang.EN))
+        assertEquals("Board", fieldSizeText(Lang.EN))
+        assertEquals("Win line", fieldWinText(Lang.EN))
+        assertEquals("Turn, s", fieldTurnText(Lang.EN))
+        assertEquals("Clock, s", fieldClockText(Lang.EN))
+        assertEquals("Bot", fieldBotText(Lang.EN))
+        assertEquals("Series", fieldSeriesText(Lang.EN))
+        assertEquals("none", seriesOffText(Lang.EN))
+        assertEquals("none", botNoneText(Lang.EN))
+        assertEquals("exhibition (2 bots)", botExhibitionText(Lang.EN))
+        assertEquals("whole board", winPlaceholderText(Lang.EN))
+        assertEquals("off", clockOffText(Lang.EN))
+    }
+
+    @Test
+    fun `quick play text follows the language`() {
+        assertEquals("Быстрая игра", quickPlayText())
+        assertEquals("Quick play", quickPlayText(Lang.EN))
+    }
+
+    @Test
+    fun `resign and hint are phrased per language`() {
+        assertEquals("Сдаться", resignButtonText())
+        assertEquals("Resign", resignButtonText(Lang.EN))
+        assertEquals("Подсказка", hintText())
+        assertEquals("Hint", hintText(Lang.EN))
+    }
+
+    @Test
+    fun `profile search is phrased per language`() {
+        assertEquals("Найти игрока", searchPlaceholder())
+        assertEquals("Find a player", searchPlaceholder(Lang.EN))
+        assertEquals("Игрок не найден", profileNotFoundText())
+        assertEquals("Player not found", profileNotFoundText(Lang.EN))
+        assertEquals("Соперники", headToHeadTitle())
+        assertEquals("Head to head", headToHeadTitle(Lang.EN))
+        assertEquals("Показать партию", replayHintText())
+        assertEquals("Replay this match", replayHintText(Lang.EN))
+        assertEquals("Автопроигрывание", autoplayText())
+        assertEquals("Autoplay", autoplayText(Lang.EN))
+    }
+
+    @Test
+    fun `turn alert is phrased per language`() {
+        assertEquals("Ваш ход!", turnAlertTitle())
+        assertEquals("Соперник сделал ход", turnAlertBody())
+        assertEquals("Your move!", turnAlertTitle(Lang.EN))
+        assertEquals("The opponent moved", turnAlertBody(Lang.EN))
+    }
+
+    @Test
+    fun `the series target rides the score line`() {
+        val state = GameState(score = mapOf(PlayerSymbol.X to 1, PlayerSymbol.O to 0), seriesTarget = 2)
+        assertEquals("Счёт — X 1 : 0 O · до 2 побед", scoreText(state))
+        assertEquals("Score — X 1 : 0 O · first to 2", scoreText(state, Lang.EN))
+        assertEquals("Счёт — X 0 : 0 O", scoreText(GameState()))
+    }
+
+    @Test
+    fun `a decided series is announced and a bad target has words`() {
+        val state = GameState(
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            winningPlayer = PlayerSymbol.X,
+            seriesWinner = PlayerSymbol.X,
+        )
+        assertEquals("X берёт серию!", statusText(state, PlayerSymbol.O))
+        assertEquals("X takes the series!", statusText(state, PlayerSymbol.O, Lang.EN))
+        assertEquals("Неверная цель серии", errorText(ErrorReason.INVALID_WINS))
+        assertEquals("Invalid series target", errorText(ErrorReason.INVALID_WINS, Lang.EN))
+        assertEquals("Пустое или слишком длинное сообщение", errorText(ErrorReason.INVALID_CHAT))
+        assertEquals("Empty or overly long message", errorText(ErrorReason.INVALID_CHAT, Lang.EN))
+        assertEquals("Слишком много соединений — попробуйте позже", errorText(ErrorReason.CONNECTION_LIMIT))
+        assertEquals("Too many connections — try again later", errorText(ErrorReason.CONNECTION_LIMIT, Lang.EN))
     }
 }

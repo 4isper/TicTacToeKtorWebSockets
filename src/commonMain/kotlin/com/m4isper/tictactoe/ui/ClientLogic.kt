@@ -19,6 +19,64 @@ fun newMoveCells(previous: GameState?, state: GameState): List<Cell> {
     }
 }
 
+/** Everything one board cell shows; two equal views mean the DOM node needs no touch. */
+data class CellView(
+    val text: String,
+    val cssClass: String,
+    val ariaLabel: String,
+    val disabled: Boolean,
+)
+
+/** The per-cell picture of the board; the renderer diffs these lists to update cells in place. */
+fun cellViews(
+    previous: GameState?,
+    state: GameState,
+    mySymbol: PlayerSymbol?,
+    lang: Lang = Lang.RU,
+): List<CellView> {
+    val winning = state.winningCells.map { "${it.x},${it.y}" }.toSet()
+    val fresh = newMoveCells(previous, state)
+    return state.field.flatMapIndexed { y, row ->
+        row.mapIndexed { x, cell ->
+            CellView(
+                text = when (cell) {
+                    PlayerSymbol.X -> "X"
+                    PlayerSymbol.O -> "O"
+                    null -> ""
+                },
+                cssClass = buildString {
+                    append("cell")
+                    if ("$x,$y" in winning) append(" winning")
+                    if (fresh.any { it.x == x && it.y == y }) append(" pop last-move")
+                },
+                ariaLabel = cellAriaText(x, y, cell, lang),
+                disabled = cell != null || mySymbol == null || state.connectionPlayers.size < 2 || state.playerAtTurn != mySymbol,
+            )
+        }
+    }
+}
+
+/** Chess-style coordinates: the column letter then the 1-based row, e.g. a1. */
+fun cellNotation(x: Int, y: Int): String = "${'a' + x}${y + 1}"
+
+/** The in-game move list: appends fresh moves, drops taken-back ones, empties on a round reset. */
+fun updatedMoveLog(previous: GameState?, state: GameState, log: List<Cell>): List<Cell> {
+    if (previous == null) return log
+    if (state.field.size != previous.field.size) return emptyList()
+    if (previous.isRoundOver && !state.isRoundOver) return emptyList()
+    val undone = buildList {
+        previous.field.forEachIndexed { y, row ->
+            row.forEachIndexed { x, cell ->
+                if (cell != null && state.field.getOrNull(y)?.getOrNull(x) == null) {
+                    add(Cell(x, y))
+                }
+            }
+        }
+    }
+    val kept = if (undone.isEmpty()) log else log.dropLastWhile { it in undone }
+    return kept + newMoveCells(previous, state)
+}
+
 enum class SoundCue { NONE, MOVE_MINE, MOVE_OPPONENT, WIN, DRAW }
 
 fun soundCue(
@@ -43,6 +101,16 @@ fun clockText(msLeft: Long): String {
     val seconds = ceil(msLeft / 1000.0).toInt()
     return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
 }
+
+/**
+ * A hint button makes sense on my turn, in a running round with a full pair — and only
+ * in a practice one: a hint in a rated round would be advice for a rated game.
+ */
+fun hintAvailable(state: GameState, mySymbol: PlayerSymbol?): Boolean = mySymbol != null &&
+    !state.isRoundOver &&
+    state.connectionPlayers.size >= 2 &&
+    state.playerAtTurn == mySymbol &&
+    (state.playerNames[PlayerSymbol.X] == null || state.playerNames[PlayerSymbol.O] == null)
 
 /** A round restart countdown just appeared and the deadline should be captured once. */
 fun isRoundRestartTransition(previous: GameState?, state: GameState): Boolean = state.roundRestartInMs != null && (previous == null || previous.roundRestartInMs == null)

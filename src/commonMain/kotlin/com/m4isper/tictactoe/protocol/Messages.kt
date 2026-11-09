@@ -34,6 +34,10 @@ sealed interface ClientMessage {
     data object RequestDraw : ClientMessage
 
     @Serializable
+    @SerialName("request_resign")
+    data object RequestResign : ClientMessage
+
+    @Serializable
     @SerialName("request_undo")
     data object RequestUndo : ClientMessage
 
@@ -44,6 +48,10 @@ sealed interface ClientMessage {
     @Serializable
     @SerialName("set_name")
     data class SetName(val name: String) : ClientMessage
+
+    @Serializable
+    @SerialName("chat")
+    data class Chat(val text: String) : ClientMessage
 }
 
 @Serializable
@@ -63,4 +71,9 @@ sealed interface ServerEvent {
     @Serializable
     @SerialName("reaction")
     data class Reaction(val from: PlayerSymbol?, val emoji: String) : ServerEvent
+
+    /** A chat line; [name] is null for an unnamed player or a spectator. */
+    @Serializable
+    @SerialName("chat")
+    data class Chat(val from: PlayerSymbol?, val name: String?, val text: String) : ServerEvent
 }

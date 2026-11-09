@@ -25,6 +25,8 @@ class TicTacToeGame(
     val secondBotLevel: BotLevel? = null,
     val turnTimeoutMs: Long = 30_000L,
     val clockBudgetMs: Long? = null,
+    /** Wins needed to take the series; null keeps the score open-ended. */
+    val seriesTarget: Int? = null,
     private val onRoundOver: (playerNames: Map<PlayerSymbol, String>, winner: PlayerSymbol?, moves: List<Cell>, boardSize: Int) -> Unit = { _, _, _, _ -> },
 ) {
     private val logger = LoggerFactory.getLogger(TicTacToeGame::class.java)
@@ -36,7 +38,7 @@ class TicTacToeGame(
         val boardSize: Int,
     )
 
-    private val state = MutableStateFlow(GameState(field = GameRules.emptyField(boardSize)))
+    private val state = MutableStateFlow(GameState(field = GameRules.emptyField(boardSize), winLength = winLength, seriesTarget = seriesTarget))
     private val stateChanges = Channel<GameState>(Channel.UNLIMITED)
 
     // Recording a round writes to disk/SQLite. Keep that off the game lock: one
@@ -49,9 +51,13 @@ class TicTacToeGame(
     private val spectatorSockets = ConcurrentHashMap.newKeySet<WebSocketSession>()
 
     private val gameScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    // negamax is CPU-bound: keep deep searches off the pool that serves broadcasts and timers
+    private val botScope = CoroutineScope(SupervisorJob() + Dispatchers.Default.limitedParallelism(2))
     private var roundRestartJob: Job? = null
     private var roundRestartDeadline = 0L
     private var bot: PlayerSymbol? = null
+    private var roundStarter: PlayerSymbol = PlayerSymbol.X
     private var botMoveJob: Job? = null
     private var turnTimeoutJob: Job? = null
     private var turnDeadline = 0L
@@ -61,10 +67,12 @@ class TicTacToeGame(
     private var clockO = clockBudgetMs ?: 0L
     private val roundMoves = mutableListOf<Cell>()
     private val lastReactionAt = ConcurrentHashMap<WebSocketSession, Long>()
+    private val lastChatAt = ConcurrentHashMap<WebSocketSession, Long>()
 
     private companion object {
         const val BOT_THINK_MS = 400L
         const val REACTION_COOLDOWN_MS = 1_000L
+        const val CHAT_COOLDOWN_MS = 500L
     }
 
     init {
@@ -98,28 +106,38 @@ class TicTacToeGame(
     }
 
     fun detachSession(player: PlayerSymbol, session: WebSocketSession): Boolean = synchronized(lock) {
-        if (playerSockets[player] === session) {
+        if (playerSockets[player] !== session) {
+            false
+        } else {
             playerSockets.remove(player)
             lastReactionAt.remove(session)
+            lastChatAt.remove(session)
+            // the slot is held for the reconnect grace: everyone sees the player went away
+            publish(state.value.copy(awayPlayers = state.value.awayPlayers + player))
             true
-        } else {
-            false
         }
     }
 
     fun reattachSession(player: PlayerSymbol, session: WebSocketSession): Unit = synchronized(lock) {
         playerSockets[player] = session
-        if (player !in state.value.connectionPlayers) {
-            publish(state.value.copy(connectionPlayers = state.value.connectionPlayers + player))
+        val current = state.value
+        val connections = if (player in current.connectionPlayers) current.connectionPlayers else current.connectionPlayers + player
+        val away = current.awayPlayers - player
+        if (connections != current.connectionPlayers || away != current.awayPlayers) {
+            publish(current.copy(connectionPlayers = connections, awayPlayers = away))
         }
     }
 
     fun disconnectPlayer(player: PlayerSymbol): Unit = synchronized(lock) {
-        playerSockets.remove(player)?.let { lastReactionAt.remove(it) }
+        playerSockets.remove(player)?.let {
+            lastReactionAt.remove(it)
+            lastChatAt.remove(it)
+        }
         publish(
             state.value.copy(
                 connectionPlayers = state.value.connectionPlayers - player,
                 playerNames = state.value.playerNames - player,
+                awayPlayers = state.value.awayPlayers - player,
             ),
         )
         maybeAttachBotLocked()
@@ -144,6 +162,7 @@ class TicTacToeGame(
     fun detachSpectator(session: WebSocketSession) {
         spectatorSockets.remove(session)
         lastReactionAt.remove(session)
+        lastChatAt.remove(session)
     }
 
     fun spectatorCount(): Int = spectatorSockets.size
@@ -159,31 +178,52 @@ class TicTacToeGame(
         val last = lastReactionAt[session] ?: 0L
         if (now - last < REACTION_COOLDOWN_MS) return null
         lastReactionAt[session] = now
+        broadcastWire(protocolJson.encodeToString<ServerEvent>(ServerEvent.Reaction(from, emoji)))
+        return null
+    }
 
-        val wire = protocolJson.encodeToString<ServerEvent>(ServerEvent.Reaction(from, emoji))
-        for (socket in playerSockets.values) {
+    /** Broadcasts a validated chat line to players and spectators; a repeat inside the cooldown is dropped. */
+    suspend fun chat(
+        from: PlayerSymbol?,
+        name: String?,
+        session: WebSocketSession,
+        text: String,
+    ) {
+        val now = System.currentTimeMillis()
+        val last = lastChatAt[session] ?: 0L
+        if (now - last < CHAT_COOLDOWN_MS) return
+        lastChatAt[session] = now
+        broadcastWire(protocolJson.encodeToString<ServerEvent>(ServerEvent.Chat(from, name, text)))
+    }
+
+    /** One wire string, every socket in the room: reactions and chat share the delivery path. */
+    private suspend fun broadcastWire(wire: String) {
+        for ((player, socket) in playerSockets) {
             try {
                 socket.send(wire)
             } catch (e: Exception) {
-                logger.warn("Failed to deliver a reaction to a player socket", e)
+                logger.warn("Failed to deliver a social event to a player socket", e)
+                synchronized(lock) {
+                    if (playerSockets[player] === socket) disconnectPlayer(player)
+                }
             }
         }
         for (socket in spectatorSockets) {
             try {
                 socket.send(wire)
             } catch (e: Exception) {
-                logger.warn("Failed to deliver a reaction to a spectator socket", e)
+                logger.warn("Failed to deliver a social event to a spectator socket", e)
+                spectatorSockets.remove(socket)
             }
         }
-        return null
     }
 
     suspend fun broadcast(state: GameState) {
+        // one encoding for the whole room: up to 22 recipients used to re-encode the same snapshot
+        val wire = protocolJson.encodeToString<ServerEvent>(ServerEvent.StateChanged(state))
         for ((player, socket) in playerSockets) {
             try {
-                socket.send(
-                    protocolJson.encodeToString<ServerEvent>(ServerEvent.StateChanged(state)),
-                )
+                socket.send(wire)
             } catch (e: Exception) {
                 logger.warn("Failed to broadcast game state to a player socket", e)
                 synchronized(lock) {
@@ -193,9 +233,7 @@ class TicTacToeGame(
         }
         for (socket in spectatorSockets) {
             try {
-                socket.send(
-                    protocolJson.encodeToString<ServerEvent>(ServerEvent.StateChanged(state)),
-                )
+                socket.send(wire)
             } catch (e: Exception) {
                 logger.warn("Failed to broadcast game state to a spectator socket", e)
                 spectatorSockets.remove(socket)
@@ -244,19 +282,23 @@ class TicTacToeGame(
             cells.mapIndexed { col, cell -> if (row == y && col == x) player else cell }
         }
         val win = GameRules.win(newField, winLength)
-        val newScore = if (win != null) {
-            current.score + (win.player to (current.score[win.player] ?: 0) + 1)
-        } else {
-            current.score
-        }
-        return current.copy(
+        val moved = current.copy(
             playerAtTurn = player.other,
             field = newField,
             isBoardFull = GameRules.isBoardFull(newField),
             winningPlayer = win?.player,
             winningCells = win?.cells.orEmpty(),
-            score = newScore,
             undoOfferBy = null, // the position moved on: a stale takeback offer dies
+        )
+        return if (win != null) moved.scored(win.player) else moved
+    }
+
+    /** One win for [winner]: the score bumps, and a reached series target decides the series. */
+    private fun GameState.scored(winner: PlayerSymbol): GameState {
+        val wins = (score[winner] ?: 0) + 1
+        return copy(
+            score = score + (winner to wins),
+            seriesWinner = this@TicTacToeGame.seriesTarget?.takeIf { wins >= it }?.let { winner },
         )
     }
 
@@ -272,22 +314,7 @@ class TicTacToeGame(
                 roundRestartJob?.cancel()
                 roundRestartJob = null
                 roundRestartDeadline = 0
-                roundMoves.clear()
-                resetClocksLocked()
-                publish(
-                    current.copy(
-                        playerAtTurn = PlayerSymbol.X,
-                        field = GameRules.emptyField(boardSize),
-                        winningPlayer = null,
-                        winningCells = emptyList(),
-                        isBoardFull = false,
-                        isDrawAgreed = false,
-                        drawPlayers = emptyList(),
-                        undoOfferBy = null,
-                        roundRestartInMs = null,
-                        rematchPlayers = emptyList(),
-                    ),
-                )
+                beginFreshRoundLocked()
             } else {
                 publish(current.copy(rematchPlayers = updated))
             }
@@ -319,6 +346,28 @@ class TicTacToeGame(
                     drawPlayers = emptyList(),
                     rematchPlayers = emptyList(),
                 ),
+            )
+            return null
+        }
+    }
+
+    /** A resignation: the asking player forfeits at once, like a run-out clock would. */
+    fun requestResign(player: PlayerSymbol, session: WebSocketSession): ErrorReason? {
+        synchronized(lock) {
+            val current = state.value
+            if (playerSockets[player] !== session) return ErrorReason.STALE_SESSION
+            if (current.isRoundOver) return ErrorReason.ROUND_IS_OVER
+
+            roundRestartDeadline = System.currentTimeMillis() + roundRestartDelayMs
+            scheduleRoundRestart()
+            publish(
+                current.copy(
+                    winningPlayer = player.other,
+                    winningCells = emptyList(),
+                    rematchPlayers = emptyList(),
+                    drawPlayers = emptyList(),
+                    undoOfferBy = null,
+                ).scored(player.other),
             )
             return null
         }
@@ -362,20 +411,68 @@ class TicTacToeGame(
 
     fun shutdown() {
         gameScope.cancel()
+        botScope.cancel()
         // close rather than cancel: the recorder still drains the rounds already won
         completedRounds.close()
     }
 
     /** True when an anonymous joiner with these settings can be paired into this game. */
-    fun matches(boardSize: Int, winLength: Int, botLevel: BotLevel?, turnSeconds: Int, clockSeconds: Int = 0): Boolean = this.boardSize == boardSize &&
+    fun matches(
+        boardSize: Int,
+        winLength: Int,
+        botLevel: BotLevel?,
+        turnSeconds: Int,
+        clockSeconds: Int = 0,
+        seriesTarget: Int = 0,
+        secondBotLevel: BotLevel? = null,
+    ): Boolean = this.boardSize == boardSize &&
         this.winLength == winLength && this.botLevel == botLevel && this.turnTimeoutMs == turnSeconds * 1000L &&
-        this.clockBudgetMs == clockSeconds.takeIf { it > 0 }?.let { it * 1000L }
+        this.clockBudgetMs == clockSeconds.takeIf { it > 0 }?.let { it * 1000L } &&
+        this.seriesTarget == seriesTarget.takeIf { it > 0 } &&
+        this.secondBotLevel == secondBotLevel
 
     fun isFull(): Boolean = state.value.connectionPlayers.size >= 2
 
     fun isEmpty(): Boolean = state.value.connectionPlayers.isEmpty()
 
+    /** Only bots (or nobody) hold the slots and nobody is watching — the lobby may retire this game. */
+    fun isBotOnly(): Boolean = playerSockets.values.all { it === BotSession } && spectatorSockets.isEmpty()
+
     fun currentState(): GameState = state.value
+
+    /** The durable essence of the round, for surviving a server restart; live connections and timers are excluded. */
+    fun snapshot(): GameSnapshot = synchronized(lock) {
+        GameSnapshot(
+            state = state.value.copy(
+                connectionPlayers = emptyList(),
+                awayPlayers = emptyList(),
+                playerNames = emptyMap(),
+                turnRemainingMs = null,
+                roundRestartInMs = null,
+                rematchPlayers = emptyList(),
+                drawPlayers = emptyList(),
+                undoOfferBy = null,
+                clocks = emptyMap(),
+            ),
+            roundStarter = roundStarter,
+            moves = roundMoves.toList(),
+            clockX = clockX,
+            clockO = clockO,
+        )
+    }
+
+    /** Resumes a persisted round in an empty room; timers stay idle until players rejoin, then arm fresh. */
+    fun restoreFrom(snapshot: GameSnapshot) = synchronized(lock) {
+        roundStarter = snapshot.roundStarter
+        roundMoves.clear()
+        roundMoves.addAll(snapshot.moves)
+        clockX = snapshot.clockX
+        clockO = snapshot.clockO
+        state.value = snapshot.state
+        if (snapshot.state.isRoundOver) {
+            beginFreshRoundLocked() // a round that ended before the restart resumes as the next one
+        }
+    }
 
     private fun rejectionReason(
         player: PlayerSymbol,
@@ -402,24 +499,34 @@ class TicTacToeGame(
             synchronized(lock) {
                 roundRestartJob = null
                 roundRestartDeadline = 0
-                roundMoves.clear()
-                resetClocksLocked()
-                publish(
-                    state.value.copy(
-                        playerAtTurn = PlayerSymbol.X,
-                        field = GameRules.emptyField(boardSize),
-                        winningPlayer = null,
-                        winningCells = emptyList(),
-                        isBoardFull = false,
-                        isDrawAgreed = false,
-                        drawPlayers = emptyList(),
-                        undoOfferBy = null,
-                        roundRestartInMs = null,
-                        rematchPlayers = emptyList(),
-                    ),
-                )
+                beginFreshRoundLocked()
             }
         }
+    }
+
+    /** Starts the next round from an empty board; the opening turn alternates between rounds. */
+    private fun beginFreshRoundLocked() {
+        roundStarter = roundStarter.other
+        roundMoves.clear()
+        resetClocksLocked()
+        val seriesTaken = state.value.seriesWinner != null
+        publish(
+            state.value.copy(
+                playerAtTurn = roundStarter,
+                field = GameRules.emptyField(boardSize),
+                winningPlayer = null,
+                winningCells = emptyList(),
+                isBoardFull = false,
+                isDrawAgreed = false,
+                drawPlayers = emptyList(),
+                undoOfferBy = null,
+                roundRestartInMs = null,
+                rematchPlayers = emptyList(),
+                // a decided series is over: the next round starts a new one from zero
+                score = if (seriesTaken) mapOf(PlayerSymbol.X to 0, PlayerSymbol.O to 0) else state.value.score,
+                seriesWinner = null,
+            ),
+        )
     }
 
     private fun publish(next: GameState) {
@@ -452,15 +559,13 @@ class TicTacToeGame(
         }
         state.value = withClocks
         stateChanges.trySend(withClocks)
-        if (roundJustEnded(previous, withClocks)) {
+        if (!previous.isRoundOver && withClocks.isRoundOver) {
             completedRounds.trySend(
                 CompletedRound(withClocks.playerNames, withClocks.winningPlayer, roundMoves.toList(), boardSize),
             )
         }
         scheduleBotMoveIfNeeded(withClocks)
     }
-
-    private fun roundJustEnded(previous: GameState, next: GameState): Boolean = !previous.isRoundOver && next.isRoundOver
 
     /** Forfeits the round to the opponent when the current player stalls past the deadline — turn budget or clock. */
     private fun armTurnTimerLocked(current: GameState) {
@@ -495,12 +600,13 @@ class TicTacToeGame(
                 armedTurnFor = null
                 scheduleRoundRestart()
                 publish(
-                    snapshot.copy(
-                        winningPlayer = winner,
-                        winningCells = emptyList(),
-                        score = snapshot.score + (winner to (snapshot.score[winner] ?: 0) + 1),
-                        rematchPlayers = emptyList(),
-                    ),
+                    snapshot
+                        .copy(
+                            winningPlayer = winner,
+                            winningCells = emptyList(),
+                            rematchPlayers = emptyList(),
+                        )
+                        .scored(winner),
                 )
             }
         }
@@ -519,7 +625,7 @@ class TicTacToeGame(
         val level = levelFor(symbol) ?: return
         if (current.isRoundOver) return
         botMoveJob?.cancel()
-        botMoveJob = gameScope.launch {
+        botMoveJob = botScope.launch {
             delay(BOT_THINK_MS)
             val snapshot = synchronized(lock) {
                 if (levelFor(symbol) == null) return@launch

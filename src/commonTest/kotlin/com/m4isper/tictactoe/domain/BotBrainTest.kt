@@ -6,6 +6,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 class BotBrainTest {
 
@@ -145,5 +147,32 @@ class BotBrainTest {
         val move = assertNotNull(BotBrain.chooseMove(field, PlayerSymbol.X, winLength = 4, level = BotLevel.HARD))
         assertNull(field[move.y][move.x])
         assertTrue(move.x in 0..4 && move.y in 0..4)
+    }
+
+    @Test
+    fun `hard blocks a four in a row on a big board`() {
+        val field = GameRules.emptyField(size = 10).mapIndexed { row, cells ->
+            cells.mapIndexed { col, _ -> if (row == 5 && col in 5..8) PlayerSymbol.O else null }
+        }
+        assertEquals(Cell(4, 5), BotBrain.chooseMove(field, PlayerSymbol.X, winLength = 5, level = BotLevel.HARD))
+    }
+
+    @Test
+    fun `hard stays inside its search budget on a busy big board`() {
+        val field = GameRules.emptyField(size = 10).mapIndexed { row, cells ->
+            cells.mapIndexed { col, _ ->
+                when {
+                    row == 5 && col == 5 -> PlayerSymbol.X
+                    row == 5 && col == 6 -> PlayerSymbol.X
+                    row == 4 && col == 5 -> PlayerSymbol.O
+                    row == 6 && col == 6 -> PlayerSymbol.O
+                    else -> null
+                }
+            }
+        }
+        val start = TimeSource.Monotonic.markNow()
+        val move = assertNotNull(BotBrain.chooseMove(field, PlayerSymbol.O, winLength = 5, level = BotLevel.HARD))
+        assertTrue(start.elapsedNow() < 5.seconds, "the search must stay bounded, took ${start.elapsedNow()}")
+        assertNull(field[move.y][move.x])
     }
 }

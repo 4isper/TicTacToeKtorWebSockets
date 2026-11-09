@@ -93,3 +93,15 @@ tasks.configureEach {
         dependsOn("jsBrowserDistribution")
     }
 }
+
+// A single runnable jar for deployments; the JS bundle is served separately from build/dist.
+tasks.register<Jar>("fatJar") {
+    group = "build"
+    description = "Bundles the JVM classes, resources and every runtime dependency into one runnable jar"
+    archiveClassifier.set("all")
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest { attributes("Main-Class" to "com.m4isper.tictactoe.ApplicationKt") }
+    dependsOn("jvmJar", "jsBrowserProductionWebpack")
+    from({ configurations.getByName("jvmRuntimeClasspath").map { if (it.isDirectory) it else zipTree(it) } })
+    from(tasks.named("jvmJar").map { zipTree(it.outputs.files.singleFile) })
+}

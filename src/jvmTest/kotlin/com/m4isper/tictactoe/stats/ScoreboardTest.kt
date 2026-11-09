@@ -45,8 +45,14 @@ class ScoreboardTest {
         val top = board.top(limit = 10).associateBy { it.name }
         val anya = top.getValue("Аня").stats
         val boris = top.getValue("Боря").stats
-        assertEquals(PlayerStats(wins = 1, losses = 0, draws = 1, rating = anya.rating, history = anya.history), anya)
-        assertEquals(PlayerStats(wins = 0, losses = 1, draws = 1, rating = boris.rating, history = boris.history), boris)
+        assertEquals(
+            PlayerStats(wins = 1, losses = 0, draws = 1, rating = anya.rating, ratedGames = 2, history = anya.history, opponents = mapOf("Боря" to HeadToHead(wins = 1, draws = 1))),
+            anya,
+        )
+        assertEquals(
+            PlayerStats(wins = 0, losses = 1, draws = 1, rating = boris.rating, ratedGames = 2, history = boris.history, opponents = mapOf("Аня" to HeadToHead(losses = 1, draws = 1))),
+            boris,
+        )
         assertEquals(RoundResult.DRAW, anya.history[0].result) // newest first
         assertEquals(RoundResult.WIN, anya.history[1].result)
         assertEquals("Боря", anya.history[0].opponent)
@@ -69,23 +75,60 @@ class ScoreboardTest {
         val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
 
         board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), winner = PlayerSymbol.X)
-        assertEquals(1016, board.profile("Аня")!!.stats.rating)
-        assertEquals(984, board.profile("Боря")!!.stats.rating)
-        assertEquals(1016, board.profile("Аня")!!.stats.history.single().ratingAfter)
+        assertEquals(1020, board.profile("Аня")!!.stats.rating) // a newcomer's first win is worth K/2 = 20
+        assertEquals(980, board.profile("Боря")!!.stats.rating)
+        assertEquals(1020, board.profile("Аня")!!.stats.history.single().ratingAfter)
 
         board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), winner = null)
-        // Аня (1016) drew the weaker Боря (984): a small loss each
-        assertTrue(board.profile("Аня")!!.stats.rating < 1016)
-        assertTrue(board.profile("Боря")!!.stats.rating > 984)
+        // Аня (1020) drew the weaker Боря (980): a small loss each
+        assertTrue(board.profile("Аня")!!.stats.rating < 1020)
+        assertTrue(board.profile("Боря")!!.stats.rating > 980)
     }
 
     @Test
-    fun `an unnamed opponent is treated as a default rated player`() {
+    fun `a newcomer trades more points than a veteran at equal ratings`() {
+        val file = Files.createTempFile("scoreboard", ".json").toFile()
+        val store = JsonScoreStore(file)
+        // Вера has settled: thirty rated rounds held her at 1000, so her k is the veteran's 16
+        repeat(30) { store.addResult("Вера", RoundResult.WIN, opponent = "Гоша", rating = 1000, ratingAfter = 1000) }
+        val board = Scoreboard(store)
+
+        board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Вера"), winner = PlayerSymbol.X)
+
+        val anya = board.profile("Аня")!!.stats
+        val vera = board.profile("Вера")!!.stats
+        assertEquals(1020, anya.rating) // 1000 + 40/2 — the newcomer's step
+        assertEquals(992, vera.rating) // 1000 - 16/2 — the veteran's step
+        assertEquals(1, anya.ratedGames)
+        assertEquals(31, vera.ratedGames)
+        file.delete()
+    }
+
+    @Test
+    fun `a round against an unnamed opponent is practice and keeps the rating`() {
         val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
 
         board.recordRound(mapOf(PlayerSymbol.X to "Аня"), winner = PlayerSymbol.X)
+        board.recordRound(mapOf(PlayerSymbol.X to "Аня"), winner = null)
 
-        assertEquals(1016, board.profile("Аня")!!.stats.rating) // the unnamed side counts as 1000
+        val stats = board.profile("Аня")!!.stats
+        assertEquals(Elo.DEFAULT, stats.rating) // a bot is not a rated opponent
+        assertEquals(1, stats.wins)
+        assertEquals(1, stats.draws)
+        assertEquals(null, stats.history.single { it.result == RoundResult.WIN }.ratingAfter)
+    }
+
+    @Test
+    fun `profile carries the rank in the full sorted table`() {
+        val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
+        board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), PlayerSymbol.X)
+        board.recordRound(mapOf(PlayerSymbol.X to "Вера", PlayerSymbol.O to "Гоша"), PlayerSymbol.X)
+        // Аня=Вера 1020, Боря=Гоша 980 — the name breaks the ties
+
+        assertEquals(1, board.profile("Аня")!!.rank)
+        assertEquals(2, board.profile("Вера")!!.rank)
+        assertEquals(3, board.profile("Боря")!!.rank)
+        assertEquals(4, board.profile("Гоша")!!.rank)
     }
 
     @Test
@@ -100,17 +143,43 @@ class ScoreboardTest {
     }
 
     @Test
-    fun `history keeps the opponent and caps at twenty entries`() {
+    fun `history keeps the opponent and caps at two hundred entries`() {
+        val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
+
+        repeat(210) { board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), PlayerSymbol.X) }
+
+        val stats = board.profile("Аня")!!.stats
+        assertEquals(210, stats.wins)
+        assertEquals(20, stats.history.size) // one page of the sliced profile
+        assertEquals(10, board.profile("Аня")!!.pages) // 210 played, 200 kept: ten full pages, the cap held
+        assertEquals(RoundResult.WIN, stats.history.first().result)
+        assertEquals("Боря", stats.history.first().opponent)
+        assertEquals("Аня", board.profile("Боря")!!.stats.history.first().opponent) // the loser's opponent is the winner
+    }
+
+    @Test
+    fun `profile history pages through twenty records`() {
         val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
 
         repeat(25) { board.recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), PlayerSymbol.X) }
 
-        val stats = board.profile("Аня")!!.stats
-        assertEquals(25, stats.wins)
-        assertEquals(20, stats.history.size)
-        assertEquals(RoundResult.WIN, stats.history.first().result)
-        assertEquals("Боря", stats.history.first().opponent)
-        assertEquals("Аня", board.profile("Боря")!!.stats.history.first().opponent) // the loser's opponent is the winner
+        val first = board.profile("Аня")
+        assertEquals(20, first!!.stats.history.size)
+        assertEquals(0, first.page)
+        assertEquals(2, first.pages)
+
+        val second = board.profile("Аня", page = 1)
+        assertEquals(5, second!!.stats.history.size) // the oldest remainder
+        assertEquals(1, second.page)
+        assertEquals(2, second.pages)
+
+        // a page past the end clamps to the last one; a bad one falls back to the first
+        val clamped = board.profile("Аня", page = 9)!!
+        assertEquals(5, clamped.stats.history.size)
+        assertEquals(1, clamped.page)
+        val fallback = board.profile("Аня", page = -1)!!
+        assertEquals(20, fallback.stats.history.size)
+        assertEquals(0, fallback.page)
     }
 
     @Test
@@ -168,8 +237,10 @@ class ScoreboardTest {
         var x = Elo.DEFAULT
         var o = Elo.DEFAULT
         repeat(rounds) {
-            val nextX = Elo.next(x, o, 1.0)
-            val nextO = Elo.next(o, x, 0.0)
+            // the two sides only ever play each other, so their k cools down together
+            val k = Elo.kFor(it)
+            val nextX = Elo.next(x, o, 1.0, k = k)
+            val nextO = Elo.next(o, x, 0.0, k = k)
             x = nextX
             o = nextO
         }
@@ -201,5 +272,57 @@ class ScoreboardTest {
         val board = Scoreboard(JsonScoreStore(Files.createTempFile("scoreboard", ".json").toFile()))
 
         assertTrue(board.top(limit = 10).isEmpty())
+    }
+
+    @Test
+    fun `results against a named opponent accumulate head to head`() {
+        var stats: PlayerStats = statsAfter(null, RoundResult.WIN, "Аня", 1L, emptyList(), 3, null, null)
+        stats = statsAfter(stats, RoundResult.LOSS, "Аня", 2L, emptyList(), 3, null, null)
+        stats = statsAfter(stats, RoundResult.DRAW, "Боря", 3L, emptyList(), 3, null, null)
+
+        assertEquals(HeadToHead(wins = 1, losses = 1), stats.opponents.getValue("Аня"))
+        assertEquals(HeadToHead(draws = 1), stats.opponents.getValue("Боря"))
+    }
+
+    @Test
+    fun `a practice round against a bot leaves the head to head alone`() {
+        val stats = statsAfter(null, RoundResult.WIN, opponent = null, atMs = 1L, moves = emptyList(), boardSize = 3, rating = null, ratingAfter = null)
+
+        assertTrue(stats.opponents.isEmpty())
+    }
+
+    @Test
+    fun `both sides of a round reach the store in a single atomic batch`() {
+        val store = RecordingStore()
+        Scoreboard(store).recordRound(mapOf(PlayerSymbol.X to "Аня", PlayerSymbol.O to "Боря"), winner = PlayerSymbol.X)
+
+        assertEquals(1, store.batches.size) // one write, not two that a crash could split
+        assertEquals(listOf("Аня", "Боря"), store.batches.single().map { it.name })
+        assertEquals(1020, store.loadAll().getValue("Аня").rating)
+        assertEquals(980, store.loadAll().getValue("Боря").rating)
+    }
+
+    /** Watches the store boundary: a round must be one operation, never a sequence of half-rounds. */
+    private class RecordingStore : ScoreStore {
+        val batches = mutableListOf<List<ResultUpdate>>()
+        private val players = mutableMapOf<String, PlayerStats>()
+
+        override fun applyResults(results: List<ResultUpdate>) {
+            batches += results
+            results.forEach { result ->
+                players[result.name] = statsAfter(
+                    players[result.name],
+                    result.result,
+                    result.opponent,
+                    result.atMs,
+                    result.moves,
+                    result.boardSize,
+                    result.rating,
+                    result.ratingAfter,
+                )
+            }
+        }
+
+        override fun loadAll(): Map<String, PlayerStats> = players.toMap()
     }
 }
