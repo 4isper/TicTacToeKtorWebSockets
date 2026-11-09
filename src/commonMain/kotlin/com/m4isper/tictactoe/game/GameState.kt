@@ -9,6 +9,8 @@ import kotlinx.serialization.Serializable
 data class GameState(
     val playerAtTurn: PlayerSymbol? = PlayerSymbol.X,
     val field: List<List<PlayerSymbol?>> = emptyField(),
+    /** The round's moves in order: the authoritative move log a reconnect or a mid-round joiner renders. */
+    val moves: List<Cell> = emptyList(),
     /** The win rule this game plays by, so a joiner's client knows it without the URL. */
     val winLength: Int = GameRules.DEFAULT_BOARD_SIZE,
     val winningPlayer: PlayerSymbol? = null,

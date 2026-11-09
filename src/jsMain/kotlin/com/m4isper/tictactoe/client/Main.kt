@@ -68,7 +68,6 @@ import com.m4isper.tictactoe.ui.turnAlertTitle
 import com.m4isper.tictactoe.ui.turnSecondsText
 import com.m4isper.tictactoe.ui.undoButtonText
 import com.m4isper.tictactoe.ui.updateNoticeText
-import com.m4isper.tictactoe.ui.updatedMoveLog
 import com.m4isper.tictactoe.ui.urlEncode
 import kotlinx.browser.document
 import kotlinx.browser.localStorage
@@ -343,7 +342,6 @@ private class GameClient {
     private var turnTotalMs = 0.0
     private var clocksSnapshot: Map<PlayerSymbol, Long> = emptyMap()
     private var clocksBase = 0.0
-    private var moveLog: List<Cell> = emptyList()
     private var countdownTimer: Int? = null
     private var opponentLostTimer: Int? = null
 
@@ -420,7 +418,7 @@ private class GameClient {
     private fun renderMoveLog() {
         val current = lastState ?: return
         movesList.innerHTML = ""
-        moveLog.forEachIndexed { i, cell ->
+        current.moves.forEachIndexed { i, cell ->
             val li = document.createElement("li") as HTMLElement
             li.textContent = "${i + 1}. ${current.field[cell.y][cell.x]} ${cellNotation(cell.x, cell.y)}"
             movesList.appendChild(li)
@@ -443,7 +441,6 @@ private class GameClient {
         val previous = lastState
         lastState = state
         updateCountdowns(previous, state)
-        moveLog = updatedMoveLog(previous, state, moveLog)
         renderMoveLog()
         turnAlert.onState(previous, state, mySymbol)
         updateActionButtons(state)

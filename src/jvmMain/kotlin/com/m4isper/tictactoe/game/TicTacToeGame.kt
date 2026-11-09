@@ -453,6 +453,7 @@ class TicTacToeGame(
                 drawPlayers = emptyList(),
                 undoOfferBy = null,
                 clocks = emptyMap(),
+                moves = emptyList(), // the snapshot's own moves field carries the round record
             ),
             roundStarter = roundStarter,
             moves = roundMoves.toList(),
@@ -557,14 +558,14 @@ class TicTacToeGame(
         } else {
             withTurn
         }
-        state.value = withClocks
-        stateChanges.trySend(withClocks)
-        if (!previous.isRoundOver && withClocks.isRoundOver) {
+        state.value = withClocks.copy(moves = roundMoves.toList())
+        stateChanges.trySend(state.value)
+        if (!previous.isRoundOver && state.value.isRoundOver) {
             completedRounds.trySend(
-                CompletedRound(withClocks.playerNames, withClocks.winningPlayer, roundMoves.toList(), boardSize),
+                CompletedRound(state.value.playerNames, state.value.winningPlayer, roundMoves.toList(), boardSize),
             )
         }
-        scheduleBotMoveIfNeeded(withClocks)
+        scheduleBotMoveIfNeeded(state.value)
     }
 
     /** Forfeits the round to the opponent when the current player stalls past the deadline — turn budget or clock. */

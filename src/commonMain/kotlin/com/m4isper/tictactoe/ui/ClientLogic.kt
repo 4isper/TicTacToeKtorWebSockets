@@ -59,24 +59,6 @@ fun cellViews(
 /** Chess-style coordinates: the column letter then the 1-based row, e.g. a1. */
 fun cellNotation(x: Int, y: Int): String = "${'a' + x}${y + 1}"
 
-/** The in-game move list: appends fresh moves, drops taken-back ones, empties on a round reset. */
-fun updatedMoveLog(previous: GameState?, state: GameState, log: List<Cell>): List<Cell> {
-    if (previous == null) return log
-    if (state.field.size != previous.field.size) return emptyList()
-    if (previous.isRoundOver && !state.isRoundOver) return emptyList()
-    val undone = buildList {
-        previous.field.forEachIndexed { y, row ->
-            row.forEachIndexed { x, cell ->
-                if (cell != null && state.field.getOrNull(y)?.getOrNull(x) == null) {
-                    add(Cell(x, y))
-                }
-            }
-        }
-    }
-    val kept = if (undone.isEmpty()) log else log.dropLastWhile { it in undone }
-    return kept + newMoveCells(previous, state)
-}
-
 enum class SoundCue { NONE, MOVE_MINE, MOVE_OPPONENT, WIN, DRAW }
 
 fun soundCue(

@@ -16,3 +16,16 @@ test('a transient error clears when the next game state arrives', async ({ page 
   await page.locator('#board .cell').nth(4).click();
   await expect(page.locator('#error')).toHaveText('', { timeout: 5_000 });
 });
+
+// The move list is the server's round record, not a client-side guess:
+// a reload (or a spectator joining mid-round) must still show every move.
+test('the move log survives a reload', async ({ page }) => {
+  await page.goto(BASE + '/?room=e2e-log-' + Date.now() + '&bot=easy&lang=en');
+  await expect(page.locator('#board .cell').first()).toBeEnabled({ timeout: 10_000 });
+  await page.locator('#board .cell').nth(4).click();
+  await expect(page.locator('#moves li')).toHaveCount(2, { timeout: 5_000 }); // my move and the bot's answer
+
+  await page.reload();
+  await expect(page.locator('#board .cell').nth(4)).toHaveText('X');
+  await expect(page.locator('#moves li')).toHaveCount(2);
+});

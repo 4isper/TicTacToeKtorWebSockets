@@ -541,6 +541,38 @@ class TicTacToeGameTest {
     }
 
     @Test
+    fun `the published state carries the move log for reconnects and spectators`() = runBlocking {
+        val game = TicTacToeGame()
+        val xSession = FakeSession()
+        val oSession = FakeSession()
+        game.connectPlayer(xSession)
+        game.connectPlayer(oSession)
+
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 0)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 0)
+        assertEquals(listOf(Cell(0, 0), Cell(1, 0)), game.currentState().moves)
+
+        // an approved takeback removes the move from the log too; the turn returns to O, the move's maker
+        assertNull(game.requestUndo(PlayerSymbol.O, oSession))
+        assertNull(game.requestUndo(PlayerSymbol.X, xSession))
+        assertEquals(listOf(Cell(0, 0)), game.currentState().moves)
+
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 1)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 1)
+        game.finishTurn(PlayerSymbol.O, oSession, 1, 2)
+        game.finishTurn(PlayerSymbol.X, xSession, 0, 2)
+        assertEquals(PlayerSymbol.X, game.currentState().winningPlayer)
+        assertEquals(listOf(Cell(0, 0), Cell(1, 1), Cell(0, 1), Cell(1, 2), Cell(0, 2)), game.currentState().moves)
+
+        // a fresh round starts with an empty log
+        assertNull(game.requestRematch(PlayerSymbol.X, xSession))
+        assertNull(game.requestRematch(PlayerSymbol.O, oSession))
+        assertEquals(emptyList(), game.currentState().moves)
+
+        game.shutdown()
+    }
+
+    @Test
     fun `a takeback needs the last mover to ask and the opponent to approve`() = runBlocking {
         val game = TicTacToeGame()
         val xSession = FakeSession()
