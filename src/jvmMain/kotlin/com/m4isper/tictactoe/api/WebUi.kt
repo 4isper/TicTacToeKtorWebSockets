@@ -93,6 +93,7 @@ import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import javax.imageio.ImageIO
 import java.awt.Color as AwtColor
@@ -325,7 +326,10 @@ private fun BODY.pageHeading(pageLang: Lang, room: String?, langParam: String?) 
             Lang.EN -> "Tic-tac-toe"
         }}"
     }
-    a(href = if (langParam == null) "/" else "/?lang=${urlEncode(langParam)}") {
+    // a fresh named room: the player can invite a friend from the very first screen
+    val quickRoom = "r" + UUID.randomUUID().toString().take(8)
+    val quickParams = "room=$quickRoom" + langParam?.let { "&lang=${urlEncode(it)}" }.orEmpty()
+    a(href = "/?$quickParams") {
         id = "quick-play"
         +quickPlayText(pageLang)
     }
@@ -345,6 +349,10 @@ private fun BODY.pageHeading(pageLang: Lang, room: String?, langParam: String?) 
 
 private fun BODY.controls(pageLang: Lang) {
     div {
+        id = "identity"
+        attributes["aria-live"] = "polite"
+    }
+    div {
         id = "status"
         attributes.putAll(mapOf("role" to "status", "aria-live" to "polite"))
     }
@@ -352,6 +360,7 @@ private fun BODY.controls(pageLang: Lang) {
         id = "score"
         attributes.putAll(mapOf("role" to "status", "aria-live" to "polite"))
     }
+    div { id = "rules" }
     div {
         id = "clocks"
         attributes.putAll(mapOf("role" to "timer", "aria-live" to "off"))
@@ -398,7 +407,7 @@ private fun BODY.actionRow(pageLang: Lang) {
             id = "undo"
             +undoButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
         }
-        button(classes = "secondary") {
+        button(classes = "secondary danger") {
             id = "resign"
             +resignButtonText(pageLang)
         }

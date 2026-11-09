@@ -5,6 +5,7 @@ import kotlinx.css.properties.*
 
 internal fun CssBuilder.styles() {
     themeStyles()
+    headerStyles()
     buttonStyles()
     layoutStyles()
     scrollbarStyles()
@@ -12,6 +13,27 @@ internal fun CssBuilder.styles() {
     moveListStyles()
     createStyles()
     effectStyles()
+}
+
+/** The two lines above the board: who is playing and by which rules. */
+private fun CssBuilder.headerStyles() {
+    rule("#identity") {
+        fontSize = 14.px
+        minHeight = 20.px
+        color = Color("var(--accent)")
+        put("font-weight", "600")
+    }
+    rule("#identity.spectator") {
+        color = Color("var(--muted)")
+    }
+    rule("#rules") {
+        fontSize = 13.px
+        minHeight = 18.px
+        color = Color("var(--muted)")
+    }
+    rule("#identity:empty, #rules:empty") {
+        display = Display.none
+    }
 }
 
 /** The running move list beside the board. */
@@ -107,6 +129,9 @@ private fun CssBuilder.buttonStyles() {
     rule(".secondary:disabled") {
         opacity = 0.6
         cursor = Cursor.default
+    }
+    rule(".danger") {
+        color = Color("var(--danger)")
     }
     rule("#chat-input") {
         backgroundColor = Color("var(--panel)")

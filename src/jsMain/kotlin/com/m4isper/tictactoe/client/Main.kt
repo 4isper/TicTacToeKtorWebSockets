@@ -12,6 +12,7 @@ import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
 import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.MAX_AUTO_RETRIES
+import com.m4isper.tictactoe.ui.SessionRole
 import com.m4isper.tictactoe.ui.SharedReplay
 import com.m4isper.tictactoe.ui.SoundCue
 import com.m4isper.tictactoe.ui.ThemeMode
@@ -37,6 +38,7 @@ import com.m4isper.tictactoe.ui.isRoundRestartTransition
 import com.m4isper.tictactoe.ui.isTurnTransition
 import com.m4isper.tictactoe.ui.joinQuery
 import com.m4isper.tictactoe.ui.leaderboardTitle
+import com.m4isper.tictactoe.ui.leaveGameText
 import com.m4isper.tictactoe.ui.noRoomsText
 import com.m4isper.tictactoe.ui.opponentLostText
 import com.m4isper.tictactoe.ui.parseLang
@@ -49,11 +51,13 @@ import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.replayFromFragment
 import com.m4isper.tictactoe.ui.replayHintText
 import com.m4isper.tictactoe.ui.replayToFragment
+import com.m4isper.tictactoe.ui.resignConfirmText
 import com.m4isper.tictactoe.ui.restartText
 import com.m4isper.tictactoe.ui.retryDelayMs
 import com.m4isper.tictactoe.ui.retryNowText
 import com.m4isper.tictactoe.ui.scoreText
 import com.m4isper.tictactoe.ui.seriesTargetText
+import com.m4isper.tictactoe.ui.sessionHeader
 import com.m4isper.tictactoe.ui.shouldAlertTurn
 import com.m4isper.tictactoe.ui.soundCue
 import com.m4isper.tictactoe.ui.soundIcon
@@ -78,6 +82,7 @@ import kotlinx.serialization.encodeToString
 import org.khronos.webgl.Uint8Array
 import org.khronos.webgl.get
 import org.w3c.dom.Element
+import org.w3c.dom.HTMLAnchorElement
 import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
 import org.w3c.dom.HTMLInputElement
@@ -271,6 +276,8 @@ private fun loadOrCreatePlayerKey(): String {
 
 private class GameClient {
     private val status = document.getElementById("status") as HTMLElement
+    private val identity = document.getElementById("identity") as HTMLElement
+    private val rulesLine = document.getElementById("rules") as HTMLElement
     private val board = document.getElementById("board") as HTMLElement
     private val errorBox = document.getElementById("error") as HTMLElement
     private val scoreDiv = document.getElementById("score") as HTMLElement
@@ -353,6 +360,7 @@ private class GameClient {
     private var socket: WebSocket? = null
     private var hintWorker: Worker? = null
     private var mySymbol: PlayerSymbol? = null
+    private var joined = false
     private var pendingReconnectToken: String? = null
     private var retry = 0
     private var fatal = false
@@ -380,6 +388,14 @@ private class GameClient {
         status.textContent = text
     }
 
+    /** One painter for the two header lines; the pure view model owns every string. */
+    private fun renderHeader() {
+        val header = sessionHeader(lastState ?: GameState(), mySymbol, joined, lang)
+        identity.textContent = header.identity
+        identity.className = if (header.role == SessionRole.SPECTATOR) "spectator" else ""
+        rulesLine.textContent = header.rules
+    }
+
     /** A shared link opens nothing but the replay: the board stays idle while the game plays out. */
     private fun showSharedReplay(replay: SharedReplay) {
         val host = document.getElementById("shared-replay") as HTMLElement
@@ -392,6 +408,8 @@ private class GameClient {
         (document.getElementById("name") as? HTMLElement)?.style?.display = "none"
         (document.getElementById("set-name") as? HTMLElement)?.style?.display = "none"
         (document.getElementById("chat") as? HTMLElement)?.style?.display = "none"
+        identity.style.display = "none"
+        rulesLine.style.display = "none"
 
         // rebuild the final position so the header can announce the outcome
         var field: List<List<PlayerSymbol?>> = GameRules.emptyField(replay.boardSize)
@@ -464,6 +482,7 @@ private class GameClient {
         val state = event.state
         val previous = lastState
         lastState = state
+        renderHeader()
         updateCountdowns(previous, state)
         renderMoveLog()
         turnAlert.onState(previous, state, mySymbol)
@@ -651,6 +670,8 @@ private class GameClient {
         when (val event = protocolJson.decodeFromString<ServerEvent>(text)) {
             is ServerEvent.Joined -> {
                 mySymbol = event.symbol
+                joined = true
+                renderHeader()
                 localStorage.setItem(tokenKey, event.token)
                 showError("")
             }
@@ -710,6 +731,8 @@ private class GameClient {
     }
 
     private fun connect() {
+        joined = false
+        renderHeader()
         showStatus(if (retry == 0) connectingText(lang) else reconnectingText(lang))
         socket = WebSocket(wsUrl)
         socket?.onopen = {
@@ -781,7 +804,23 @@ private class GameClient {
         }
     }
 
+    /** Two destructive navigation/round actions share one confirmation guard. */
+    private fun installGuards() {
+        (document.getElementById("quick-play") as? HTMLAnchorElement)?.onclick = { event ->
+            if (inLiveRound() && !window.confirm(leaveGameText(lang))) event.preventDefault()
+        }
+        resignButton.onclick = {
+            if (window.confirm(resignConfirmText(lang))) send(ClientMessage.RequestResign)
+        }
+    }
+
+    private fun inLiveRound(): Boolean {
+        val state = lastState ?: return false
+        return joined && mySymbol != null && state.connectionPlayers.size >= 2 && !state.isRoundOver
+    }
+
     fun start() {
+        installGuards()
         copyLink?.let { button ->
             button.onclick = {
                 copyTextWithFeedback(
@@ -797,7 +836,6 @@ private class GameClient {
         rematchButton.onclick = { send(ClientMessage.RequestRematch) }
         drawButton.onclick = { send(ClientMessage.RequestDraw) }
         undoButton.onclick = { send(ClientMessage.RequestUndo) }
-        resignButton.onclick = { send(ClientMessage.RequestResign) }
         hintButton.onclick = { requestHint() }
 
         document.querySelectorAll("#reactions button").asDynamic().forEach { node: dynamic ->
