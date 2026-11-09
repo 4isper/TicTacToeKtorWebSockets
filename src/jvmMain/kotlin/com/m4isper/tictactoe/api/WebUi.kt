@@ -398,6 +398,7 @@ private fun CssBuilder.layoutStyles() {
     rule("#turn-bar") {
         display = Display.none
         height = 6.px
+        maxWidth = 100.pct
         backgroundColor = Color("var(--panel)")
         borderRadius = 3.px
         margin = Margin(vertical = 6.px)
@@ -489,6 +490,7 @@ private fun CssBuilder.boardStyles() {
         borderRadius = 8.px
         borderWidth = 0.px
         cursor = Cursor.pointer
+        put("flex-shrink", "0") // rows must overflow the board box, not squeeze the touch targets
     }
     rule(".cell:disabled") {
         cursor = Cursor.default
@@ -580,6 +582,7 @@ private fun CssBuilder.createStyles() {
 private fun CssBuilder.effectStyles() {
     rule("#board") {
         position = Position.relative
+        maxWidth = 100.pct // the box stays inside the viewport so overflow-x actually scrolls
         put("overflow-x", "auto") // a 10x10 board keeps 44px touch targets on narrow screens
     }
     rule("#reactions") {
