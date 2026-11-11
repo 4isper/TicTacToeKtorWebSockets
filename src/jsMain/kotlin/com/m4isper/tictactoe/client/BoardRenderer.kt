@@ -4,6 +4,7 @@ import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.game.GameState
 import com.m4isper.tictactoe.ui.CellView
 import com.m4isper.tictactoe.ui.Lang
+import com.m4isper.tictactoe.ui.boardLabel
 import com.m4isper.tictactoe.ui.cellViews
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -31,8 +32,10 @@ internal class BoardRenderer(
     private val resizeHandler: (Event) -> Unit = { recomputeCellSize() }
 
     init {
-        // a disabled cell cannot hold focus, so the grid itself is a fallback target
-        board.setAttribute("tabindex", "-1")
+        // the grid itself is a named, tabbable fallback when a move disables every cell
+        board.setAttribute("role", "grid")
+        board.setAttribute("aria-label", boardLabel(lang))
+        board.setAttribute("tabindex", "0")
         board.addEventListener("keydown", keyHandler)
         window.addEventListener("resize", resizeHandler)
     }
@@ -127,6 +130,13 @@ internal class BoardRenderer(
     /** Arrow keys move focus inside the grid's row/column; the replay's global keys are untouched. */
     private fun onBoardKey(event: Event) {
         val key = event.asDynamic().key as? String ?: return
+        if (key !in ARROW_KEYS) return
+        if (event.target === board) {
+            event.preventDefault()
+            event.stopPropagation()
+            focusFirstCell()
+            return
+        }
         val target = event.target as? HTMLButtonElement ?: return
         val size = cells.size
         val from = cells.flatten().indexOf(target)
@@ -137,8 +147,7 @@ internal class BoardRenderer(
             "ArrowLeft" -> row to (col - 1)
             "ArrowRight" -> row to (col + 1)
             "ArrowUp" -> (row - 1) to col
-            "ArrowDown" -> (row + 1) to col
-            else -> return
+            else -> (row + 1) to col
         }
         if (next.first !in 0 until size || next.second !in 0 until size) return
         event.preventDefault()
@@ -147,8 +156,15 @@ internal class BoardRenderer(
         if (!cell.disabled) cell.focus()
     }
 
+    /** Arrow keys from the grid container enter the first usable cell. */
+    private fun focusFirstCell() {
+        val all = cells.flatten()
+        (all.firstOrNull { !it.disabled } ?: all.firstOrNull())?.focus()
+    }
+
     private companion object {
         const val MIN_TOUCH_PX = 44
         const val MAX_CELL_PX = 96
+        val ARROW_KEYS = setOf("ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown")
     }
 }

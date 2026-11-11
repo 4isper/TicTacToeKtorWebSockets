@@ -34,6 +34,18 @@ private fun CssBuilder.headerStyles() {
     rule("#identity:empty, #rules:empty") {
         display = Display.none
     }
+    rule(".status-line") {
+        display = Display.flex
+        alignItems = Align.baseline
+        justifyContent = JustifyContent.center
+    }
+    rule("#timer") {
+        fontSize = 17.px
+        color = Color("var(--muted)")
+    }
+    rule("#timer:empty") {
+        display = Display.none
+    }
 }
 
 /** The running move list beside the board. */
@@ -66,7 +78,8 @@ private fun CssBuilder.themeStyles() {
         put("--accent", "#7aa2f7")
         put("--win", "#2e7d4f")
         put("--danger", "#ff7b7b")
-        put("--placeholder", "#6a6a85")
+        put("--placeholder", "#9292b0")
+        put("--cell-line", "#6b6b95")
     }
     rule("@media (prefers-color-scheme: light)") {
         // the automatic light theme spares a manually chosen dark one
@@ -113,7 +126,8 @@ private fun CssBuilder.lightPalette() {
     put("--accent", "#4a6fd4")
     put("--win", "#2e7d4f")
     put("--danger", "#c0392b")
-    put("--placeholder", "#9a9ab8")
+    put("--placeholder", "#66668a")
+    put("--cell-line", "#76768f")
 }
 
 private fun CssBuilder.buttonStyles() {
@@ -267,13 +281,15 @@ private fun CssBuilder.boardStyles() {
         backgroundColor = Color("var(--panel)")
         color = Color("var(--text)")
         borderRadius = 8.px
-        borderWidth = 0.px
+        boxSizing = BoxSizing.borderBox // the 1px grid line must not grow the 44px touch target
+        borderWidth = 1.px
+        borderStyle = BorderStyle.solid
+        borderColor = Color("var(--cell-line)")
         cursor = Cursor.pointer
         put("flex-shrink", "0") // rows must overflow the board box, not squeeze the touch targets
     }
     rule(".cell:disabled") {
         cursor = Cursor.default
-        opacity = 0.85
     }
     rule(".cell.hint") {
         put("outline", "3px solid var(--accent)")

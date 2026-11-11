@@ -28,6 +28,7 @@ import com.m4isper.tictactoe.ui.fieldTurnText
 import com.m4isper.tictactoe.ui.fieldWinText
 import com.m4isper.tictactoe.ui.hintText
 import com.m4isper.tictactoe.ui.leaderboardTitle
+import com.m4isper.tictactoe.ui.moveListLabel
 import com.m4isper.tictactoe.ui.namePlaceholder
 import com.m4isper.tictactoe.ui.okText
 import com.m4isper.tictactoe.ui.parseLang
@@ -82,6 +83,7 @@ import kotlinx.html.option
 import kotlinx.html.p
 import kotlinx.html.script
 import kotlinx.html.select
+import kotlinx.html.span
 import kotlinx.html.textInput
 import kotlinx.html.title
 import kotlinx.html.ul
@@ -292,7 +294,7 @@ private fun HTML.page(pageLang: Lang, room: String?, langParam: String?) {
     body {
         pageHeading(pageLang, room, langParam)
         controls(pageLang)
-        boardArea()
+        boardArea(pageLang)
         panels(pageLang, langParam)
         script(src = "/static/app.js") {}
     }
@@ -352,9 +354,15 @@ private fun BODY.controls(pageLang: Lang) {
         id = "identity"
         attributes["aria-live"] = "polite"
     }
-    div {
-        id = "status"
-        attributes.putAll(mapOf("role" to "status", "aria-live" to "polite"))
+    div(classes = "status-line") {
+        div {
+            id = "status"
+            attributes.putAll(mapOf("role" to "status", "aria-live" to "polite"))
+        }
+        span {
+            id = "timer"
+            attributes["aria-live"] = "off"
+        }
     }
     div {
         id = "score"
@@ -418,13 +426,16 @@ private fun BODY.actionRow(pageLang: Lang) {
     }
 }
 
-private fun BODY.boardArea() {
+private fun BODY.boardArea(pageLang: Lang) {
     div {
         id = "turn-bar"
         div { id = "turn-bar-fill" }
     }
     div { id = "board" }
-    ol { id = "moves" }
+    ol {
+        id = "moves"
+        attributes["aria-label"] = moveListLabel(pageLang)
+    }
     div {
         id = "error"
         attributes["role"] = "alert"

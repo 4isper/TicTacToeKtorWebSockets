@@ -50,9 +50,12 @@ import com.m4isper.tictactoe.ui.reloadText
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.replayFromFragment
 import com.m4isper.tictactoe.ui.replayHintText
+import com.m4isper.tictactoe.ui.replayNextText
+import com.m4isper.tictactoe.ui.replayPrevText
 import com.m4isper.tictactoe.ui.replayToFragment
 import com.m4isper.tictactoe.ui.resignConfirmText
 import com.m4isper.tictactoe.ui.restartText
+import com.m4isper.tictactoe.ui.resultText
 import com.m4isper.tictactoe.ui.retryDelayMs
 import com.m4isper.tictactoe.ui.retryNowText
 import com.m4isper.tictactoe.ui.scoreText
@@ -71,12 +74,14 @@ import com.m4isper.tictactoe.ui.timerSuffix
 import com.m4isper.tictactoe.ui.turnAlertBody
 import com.m4isper.tictactoe.ui.turnAlertTitle
 import com.m4isper.tictactoe.ui.turnSecondsText
+import com.m4isper.tictactoe.ui.undoAvailable
 import com.m4isper.tictactoe.ui.undoButtonText
 import com.m4isper.tictactoe.ui.updateNoticeText
 import com.m4isper.tictactoe.ui.urlEncode
 import com.m4isper.tictactoe.ui.winLengthText
 import kotlinx.browser.document
 import kotlinx.browser.localStorage
+import kotlinx.browser.sessionStorage
 import kotlinx.browser.window
 import kotlinx.serialization.encodeToString
 import org.khronos.webgl.Uint8Array
@@ -276,6 +281,7 @@ private fun loadOrCreatePlayerKey(): String {
 
 private class GameClient {
     private val status = document.getElementById("status") as HTMLElement
+    private val timer = document.getElementById("timer") as HTMLElement
     private val identity = document.getElementById("identity") as HTMLElement
     private val rulesLine = document.getElementById("rules") as HTMLElement
     private val board = document.getElementById("board") as HTMLElement
@@ -388,6 +394,11 @@ private class GameClient {
         status.textContent = text
     }
 
+    /** Countdowns live outside the polite region: four writes a second would flood a screen reader. */
+    private fun showTimer(text: String) {
+        timer.textContent = text
+    }
+
     /** One painter for the two header lines; the pure view model owns every string. */
     private fun renderHeader() {
         val header = sessionHeader(lastState ?: GameState(), mySymbol, joined, lang)
@@ -494,6 +505,7 @@ private class GameClient {
     private fun updateCountdowns(previous: GameState?, state: GameState) {
         countdownTimer?.let { window.clearInterval(it) }
         countdownTimer = null
+        showTimer("")
         restartCountdown(previous, state)
         turnCountdown(previous, state)
     }
@@ -505,6 +517,7 @@ private class GameClient {
         roundDeadline = 0.0
         turnDeadline = 0.0
         turnBar.style.display = "none"
+        showTimer("")
     }
 
     private fun restartCountdown(previous: GameState?, state: GameState) {
@@ -517,7 +530,7 @@ private class GameClient {
                 val msLeft = roundDeadline - Date.now()
                 if (msLeft <= 0) return@setInterval
                 if (opponentLostTimer == null) {
-                    showStatus(statusText(current, mySymbol, lang) + " · " + restartText(msLeft.toLong(), lang))
+                    showTimer(" · " + restartText(msLeft.toLong(), lang))
                 }
             }, 250)
         } else {
@@ -542,7 +555,7 @@ private class GameClient {
                 if (clocksSnapshot.isNotEmpty()) renderClocks()
                 // the away-plate owns the status line while the opponent is gone
                 if (opponentLostTimer == null) {
-                    showStatus(statusText(current, mySymbol, lang) + timerSuffix(msLeft.toLong(), lang))
+                    showTimer(timerSuffix(msLeft.toLong(), lang))
                 }
             }, 250)
         } else {
@@ -598,10 +611,7 @@ private class GameClient {
     }
 
     private fun updateUndoButton(state: GameState) {
-        val roundOver = state.isRoundOver
-        val undoVisible = !roundOver && mySymbol != null && state.connectionPlayers.size >= 2 &&
-            (state.undoOfferBy != null || state.playerAtTurn != mySymbol)
-        undoButton.style.display = if (undoVisible) "block" else "none"
+        undoButton.style.display = if (undoAvailable(state, mySymbol)) "block" else "none"
         val iOfferedUndo = mySymbol != null && state.undoOfferBy == mySymbol
         val opponentOfferedUndo = state.undoOfferBy != null && state.undoOfferBy != mySymbol
         undoButton.textContent = undoButtonText(iOfferedUndo, opponentOfferedUndo, lang)
@@ -672,14 +682,14 @@ private class GameClient {
                 mySymbol = event.symbol
                 joined = true
                 renderHeader()
-                localStorage.setItem(tokenKey, event.token)
+                sessionStorage.setItem(tokenKey, event.token)
                 showError("")
             }
 
             is ServerEvent.StateChanged -> {
                 // the world moved on: a refusal of an earlier action is stale now
                 showError("")
-                pendingReconnectToken?.let { localStorage.setItem(tokenKey, it) }
+                pendingReconnectToken?.let { sessionStorage.setItem(tokenKey, it) }
                 pendingReconnectToken = null
                 // the server is the source of truth: cache the name it attributes to me
                 val myName = mySymbol?.let { symbol -> event.state.playerNames[symbol] }
@@ -689,7 +699,7 @@ private class GameClient {
 
             is ServerEvent.Error -> {
                 pendingReconnectToken = null
-                if (event.reason == ErrorReason.UNKNOWN_TOKEN) localStorage.removeItem(tokenKey)
+                if (event.reason == ErrorReason.UNKNOWN_TOKEN) sessionStorage.removeItem(tokenKey)
                 if (event.reason in fatalReasons) fatal = true
                 showError(errorText(event.reason, lang))
             }
@@ -739,7 +749,7 @@ private class GameClient {
             retry = 0
             hideRetryButton()
             showError("")
-            val stored = localStorage.getItem(tokenKey)
+            val stored = sessionStorage.getItem(tokenKey)
             if (stored != null) {
                 pendingReconnectToken = stored
                 send(ClientMessage.Reconnect(stored))
@@ -1157,7 +1167,7 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                         val d = Date(rec.epochMs as Double)
                         val stamp = "${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')} " +
                             "${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}"
-                        li.textContent = "${resultMark(rec.result as String)} ${if (opponent != null) "vs $opponent · " else ""}$stamp"
+                        li.textContent = "${resultText(rec.result as String, lang)} ${if (opponent != null) "vs $opponent · " else ""}$stamp"
                         li.title = replayHintText(lang)
                         li.makeButtonLike { showReplay(rec, replayDiv) }
                         ul.appendChild(li)
@@ -1249,12 +1259,6 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
         profileDiv.appendChild(head)
         profileDiv.appendChild(ul)
     }
-
-    private fun resultMark(result: String): String = when (result) {
-        "WIN" -> "✓"
-        "LOSS" -> "✗"
-        else -> "="
-    }
 }
 
 /** One mounted replay: a stepper, autoplay and arrow keys over a mini board. */
@@ -1281,10 +1285,15 @@ private class ReplayView(
         next.textContent = "›"
         play.textContent = "▶"
         play.title = autoplayText(lang)
+        prev.setAttribute("aria-label", replayPrevText(lang))
+        next.setAttribute("aria-label", replayNextText(lang))
+        play.setAttribute("aria-label", autoplayText(lang))
+        play.setAttribute("aria-pressed", "false")
         val share = document.createElement("button") as HTMLButtonElement
         share.className = "secondary"
         share.textContent = "🔗"
         share.title = copyLinkText(lang)
+        share.setAttribute("aria-label", copyLinkText(lang))
         val controls = document.createElement("div") as HTMLElement
         controls.className = "replay-controls"
         controls.appendChild(prev)
@@ -1331,6 +1340,7 @@ private class ReplayView(
             stopPlaying()
         } else {
             play.textContent = "⏸"
+            play.setAttribute("aria-pressed", "true")
             playTimer = window.setInterval({ step(1) }, 700)
         }
     }
@@ -1339,6 +1349,7 @@ private class ReplayView(
         playTimer?.let { window.clearInterval(it) }
         playTimer = null
         play.textContent = "▶"
+        play.setAttribute("aria-pressed", "false")
     }
 
     private fun render() {
