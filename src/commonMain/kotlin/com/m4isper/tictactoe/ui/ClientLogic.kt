@@ -85,14 +85,22 @@ fun clockText(msLeft: Long): String {
     return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
 }
 
+/** A takeback needs an actual move to take back, plus the side that owns it. */
+fun undoAvailable(state: GameState, mySymbol: PlayerSymbol?): Boolean = mySymbol != null &&
+    !state.isRoundOver &&
+    state.connectionPlayers.size >= 2 &&
+    state.moves.isNotEmpty() &&
+    (state.undoOfferBy != null || state.playerAtTurn != mySymbol)
+
 /**
- * A hint button makes sense on my turn, in a running round with a full pair — and only
- * in a practice one: a hint in a rated round would be advice for a rated game.
+ * A hint belongs to a practice round: a bot holds a slot, it is my turn, and no
+ * fully named (rated) game gets engine advice against another human.
  */
 fun hintAvailable(state: GameState, mySymbol: PlayerSymbol?): Boolean = mySymbol != null &&
     !state.isRoundOver &&
     state.connectionPlayers.size >= 2 &&
     state.playerAtTurn == mySymbol &&
+    state.botPlayers.isNotEmpty() &&
     (state.playerNames[PlayerSymbol.X] == null || state.playerNames[PlayerSymbol.O] == null)
 
 /** A round restart countdown just appeared and the deadline should be captured once. */

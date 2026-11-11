@@ -217,6 +217,7 @@ class ClientLogicTest {
     fun `a hint shows on my turn in a practice round`() {
         val practice = GameState(
             connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            botPlayers = listOf(PlayerSymbol.X),
             playerNames = mapOf(PlayerSymbol.X to "Бот-тренер"),
             playerAtTurn = PlayerSymbol.O,
         )

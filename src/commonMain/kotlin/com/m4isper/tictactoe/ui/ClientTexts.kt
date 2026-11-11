@@ -64,6 +64,42 @@ fun resignConfirmText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.EN -> "Resign? The opponent wins the round and it counts as a loss."
 }
 
+/** Spoken names for the two regions a screen reader navigates by. */
+fun boardLabel(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Игровое поле"
+    Lang.EN -> "Game board"
+}
+
+fun moveListLabel(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Список ходов"
+    Lang.EN -> "Move list"
+}
+
+fun replayPrevText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Предыдущий ход"
+    Lang.EN -> "Previous move"
+}
+
+fun replayNextText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Следующий ход"
+    Lang.EN -> "Next move"
+}
+
+/** History rows spell out the result; a glyph alone reads as punctuation. */
+fun resultText(result: String, lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> when (result) {
+        "WIN" -> "Победа"
+        "LOSS" -> "Поражение"
+        else -> "Ничья"
+    }
+
+    Lang.EN -> when (result) {
+        "WIN" -> "Win"
+        "LOSS" -> "Loss"
+        else -> "Draw"
+    }
+}
+
 fun installText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> "Установить приложение"
     Lang.EN -> "Install app"
