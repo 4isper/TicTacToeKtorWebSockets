@@ -39,6 +39,10 @@ test('a third visitor is told they are a spectator', async ({ browser }) => {
 
 test('quick play opens a named room with an invite link', async ({ page }) => {
   await page.goto(BASE + '/?lang=en');
+  // A previous suite test may have left an anonymous opponent in the grace window,
+  // which makes quick play confirm leaving a live round. Accept it: this test is
+  // about the destination room, not the guard (covered by the next test).
+  page.on('dialog', (d) => d.accept());
   await page.locator('#quick-play').click();
   await expect(page).toHaveURL(/[?&]room=/);
   await expect(page.locator('#copy-link')).toBeVisible();
