@@ -5,6 +5,7 @@ import com.m4isper.tictactoe.domain.BotLevel
 import com.m4isper.tictactoe.domain.Cell
 import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.GameRules
+import com.m4isper.tictactoe.domain.MAX_CHAT_LENGTH
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.game.GameState
 import com.m4isper.tictactoe.protocol.ClientMessage
@@ -27,6 +28,7 @@ import com.m4isper.tictactoe.ui.connectionLostText
 import com.m4isper.tictactoe.ui.copiedText
 import com.m4isper.tictactoe.ui.copyFailedText
 import com.m4isper.tictactoe.ui.copyLinkText
+import com.m4isper.tictactoe.ui.createFormError
 import com.m4isper.tictactoe.ui.detectLang
 import com.m4isper.tictactoe.ui.dismissText
 import com.m4isper.tictactoe.ui.drawButtonText
@@ -91,6 +93,7 @@ import org.w3c.dom.Element
 import org.w3c.dom.HTMLAnchorElement
 import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
+import org.w3c.dom.HTMLFormElement
 import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.HTMLTextAreaElement
 import org.w3c.dom.WebSocket
@@ -735,7 +738,8 @@ private class GameClient {
     private fun appendChat(event: ServerEvent.Chat) {
         val log = document.getElementById("chat-log") as? HTMLElement ?: return
         val line = document.createElement("p") as HTMLElement
-        line.className = "chat-line"
+        val myName = confirmedName ?: localStorage.getItem(NAME_KEY)
+        line.className = if (event.name != null && event.name == myName) "chat-line mine" else "chat-line"
         line.textContent = "${event.name ?: spectatorText(lang)}: ${event.text}"
         log.appendChild(line)
         while (log.childElementCount > 50) log.firstElementChild?.remove()
@@ -750,7 +754,14 @@ private class GameClient {
             input.onkeydown = { event ->
                 if (event.asDynamic().key == "Enter") sendChatLine()
             }
+            input.oninput = { updateChatCount() }
         }
+        updateChatCount()
+    }
+
+    private fun updateChatCount() {
+        val input = document.getElementById("chat-input") as? HTMLInputElement ?: return
+        (document.getElementById("chat-count") as? HTMLElement)?.textContent = "${input.value.length}/$MAX_CHAT_LENGTH"
     }
 
     private fun sendChatLine() {
@@ -759,6 +770,7 @@ private class GameClient {
         if (text.isBlank()) return
         send(ClientMessage.Chat(text))
         input.value = ""
+        updateChatCount()
     }
 
     private fun connect() {
@@ -843,6 +855,22 @@ private class GameClient {
         resignButton.onclick = {
             if (window.confirm(resignConfirmText(lang))) send(ClientMessage.RequestResign)
         }
+        installCreateFormGuard()
+    }
+
+    /** A bad setting must not navigate away, and neither should a live round. */
+    private fun installCreateFormGuard() {
+        (document.getElementById("create-form") as? HTMLFormElement)?.addEventListener("submit", { event ->
+            val size = (document.getElementById("create-size") as? HTMLInputElement)?.value?.toIntOrNull()
+            val win = (document.getElementById("create-win") as? HTMLInputElement)?.value?.toIntOrNull()
+            val invalid = createFormError(size, win, lang)
+            if (invalid != null) {
+                event.preventDefault()
+                showError(invalid)
+            } else if (inLiveRound() && !window.confirm(leaveGameText(lang))) {
+                event.preventDefault()
+            }
+        })
     }
 
     private fun inLiveRound(): Boolean {

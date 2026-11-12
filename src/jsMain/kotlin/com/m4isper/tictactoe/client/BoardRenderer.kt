@@ -5,6 +5,7 @@ import com.m4isper.tictactoe.game.GameState
 import com.m4isper.tictactoe.ui.CellView
 import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.boardLabel
+import com.m4isper.tictactoe.ui.cellNotation
 import com.m4isper.tictactoe.ui.cellViews
 import kotlinx.browser.document
 import kotlinx.browser.window
@@ -64,6 +65,7 @@ internal class BoardRenderer(
             rowDiv.className = "row"
             val row = List(size) { x ->
                 val button = document.createElement("button") as HTMLButtonElement
+                button.setAttribute("title", cellNotation(x, y))
                 button.onclick = { onCellClick(x, y) }
                 rowDiv.appendChild(button)
                 button
@@ -80,10 +82,18 @@ internal class BoardRenderer(
         if (cells.isEmpty()) return
         val size = cells.size
         val px = cellSize(size)
-        if (px == cellPx) return
-        cells.forEach { row -> row.forEach { sizeButton(it, px) } }
-        cellPx = px
-        turnBar.style.width = "${size * px + (size - 1) * 4}px"
+        if (px != cellPx) {
+            cells.forEach { row -> row.forEach { sizeButton(it, px) } }
+            cellPx = px
+            turnBar.style.width = "${size * px + (size - 1) * 4}px"
+        }
+        updateScrollHint()
+    }
+
+    /** A board wider than its viewport needs a visible hint, not a hidden scrollbar. */
+    private fun updateScrollHint() {
+        val hint = document.getElementById("board-hint") as? HTMLElement ?: return
+        hint.style.display = if (board.scrollWidth > board.clientWidth) "block" else "none"
     }
 
     private fun apply(button: HTMLButtonElement, view: CellView) {

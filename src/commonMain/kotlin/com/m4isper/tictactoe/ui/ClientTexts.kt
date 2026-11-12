@@ -64,44 +64,6 @@ fun resignConfirmText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.EN -> "Resign? The opponent wins the round and it counts as a loss."
 }
 
-/** Spoken names for the two regions a screen reader navigates by. */
-fun boardLabel(lang: Lang = Lang.RU): String = when (lang) {
-    Lang.RU -> "Игровое поле"
-    Lang.EN -> "Game board"
-}
-
-fun moveListLabel(lang: Lang = Lang.RU): String = when (lang) {
-    Lang.RU -> "Список ходов"
-    Lang.EN -> "Move list"
-}
-
-fun replayPrevText(lang: Lang = Lang.RU): String = when (lang) {
-    Lang.RU -> "Предыдущий ход"
-    Lang.EN -> "Previous move"
-}
-
-fun replayNextText(lang: Lang = Lang.RU): String = when (lang) {
-    Lang.RU -> "Следующий ход"
-    Lang.EN -> "Next move"
-}
-
-/** Page-level copy: the description and the landmarks a screen reader navigates by. */
-fun pageDescription(lang: Lang = Lang.RU): String = when (lang) {
-    Lang.RU -> "Крестики-нолики онлайн: играйте с другом по ссылке, смотрите партии и следите за рейтингом."
-    Lang.EN -> "Play tic-tac-toe online: invite a friend by link, watch games and follow the leaderboard."
-}
-
-fun skipLinkText(lang: Lang = Lang.RU): String = when (lang) {
-    Lang.RU -> "Перейти к игре"
-    Lang.EN -> "Skip to the game"
-}
-
-/** Spoken names for the language switch; the visible labels are the ISO-style codes. */
-fun languageName(lang: Lang): String = when (lang) {
-    Lang.RU -> "Русский"
-    Lang.EN -> "English"
-}
-
 /** The three-state theme control needs a visible label, not only an icon. */
 fun themeModeText(theme: ThemeMode, lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> when (theme) {
@@ -115,12 +77,6 @@ fun themeModeText(theme: ThemeMode, lang: Lang = Lang.RU): String = when (lang) 
         ThemeMode.LIGHT -> "light"
         ThemeMode.DARK -> "dark"
     }
-}
-
-/** The leaderboard's three numbers mean nothing without a legend. */
-fun leaderboardLegend(lang: Lang = Lang.RU): String = when (lang) {
-    Lang.RU -> "Игрок · Рейтинг · Победы : Поражения : Ничьи"
-    Lang.EN -> "Player · Rating · Wins : Losses : Draws"
 }
 
 /** History rows spell out the result; a glyph alone reads as punctuation. */

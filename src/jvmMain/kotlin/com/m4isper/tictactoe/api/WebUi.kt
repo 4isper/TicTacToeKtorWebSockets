@@ -7,9 +7,11 @@ import com.m4isper.tictactoe.stats.LeaderboardResponse
 import com.m4isper.tictactoe.stats.Scoreboard
 import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.ThemeMode
+import com.m4isper.tictactoe.ui.advancedSettingsText
 import com.m4isper.tictactoe.ui.botExhibitionText
 import com.m4isper.tictactoe.ui.botLevelText
 import com.m4isper.tictactoe.ui.botNoneText
+import com.m4isper.tictactoe.ui.chatEnterHintText
 import com.m4isper.tictactoe.ui.chatPlaceholder
 import com.m4isper.tictactoe.ui.chatSendText
 import com.m4isper.tictactoe.ui.chatTitle
@@ -41,6 +43,7 @@ import com.m4isper.tictactoe.ui.reactionLabel
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.resignButtonText
 import com.m4isper.tictactoe.ui.roomsTitle
+import com.m4isper.tictactoe.ui.scrollBoardText
 import com.m4isper.tictactoe.ui.searchPlaceholder
 import com.m4isper.tictactoe.ui.seriesOffText
 import com.m4isper.tictactoe.ui.seriesTargetText
@@ -53,6 +56,7 @@ import com.m4isper.tictactoe.ui.themeTitle
 import com.m4isper.tictactoe.ui.undoButtonText
 import com.m4isper.tictactoe.ui.urlEncode
 import com.m4isper.tictactoe.ui.winPlaceholderText
+import com.m4isper.tictactoe.ui.winRuleHintText
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.html.*
@@ -69,6 +73,7 @@ import kotlinx.html.InputType
 import kotlinx.html.a
 import kotlinx.html.body
 import kotlinx.html.button
+import kotlinx.html.details
 import kotlinx.html.div
 import kotlinx.html.form
 import kotlinx.html.h1
@@ -89,6 +94,7 @@ import kotlinx.html.p
 import kotlinx.html.script
 import kotlinx.html.select
 import kotlinx.html.span
+import kotlinx.html.summary
 import kotlinx.html.textInput
 import kotlinx.html.title
 import kotlinx.html.ul
@@ -471,6 +477,11 @@ private fun HtmlBlockTag.boardArea(pageLang: Lang) {
         id = "turn-bar"
         div { id = "turn-bar-fill" }
     }
+    div {
+        id = "board-hint"
+        attributes["style"] = "display:none"
+        +scrollBoardText(pageLang)
+    }
     div { id = "board" }
     ol {
         id = "moves"
@@ -553,6 +564,16 @@ private fun HtmlBlockTag.chatPanel(pageLang: Lang) {
                 +chatSendText(pageLang)
             }
         }
+        p(classes = "chat-meta") {
+            span {
+                id = "chat-count"
+                +"0/$MAX_CHAT_LENGTH"
+            }
+            span {
+                id = "chat-hint"
+                +chatEnterHintText(pageLang)
+            }
+        }
     }
 }
 
@@ -564,9 +585,14 @@ private fun HtmlBlockTag.createGameForm(pageLang: Lang, langParam: String?) {
         attributes["aria-label"] = createGameTitle(pageLang)
         h2 { +createGameTitle(pageLang) }
         form(action = "/", method = FormMethod.get) {
+            id = "create-form"
             langParam?.let { hiddenInput(name = "lang") { value = it } }
             createBoardFields(pageLang)
-            createTimeFields(pageLang)
+            p(classes = "field-hint") { +winRuleHintText(pageLang) }
+            details {
+                summary { +advancedSettingsText(pageLang) }
+                createTimeFields(pageLang)
+            }
             button {
                 +createGameSubmit(pageLang)
             }
@@ -586,6 +612,7 @@ private fun FORM.createBoardFields(pageLang: Lang) {
     label {
         +fieldSizeText(pageLang)
         numberInput(name = "size") {
+            id = "create-size"
             min = GameRules.MIN_BOARD_SIZE.toString()
             max = GameRules.MAX_BOARD_SIZE.toString()
             value = GameRules.DEFAULT_BOARD_SIZE.toString()
@@ -594,6 +621,7 @@ private fun FORM.createBoardFields(pageLang: Lang) {
     label {
         +fieldWinText(pageLang)
         numberInput(name = "win") {
+            id = "create-win"
             min = GameRules.MIN_WIN_LENGTH.toString()
             max = GameRules.MAX_BOARD_SIZE.toString()
             placeholder = winPlaceholderText(pageLang)
@@ -602,7 +630,7 @@ private fun FORM.createBoardFields(pageLang: Lang) {
 }
 
 /** Turn and game-clock budgets, the practice bot level and the series target. */
-private fun FORM.createTimeFields(pageLang: Lang) {
+private fun HtmlBlockTag.createTimeFields(pageLang: Lang) {
     label {
         +fieldTurnText(pageLang)
         numberInput(name = "turn") {

@@ -16,6 +16,38 @@ internal fun CssBuilder.styles() {
     effectStyles()
     interactionStyles()
     columnsStyles()
+    formChatStyles()
+}
+
+/** Form, board and chat hints that keep a user oriented. */
+private fun CssBuilder.formChatStyles() {
+    rule("#create details") {
+        width = 100.pct
+        margin = Margin(vertical = 6.px)
+    }
+    rule("#create summary") {
+        cursor = Cursor.pointer
+        color = Color("var(--accent)")
+        padding = Padding(vertical = 8.px)
+        put("min-height", "44px")
+    }
+    rule(".field-hint, .chat-meta") {
+        fontSize = 12.px
+        color = Color("var(--muted)")
+        margin = Margin(vertical = 2.px)
+    }
+    rule(".chat-meta") {
+        display = Display.flex
+        gap = 12.px
+    }
+    rule("#board-hint") {
+        fontSize = 13.px
+        color = Color("var(--muted)")
+        margin = Margin(vertical = 4.px)
+    }
+    rule(".chat-line.mine") {
+        color = Color("var(--accent)")
+    }
 }
 
 /** Wide screens get a game column and a side column; narrow screens stay stacked. */
