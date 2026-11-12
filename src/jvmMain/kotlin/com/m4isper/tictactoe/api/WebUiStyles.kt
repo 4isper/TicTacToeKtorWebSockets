@@ -6,6 +6,7 @@ import kotlinx.css.properties.*
 internal fun CssBuilder.styles() {
     themeStyles()
     headerStyles()
+    errorStyles()
     buttonStyles()
     layoutStyles()
     scrollbarStyles()
@@ -44,6 +45,26 @@ private fun CssBuilder.headerStyles() {
         color = Color("var(--muted)")
     }
     rule("#timer:empty") {
+        display = Display.none
+    }
+}
+
+/** Errors are viewport-anchored: their causes sit in different scroll regions. */
+private fun CssBuilder.errorStyles() {
+    rule("#error") {
+        position = Position.fixed
+        put("left", "12px")
+        put("right", "12px")
+        put("bottom", "12px")
+        put("z-index", "60")
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--danger)")
+        padding = Padding(horizontal = 14.px, vertical = 10.px)
+        borderRadius = 10.px
+        pointerEvents = PointerEvents.none
+        put("text-align", "center")
+    }
+    rule("#error:empty") {
         display = Display.none
     }
 }
@@ -93,14 +114,12 @@ private fun CssBuilder.themeStyles() {
         alignItems = Align.center
         backgroundColor = Color("var(--bg)")
         color = Color("var(--text)")
+        // the last panel (a profile) must be able to scroll into a readable position
+        put("padding-bottom", "40vh")
     }
     rule("#status") {
         fontSize = 22.px
         minHeight = 30.px
-    }
-    rule("#error") {
-        color = Color("var(--danger)")
-        minHeight = 24.px
     }
     rule("#score") {
         fontSize = 18.px

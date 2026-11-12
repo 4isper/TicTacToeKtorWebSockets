@@ -349,6 +349,7 @@ private class GameClient {
 
     companion object {
         const val NAME_KEY = "tictactoe-name"
+        const val ERROR_DISMISS_MS = 5_000
     }
 
     // answered before the game even started: the server closes the socket, so retrying cannot fix them
@@ -378,6 +379,8 @@ private class GameClient {
     private var clocksBase = 0.0
     private var countdownTimer: Int? = null
     private var opponentLostTimer: Int? = null
+    private var errorTimer: Int? = null
+    private var confirmedName: String? = null
 
     // mirrors the server's reconnectGraceMs: how long a dropped player's slot is held
     private val reconnectGraceSeconds = 10
@@ -386,8 +389,21 @@ private class GameClient {
         socket?.send(protocolJson.encodeToString<ClientMessage>(message))
     }
 
+    /** Errors never linger: a stale refusal must not outlive the round that caused it. */
     private fun showError(message: String) {
+        errorTimer?.let { window.clearTimeout(it) }
         errorBox.textContent = message
+        errorTimer = if (message.isEmpty()) {
+            null
+        } else {
+            window.setTimeout({ clearErrors() }, ERROR_DISMISS_MS)
+        }
+    }
+
+    private fun clearErrors() {
+        errorTimer?.let { window.clearTimeout(it) }
+        errorTimer = null
+        errorBox.textContent = ""
     }
 
     private fun showStatus(text: String) {
@@ -683,17 +699,21 @@ private class GameClient {
                 joined = true
                 renderHeader()
                 sessionStorage.setItem(tokenKey, event.token)
-                showError("")
+                clearErrors()
             }
 
             is ServerEvent.StateChanged -> {
                 // the world moved on: a refusal of an earlier action is stale now
-                showError("")
+                clearErrors()
                 pendingReconnectToken?.let { sessionStorage.setItem(tokenKey, it) }
                 pendingReconnectToken = null
-                // the server is the source of truth: cache the name it attributes to me
+                // the server is the source of truth: show the name it accepted
                 val myName = mySymbol?.let { symbol -> event.state.playerNames[symbol] }
-                if (myName != null) localStorage.setItem(NAME_KEY, myName)
+                if (myName != null && myName != confirmedName) {
+                    confirmedName = myName
+                    localStorage.setItem(NAME_KEY, myName)
+                    nameInput?.let { it.value = myName }
+                }
                 showState(event)
             }
 
@@ -748,7 +768,7 @@ private class GameClient {
         socket?.onopen = {
             retry = 0
             hideRetryButton()
-            showError("")
+            clearErrors()
             val stored = sessionStorage.getItem(tokenKey)
             if (stored != null) {
                 pendingReconnectToken = stored
@@ -859,7 +879,8 @@ private class GameClient {
             fun submitName() {
                 val name = nameInput.value.trim()
                 if (name.isNotEmpty()) send(ClientMessage.SetName(name))
-                nameInput.value = ""
+                // keep the typed value: the server may still refuse it, and the
+                // next state replaces it with the confirmed name
             }
             setNameButton.onclick = { submitName() }
             nameInput.onkeydown = { event ->
@@ -1156,7 +1177,7 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                 }
                 response.json().then { data: dynamic ->
                     profileDiv.innerHTML = ""
-                    val title = document.createElement("h3")
+                    val title = document.createElement("h3") as HTMLElement
                     title.textContent = "${data.name as String} · #${data.rank as Int} · ${data.stats.rating as Int}"
                     val ul = document.createElement("ul") as HTMLElement
                     val replayDiv = document.createElement("div") as HTMLElement
@@ -1178,6 +1199,11 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                     profileDiv.appendChild(replayDiv)
                     mountHistoryPages(data, name, profileDiv)
                     mountHeadToHead(data, profileDiv)
+                    // opening a profile from the leaderboard must not leave it off-screen
+                    title.setAttribute("tabindex", "-1")
+                    title.focus()
+                    val absoluteTop = profileDiv.getBoundingClientRect().top + window.scrollY
+                    window.scrollTo(0.0, absoluteTop)
                 }
             }.catch { /* the profile is decorative */ }
         } catch (ignored: Throwable) {
