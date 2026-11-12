@@ -96,6 +96,12 @@ fun skipLinkText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.EN -> "Skip to the game"
 }
 
+/** Spoken names for the language switch; the visible labels are the ISO-style codes. */
+fun languageName(lang: Lang): String = when (lang) {
+    Lang.RU -> "Русский"
+    Lang.EN -> "English"
+}
+
 /** The three-state theme control needs a visible label, not only an icon. */
 fun themeModeText(theme: ThemeMode, lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> when (theme) {

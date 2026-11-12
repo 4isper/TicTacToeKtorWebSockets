@@ -27,6 +27,7 @@ import com.m4isper.tictactoe.ui.fieldSizeText
 import com.m4isper.tictactoe.ui.fieldTurnText
 import com.m4isper.tictactoe.ui.fieldWinText
 import com.m4isper.tictactoe.ui.hintText
+import com.m4isper.tictactoe.ui.languageName
 import com.m4isper.tictactoe.ui.leaderboardLegend
 import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.moveListLabel
@@ -285,11 +286,14 @@ private fun Route.pageRoute() {
         val langParam = call.request.queryParameters["lang"]?.takeIf { it.isNotBlank() }
         val pageLang = langParam?.let(::parseLang)
             ?: detectLang(call.request.headers[HttpHeaders.AcceptLanguage])
-        call.respondHtml { page(pageLang, room, langParam) }
+        // the language switch must carry every existing setting (room, board, clock, …)
+        val query = call.request.queryParameters.entries()
+            .associate { (key, values) -> key to values.firstOrNull().orEmpty() }
+        call.respondHtml { page(pageLang, room, langParam, query) }
     }
 }
 
-private fun HTML.page(pageLang: Lang, room: String?, langParam: String?) {
+private fun HTML.page(pageLang: Lang, room: String?, langParam: String?, query: Map<String, String>) {
     lang = when (pageLang) {
         Lang.RU -> "ru"
         Lang.EN -> "en"
@@ -303,10 +307,16 @@ private fun HTML.page(pageLang: Lang, room: String?, langParam: String?) {
         main {
             id = "main"
             attributes["tabindex"] = "-1"
-            pageHeading(pageLang, room, langParam)
-            controls(pageLang)
-            boardArea(pageLang)
-            panels(pageLang, langParam)
+            div(classes = "layout") {
+                div(classes = "game-column") {
+                    pageHeading(pageLang, room, langParam, query)
+                    controls(pageLang)
+                    boardArea(pageLang)
+                }
+                div(classes = "side-column") {
+                    panels(pageLang, langParam)
+                }
+            }
         }
         script(src = "/static/app.js") {}
     }
@@ -323,7 +333,7 @@ private fun HEAD.pageHead(pageLang: Lang) {
     meta(name = "theme-color", content = themeColor(ThemeMode.AUTO, prefersLight = false)) {
         attributes["id"] = "theme-color-dark"
     }
-    link(rel = "manifest", href = "/manifest.webmanifest")
+    link(rel = "manifest", href = "/manifest.webmanifest?lang=${pageLang.name.lowercase()}")
     link(rel = "icon", href = "/icon.svg")
     title {
         +"${when (pageLang) {
@@ -334,7 +344,24 @@ private fun HEAD.pageHead(pageLang: Lang) {
     link(rel = "stylesheet", href = "/styles.css")
 }
 
-private fun HtmlBlockTag.pageHeading(pageLang: Lang, room: String?, langParam: String?) {
+/** Keeps every join setting, swaps only the language parameter. */
+private fun languageHref(query: Map<String, String>, target: Lang): String {
+    val parts = query.filterKeys { it != "lang" }
+        .map { (key, value) -> "${urlEncode(key)}=${urlEncode(value)}" }
+        .plus("lang=${target.name.lowercase()}")
+    return "/?" + parts.joinToString("&")
+}
+
+private fun HtmlBlockTag.pageHeading(pageLang: Lang, room: String?, langParam: String?, query: Map<String, String>) {
+    div(classes = "lang-switch") {
+        listOf(Lang.RU, Lang.EN).forEach { target ->
+            a(href = languageHref(query, target)) {
+                attributes["aria-label"] = languageName(target)
+                if (target == pageLang) attributes["aria-current"] = "page"
+                +target.name
+            }
+        }
+    }
     h1 {
         +"${when (pageLang) {
             Lang.RU -> "Крестики-нолики"

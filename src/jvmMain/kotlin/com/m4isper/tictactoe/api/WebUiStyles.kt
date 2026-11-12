@@ -15,6 +15,59 @@ internal fun CssBuilder.styles() {
     createStyles()
     effectStyles()
     interactionStyles()
+    columnsStyles()
+}
+
+/** Wide screens get a game column and a side column; narrow screens stay stacked. */
+private fun CssBuilder.columnsStyles() {
+    rule(".layout") {
+        display = Display.flex
+        flexDirection = FlexDirection.column
+        alignItems = Align.center
+        width = 100.pct
+        maxWidth = 100.pct
+    }
+    rule(".game-column, .side-column") {
+        display = Display.flex
+        flexDirection = FlexDirection.column
+        alignItems = Align.center
+        width = 100.pct
+        maxWidth = 100.pct
+    }
+    rule(".lang-switch") {
+        display = Display.flex
+        gap = 6.px
+        justifyContent = JustifyContent.center
+        margin = Margin(vertical = 6.px)
+    }
+    rule(".lang-switch a") {
+        padding = Padding(horizontal = 10.px, vertical = 8.px)
+        borderRadius = 8.px
+        backgroundColor = Color("var(--panel)")
+        color = Color("var(--muted)")
+        textDecoration = TextDecoration.none
+        fontSize = 13.px
+    }
+    rule(".lang-switch a[aria-current=page]") {
+        color = Color("var(--text)")
+        backgroundColor = Color("var(--panel-hover)")
+    }
+    rule("@media (min-width: 1024px)") {
+        rule(".layout") {
+            flexDirection = FlexDirection.row
+            alignItems = Align.flexStart
+            justifyContent = JustifyContent.center
+            gap = 24.px
+            maxWidth = 1000.px
+        }
+        rule(".game-column") {
+            put("flex", "0 0 440px")
+        }
+        rule(".side-column") {
+            put("flex", "1 1 420px")
+            maxWidth = 460.px
+        }
+    }
 }
 
 /** One place owns control size, visual hierarchy and press feedback. */
