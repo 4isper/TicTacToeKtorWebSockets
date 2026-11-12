@@ -27,10 +27,12 @@ import com.m4isper.tictactoe.ui.fieldSizeText
 import com.m4isper.tictactoe.ui.fieldTurnText
 import com.m4isper.tictactoe.ui.fieldWinText
 import com.m4isper.tictactoe.ui.hintText
+import com.m4isper.tictactoe.ui.leaderboardLegend
 import com.m4isper.tictactoe.ui.leaderboardTitle
 import com.m4isper.tictactoe.ui.moveListLabel
 import com.m4isper.tictactoe.ui.namePlaceholder
 import com.m4isper.tictactoe.ui.okText
+import com.m4isper.tictactoe.ui.pageDescription
 import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.profileNotFoundText
 import com.m4isper.tictactoe.ui.quickPlayText
@@ -41,6 +43,7 @@ import com.m4isper.tictactoe.ui.roomsTitle
 import com.m4isper.tictactoe.ui.searchPlaceholder
 import com.m4isper.tictactoe.ui.seriesOffText
 import com.m4isper.tictactoe.ui.seriesTargetText
+import com.m4isper.tictactoe.ui.skipLinkText
 import com.m4isper.tictactoe.ui.soundIcon
 import com.m4isper.tictactoe.ui.soundTitle
 import com.m4isper.tictactoe.ui.themeColor
@@ -56,11 +59,11 @@ import io.ktor.server.http.content.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.css.*
-import kotlinx.html.BODY
 import kotlinx.html.FORM
 import kotlinx.html.FormMethod
 import kotlinx.html.HEAD
 import kotlinx.html.HTML
+import kotlinx.html.HtmlBlockTag
 import kotlinx.html.InputType
 import kotlinx.html.a
 import kotlinx.html.body
@@ -76,6 +79,7 @@ import kotlinx.html.input
 import kotlinx.html.label
 import kotlinx.html.lang
 import kotlinx.html.link
+import kotlinx.html.main
 import kotlinx.html.meta
 import kotlinx.html.numberInput
 import kotlinx.html.ol
@@ -292,10 +296,18 @@ private fun HTML.page(pageLang: Lang, room: String?, langParam: String?) {
     }
     head { pageHead(pageLang) }
     body {
-        pageHeading(pageLang, room, langParam)
-        controls(pageLang)
-        boardArea(pageLang)
-        panels(pageLang, langParam)
+        a(href = "#main", classes = "skip-link") {
+            id = "skip-link"
+            +skipLinkText(pageLang)
+        }
+        main {
+            id = "main"
+            attributes["tabindex"] = "-1"
+            pageHeading(pageLang, room, langParam)
+            controls(pageLang)
+            boardArea(pageLang)
+            panels(pageLang, langParam)
+        }
         script(src = "/static/app.js") {}
     }
 }
@@ -303,6 +315,7 @@ private fun HTML.page(pageLang: Lang, room: String?, langParam: String?) {
 private fun HEAD.pageHead(pageLang: Lang) {
     meta { charset = "utf-8" }
     meta(name = "viewport", content = "width=device-width, initial-scale=1")
+    meta(name = "description", content = pageDescription(pageLang))
     meta(name = "theme-color", content = themeColor(ThemeMode.AUTO, prefersLight = true)) {
         attributes["media"] = "(prefers-color-scheme: light)"
         attributes["id"] = "theme-color-light"
@@ -321,7 +334,7 @@ private fun HEAD.pageHead(pageLang: Lang) {
     link(rel = "stylesheet", href = "/styles.css")
 }
 
-private fun BODY.pageHeading(pageLang: Lang, room: String?, langParam: String?) {
+private fun HtmlBlockTag.pageHeading(pageLang: Lang, room: String?, langParam: String?) {
     h1 {
         +"${when (pageLang) {
             Lang.RU -> "Крестики-нолики"
@@ -349,7 +362,7 @@ private fun BODY.pageHeading(pageLang: Lang, room: String?, langParam: String?) 
     }
 }
 
-private fun BODY.controls(pageLang: Lang) {
+private fun HtmlBlockTag.controls(pageLang: Lang) {
     div {
         id = "identity"
         attributes["aria-live"] = "polite"
@@ -401,7 +414,7 @@ private fun BODY.controls(pageLang: Lang) {
     actionRow(pageLang)
 }
 
-private fun BODY.actionRow(pageLang: Lang) {
+private fun HtmlBlockTag.actionRow(pageLang: Lang) {
     div(classes = "action-row") {
         button(classes = "secondary") {
             id = "rematch"
@@ -426,7 +439,7 @@ private fun BODY.actionRow(pageLang: Lang) {
     }
 }
 
-private fun BODY.boardArea(pageLang: Lang) {
+private fun HtmlBlockTag.boardArea(pageLang: Lang) {
     div {
         id = "turn-bar"
         div { id = "turn-bar-fill" }
@@ -447,7 +460,7 @@ private fun BODY.boardArea(pageLang: Lang) {
     }
 }
 
-private fun BODY.panels(pageLang: Lang, langParam: String?) {
+private fun HtmlBlockTag.panels(pageLang: Lang, langParam: String?) {
     createGameForm(pageLang, langParam)
     div {
         id = "reactions"
@@ -458,8 +471,41 @@ private fun BODY.panels(pageLang: Lang, langParam: String?) {
             }
         }
     }
+    chatPanel(pageLang)
+    div {
+        id = "rooms"
+        attributes["role"] = "region"
+        attributes["aria-label"] = roomsTitle(pageLang)
+        h2 { +roomsTitle(pageLang) }
+        ul { id = "rooms-rows" }
+    }
+    div {
+        id = "leaderboard"
+        attributes["role"] = "region"
+        attributes["aria-label"] = leaderboardTitle(pageLang)
+        h2 { +leaderboardTitle(pageLang) }
+        p(classes = "legend") { +leaderboardLegend(pageLang) }
+        input(InputType.text) {
+            id = "player-search"
+            placeholder = searchPlaceholder(pageLang)
+            attributes["aria-label"] = searchPlaceholder(pageLang)
+            maxLength = "20"
+        }
+        ul { id = "leaderboard-rows" }
+    }
+    div {
+        id = "profile"
+        attributes["role"] = "region"
+        attributes["aria-label"] = searchPlaceholder(pageLang)
+    }
+}
+
+/** The chat region: a live log and a single-line composer. */
+private fun HtmlBlockTag.chatPanel(pageLang: Lang) {
     div {
         id = "chat"
+        attributes["role"] = "region"
+        attributes["aria-label"] = chatTitle(pageLang)
         h2 { +chatTitle(pageLang) }
         div {
             id = "chat-log"
@@ -481,29 +527,14 @@ private fun BODY.panels(pageLang: Lang, langParam: String?) {
             }
         }
     }
-    div {
-        id = "rooms"
-        h2 { +roomsTitle(pageLang) }
-        ul { id = "rooms-rows" }
-    }
-    div {
-        id = "leaderboard"
-        h2 { +leaderboardTitle(pageLang) }
-        input(InputType.text) {
-            id = "player-search"
-            placeholder = searchPlaceholder(pageLang)
-            attributes["aria-label"] = searchPlaceholder(pageLang)
-            maxLength = "20"
-        }
-        ul { id = "leaderboard-rows" }
-    }
-    div { id = "profile" }
 }
 
 /** A GET form that composes a join link: the browser navigates, the client drops blank fields. */
-private fun BODY.createGameForm(pageLang: Lang, langParam: String?) {
+private fun HtmlBlockTag.createGameForm(pageLang: Lang, langParam: String?) {
     div {
         id = "create"
+        attributes["role"] = "region"
+        attributes["aria-label"] = createGameTitle(pageLang)
         h2 { +createGameTitle(pageLang) }
         form(action = "/", method = FormMethod.get) {
             langParam?.let { hiddenInput(name = "lang") { value = it } }

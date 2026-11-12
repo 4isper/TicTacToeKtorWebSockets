@@ -14,6 +14,59 @@ internal fun CssBuilder.styles() {
     moveListStyles()
     createStyles()
     effectStyles()
+    interactionStyles()
+}
+
+/** One place owns control size, visual hierarchy and press feedback. */
+private fun CssBuilder.interactionStyles() {
+    // the landmark must stay viewport-wide: a 10x10 board would otherwise widen it
+    rule("main") {
+        display = Display.flex
+        flexDirection = FlexDirection.column
+        alignItems = Align.center
+        width = 100.pct
+        maxWidth = 100.pct
+    }
+    rule("a, button, input, select, [role=button]") {
+        put("min-height", "44px")
+        put("min-width", "44px")
+    }
+    rule("#quick-play, #create button") {
+        backgroundColor = Color("var(--accent)")
+        color = Color("var(--bg)")
+    }
+    rule("#quick-play:hover, #create button:hover") {
+        backgroundColor = Color("var(--accent-hover)")
+    }
+    rule(".secondary:hover, .reaction:hover") {
+        backgroundColor = Color("var(--panel-hover)")
+    }
+    rule("#quick-play:active, #create button:active, .secondary:active, .reaction:active") {
+        opacity = 0.85
+    }
+    rule(".skip-link") {
+        position = Position.absolute
+        put("left", "-9999px")
+        put("top", "0")
+        backgroundColor = Color("var(--accent)")
+        color = Color("var(--bg)")
+        padding = Padding(horizontal = 14.px, vertical = 10.px)
+        borderRadius = 8.px
+        textDecoration = TextDecoration.none
+        put("z-index", "70")
+    }
+    rule(".skip-link:focus") {
+        put("left", "12px")
+        put("top", "12px")
+    }
+    rule("#moves:empty, #connection-actions:empty") {
+        display = Display.none
+    }
+    rule(".legend") {
+        fontSize = 12.px
+        color = Color("var(--muted)")
+        margin = Margin(vertical = 2.px)
+    }
 }
 
 /** The two lines above the board: who is playing and by which rules. */
@@ -55,7 +108,7 @@ private fun CssBuilder.errorStyles() {
         position = Position.fixed
         put("left", "12px")
         put("right", "12px")
-        put("bottom", "12px")
+        put("bottom", "calc(12px + env(safe-area-inset-bottom))")
         put("z-index", "60")
         backgroundColor = Color("var(--panel)")
         color = Color("var(--danger)")
@@ -91,6 +144,9 @@ private fun CssBuilder.moveListStyles() {
 }
 
 private fun CssBuilder.themeStyles() {
+    rule("*, *::before, *::after") {
+        boxSizing = BoxSizing.borderBox
+    }
     rule(":root") {
         put("--bg", "#14141f")
         put("--panel", "#1f1f33")
@@ -101,6 +157,8 @@ private fun CssBuilder.themeStyles() {
         put("--danger", "#ff7b7b")
         put("--placeholder", "#9292b0")
         put("--cell-line", "#6b6b95")
+        put("--panel-hover", "#2a2a45")
+        put("--accent-hover", "#93b4fa")
     }
     rule("@media (prefers-color-scheme: light)") {
         // the automatic light theme spares a manually chosen dark one
@@ -114,6 +172,7 @@ private fun CssBuilder.themeStyles() {
         alignItems = Align.center
         backgroundColor = Color("var(--bg)")
         color = Color("var(--text)")
+        put("margin", "0")
         // the last panel (a profile) must be able to scroll into a readable position
         put("padding-bottom", "40vh")
     }
@@ -147,6 +206,8 @@ private fun CssBuilder.lightPalette() {
     put("--danger", "#c0392b")
     put("--placeholder", "#66668a")
     put("--cell-line", "#76768f")
+    put("--panel-hover", "#e7e7f0")
+    put("--accent-hover", "#3b5cbb")
 }
 
 private fun CssBuilder.buttonStyles() {
@@ -244,7 +305,7 @@ private fun CssBuilder.layoutStyles() {
     }
     rule(".pwa-notice, #install-button") {
         position = Position.fixed
-        put("bottom", "12px")
+        put("bottom", "calc(12px + env(safe-area-inset-bottom))")
         backgroundColor = Color("var(--panel)")
         color = Color("var(--text)")
         padding = Padding(horizontal = 12.px, vertical = 8.px)

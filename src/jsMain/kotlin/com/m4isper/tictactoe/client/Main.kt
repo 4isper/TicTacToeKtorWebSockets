@@ -69,6 +69,7 @@ import com.m4isper.tictactoe.ui.spectatorText
 import com.m4isper.tictactoe.ui.statusText
 import com.m4isper.tictactoe.ui.themeColor
 import com.m4isper.tictactoe.ui.themeIcon
+import com.m4isper.tictactoe.ui.themeModeText
 import com.m4isper.tictactoe.ui.themeTitle
 import com.m4isper.tictactoe.ui.timerSuffix
 import com.m4isper.tictactoe.ui.turnAlertBody
@@ -1073,6 +1074,7 @@ private class Preferences(
         soundButton.textContent = soundIcon(muted)
         soundButton.title = soundTitle(muted, lang)
         soundButton.setAttribute("aria-label", soundTitle(muted, lang))
+        soundButton.setAttribute("aria-pressed", muted.toString())
     }
 
     private fun renderTheme() {
@@ -1082,7 +1084,7 @@ private class Preferences(
         } else {
             root.setAttribute("data-theme", theme.name.lowercase())
         }
-        themeButton.textContent = themeIcon(theme)
+        themeButton.textContent = "${themeIcon(theme)} ${themeModeText(theme, lang)}"
         themeButton.title = themeTitle(theme, lang)
         themeButton.setAttribute("aria-label", themeTitle(theme, lang))
         updateThemeColorMetas()

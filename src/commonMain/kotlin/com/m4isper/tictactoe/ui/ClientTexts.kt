@@ -85,6 +85,38 @@ fun replayNextText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.EN -> "Next move"
 }
 
+/** Page-level copy: the description and the landmarks a screen reader navigates by. */
+fun pageDescription(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Крестики-нолики онлайн: играйте с другом по ссылке, смотрите партии и следите за рейтингом."
+    Lang.EN -> "Play tic-tac-toe online: invite a friend by link, watch games and follow the leaderboard."
+}
+
+fun skipLinkText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Перейти к игре"
+    Lang.EN -> "Skip to the game"
+}
+
+/** The three-state theme control needs a visible label, not only an icon. */
+fun themeModeText(theme: ThemeMode, lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> when (theme) {
+        ThemeMode.AUTO -> "авто"
+        ThemeMode.LIGHT -> "светлая"
+        ThemeMode.DARK -> "тёмная"
+    }
+
+    Lang.EN -> when (theme) {
+        ThemeMode.AUTO -> "auto"
+        ThemeMode.LIGHT -> "light"
+        ThemeMode.DARK -> "dark"
+    }
+}
+
+/** The leaderboard's three numbers mean nothing without a legend. */
+fun leaderboardLegend(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Игрок · Рейтинг · Победы : Поражения : Ничьи"
+    Lang.EN -> "Player · Rating · Wins : Losses : Draws"
+}
+
 /** History rows spell out the result; a glyph alone reads as punctuation. */
 fun resultText(result: String, lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> when (result) {
