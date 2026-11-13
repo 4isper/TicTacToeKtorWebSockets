@@ -175,8 +175,10 @@ private fun CssBuilder.headerStyles() {
     }
     rule(".status-line") {
         display = Display.flex
+        flexWrap = FlexWrap.wrap
         alignItems = Align.baseline
         justifyContent = JustifyContent.center
+        maxWidth = 100.pct
     }
     rule("#timer") {
         fontSize = 17.px
@@ -407,6 +409,11 @@ private fun CssBuilder.layoutStyles() {
 private fun CssBuilder.nameRowStyles() {
     rule(".name-row") {
         display = Display.flex
+        // font metrics differ across platforms: a nowrap row exactly 375px wide on
+        // macOS grows past the viewport on Linux and expands the mobile layout
+        flexWrap = FlexWrap.wrap
+        justifyContent = JustifyContent.center
+        maxWidth = 100.pct
         gap = 4.px
         margin = Margin(vertical = 4.px)
     }
