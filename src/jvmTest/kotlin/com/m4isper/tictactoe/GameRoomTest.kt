@@ -228,4 +228,23 @@ class GameRoomTest {
             second.cancel()
         }
     }
+
+    @Test
+    fun `a player gets the settled room state immediately after joining`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+        client.webSocket("/play?room=joinstate&bot=easy") {
+            val joined = receiveEvent() as ServerEvent.Joined
+            assertEquals(PlayerSymbol.X, joined.symbol)
+            // the bot attaches during the join, so the very first state must already
+            // have two players — otherwise the client renders a dead one-player board
+            val state = (receiveEvent() as ServerEvent.StateChanged).state
+            assertEquals(listOf(PlayerSymbol.X, PlayerSymbol.O), state.connectionPlayers)
+            assertEquals(listOf(PlayerSymbol.O), state.botPlayers)
+        }
+    }
 }

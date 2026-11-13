@@ -39,6 +39,21 @@ test('narrow screens stack the panels without horizontal overflow', async ({ bro
   await ctx.close();
 });
 
+test('wider font metrics never expand the mobile layout viewport', async ({ browser }) => {
+  // CI (Linux) renders system-ui wider than macOS: the 375px name row used to
+  // become ~380px and Chromium expanded the layout viewport with it.
+  const ctx = await browser.newContext({ viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
+  const page = await ctx.newPage();
+  await page.goto(BASE + '/?room=' + room('font') + '&size=10&win=5&lang=en');
+  await expect(page.locator('#board .cell')).toHaveCount(100);
+  // stand-in for wider Linux font metrics: these controls can no longer shrink
+  await page.addStyleTag({ content: '#name{min-width:186px}#set-name{min-width:60px}#sound{min-width:60px}#theme{min-width:95px}' });
+  const m = await page.evaluate(() => ({ innerW: innerWidth, docW: document.documentElement.scrollWidth }));
+  expect(m.innerW).toBe(375);
+  expect(m.docW).toBeLessThanOrEqual(375);
+  await ctx.close();
+});
+
 test('the board keeps its desktop size in the new layout', async ({ page }) => {
   await page.goto(BASE + '/?room=' + room('size') + '&lang=en');
   await expect(page.locator('#board .cell').first()).toBeVisible({ timeout: 10_000 });
