@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./diagnostics');
 
 // The user-visible contract: the tab keeps painting while the hint search runs.
 // A main-thread search starves rAF for ~0.9s (one huge wall-clock frame gap); a worker does not.

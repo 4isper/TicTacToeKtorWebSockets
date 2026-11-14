@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./diagnostics');
 
 const BASE = 'http://localhost:8080';
 const room = (tag) => 'e2e-p1-' + tag + '-' + Date.now();
