@@ -238,11 +238,11 @@ class GameRoomTest {
             install(WebSockets)
         }
         client.webSocket("/play?room=joinstate&bot=easy") {
-            val joined = receiveEvent() as ServerEvent.Joined
+            // the room broadcast can beat the handshake: read until both arrive
+            val (joined, state) = receiveHandshake()
             assertEquals(PlayerSymbol.X, joined.symbol)
-            // the bot attaches during the join, so the very first state must already
-            // have two players — otherwise the client renders a dead one-player board
-            val state = (receiveEvent() as ServerEvent.StateChanged).state
+            // the bot is reserved before the publish, so the first state already
+            // has two players — otherwise the client renders a dead one-player board
             assertEquals(listOf(PlayerSymbol.X, PlayerSymbol.O), state.connectionPlayers)
             assertEquals(listOf(PlayerSymbol.O), state.botPlayers)
         }
