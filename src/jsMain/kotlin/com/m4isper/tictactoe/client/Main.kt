@@ -697,6 +697,15 @@ private class GameClient {
     }
 
     private fun handleMessage(text: String) {
+        fun rememberName(state: GameState) {
+            // the server is the source of truth: show the name it accepted
+            val myName = mySymbol?.let { symbol -> state.playerNames[symbol] }
+            if (myName != null && myName != confirmedName) {
+                confirmedName = myName
+                localStorage.setItem(NAME_KEY, myName)
+                nameInput?.let { it.value = myName }
+            }
+        }
         when (val event = protocolJson.decodeFromString<ServerEvent>(text)) {
             is ServerEvent.Joined -> {
                 mySymbol = event.symbol
@@ -704,6 +713,14 @@ private class GameClient {
                 renderHeader()
                 sessionStorage.setItem(tokenKey, event.token)
                 clearErrors()
+                // A busy server can broadcast the room state before this handshake.
+                // That first render had no symbol, so redraw everything depending on
+                // it — otherwise the cells stay disabled and the hint hidden all round.
+                lastState?.let { state ->
+                    rememberName(state)
+                    updateActionButtons(state)
+                    boardRenderer.render(state, state, mySymbol)
+                }
             }
 
             is ServerEvent.StateChanged -> {
@@ -711,13 +728,7 @@ private class GameClient {
                 clearErrors()
                 pendingReconnectToken?.let { sessionStorage.setItem(tokenKey, it) }
                 pendingReconnectToken = null
-                // the server is the source of truth: show the name it accepted
-                val myName = mySymbol?.let { symbol -> event.state.playerNames[symbol] }
-                if (myName != null && myName != confirmedName) {
-                    confirmedName = myName
-                    localStorage.setItem(NAME_KEY, myName)
-                    nameInput?.let { it.value = myName }
-                }
+                rememberName(event.state)
                 showState(event)
             }
 
