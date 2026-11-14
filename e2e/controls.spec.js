@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./diagnostics');
 
 const BASE = 'http://localhost:8080';
 const PANEL = 'rgb(31, 31, 51)'; // --panel in the dark palette

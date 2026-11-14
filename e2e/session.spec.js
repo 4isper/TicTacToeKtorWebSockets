@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./diagnostics');
 
 const BASE = 'http://localhost:8080';
 const cell = (page, x, y) => page.locator('#board .cell').nth(y * 3 + x);
