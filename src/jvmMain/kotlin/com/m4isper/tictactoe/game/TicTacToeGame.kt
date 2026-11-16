@@ -100,8 +100,12 @@ class TicTacToeGame(
             detachBotLocked() // a human takes the bot's slot
         }
         playerSockets[player] = session
-        publish(state.value.copy(connectionPlayers = state.value.connectionPlayers + player))
-        maybeAttachBotLocked()
+        // Reserve the practice bot before publishing, so the first wire state already
+        // describes the complete room. Two back-to-back states could leave a slow
+        // client stuck on a one-player board with every cell disabled.
+        val players = state.value.connectionPlayers + player
+        val botSlot = maybeAttachBotLocked(players, publishNow = false)
+        publish(state.value.copy(connectionPlayers = players + listOfNotNull(botSlot)))
         player
     }
 
@@ -453,6 +457,8 @@ class TicTacToeGame(
                 drawPlayers = emptyList(),
                 undoOfferBy = null,
                 clocks = emptyMap(),
+                moves = emptyList(), // the snapshot's own moves field carries the round record
+                botPlayers = emptyList(), // bots reattach when players rejoin
             ),
             roundStarter = roundStarter,
             moves = roundMoves.toList(),
@@ -557,14 +563,16 @@ class TicTacToeGame(
         } else {
             withTurn
         }
-        state.value = withClocks
-        stateChanges.trySend(withClocks)
-        if (!previous.isRoundOver && withClocks.isRoundOver) {
+        // bot slots are read under the lock, like every publish caller
+        val bots = if (secondBotLevel != null) listOf(PlayerSymbol.X, PlayerSymbol.O) else listOfNotNull(bot)
+        state.value = withClocks.copy(moves = roundMoves.toList(), botPlayers = bots)
+        stateChanges.trySend(state.value)
+        if (!previous.isRoundOver && state.value.isRoundOver) {
             completedRounds.trySend(
-                CompletedRound(withClocks.playerNames, withClocks.winningPlayer, roundMoves.toList(), boardSize),
+                CompletedRound(state.value.playerNames, state.value.winningPlayer, roundMoves.toList(), boardSize),
             )
         }
-        scheduleBotMoveIfNeeded(withClocks)
+        scheduleBotMoveIfNeeded(state.value)
     }
 
     /** Forfeits the round to the opponent when the current player stalls past the deadline — turn budget or clock. */
@@ -666,13 +674,17 @@ class TicTacToeGame(
         publish(state.value.copy(connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O)))
     }
 
-    private fun maybeAttachBotLocked() {
-        if (botLevel == null || bot != null) return
-        if (state.value.connectionPlayers.size != 1) return
-        val symbol = if (PlayerSymbol.X in state.value.connectionPlayers) PlayerSymbol.O else PlayerSymbol.X
+    /** Reserves the bot slot for a lone human; the caller may fold it into its own publish. */
+    private fun maybeAttachBotLocked(
+        players: List<PlayerSymbol> = state.value.connectionPlayers,
+        publishNow: Boolean = true,
+    ): PlayerSymbol? {
+        if (botLevel == null || bot != null || players.size != 1) return null
+        val symbol = if (PlayerSymbol.X in players) PlayerSymbol.O else PlayerSymbol.X
         playerSockets[symbol] = BotSession
         bot = symbol
-        publish(state.value.copy(connectionPlayers = state.value.connectionPlayers + symbol))
+        if (publishNow) publish(state.value.copy(connectionPlayers = state.value.connectionPlayers + symbol))
+        return symbol
     }
 
     private fun detachBotLocked() {

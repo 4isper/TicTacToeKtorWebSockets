@@ -12,7 +12,7 @@ fun statusText(
 ): String = when (lang) {
     Lang.RU -> when {
         state.seriesWinner != null -> "${displayName(state, state.seriesWinner)} берёт серию!"
-        state.winningPlayer != null -> "Победил ${displayName(state, state.winningPlayer)}!"
+        state.winningPlayer != null -> "Победа — ${displayName(state, state.winningPlayer)}!"
         state.isDrawAgreed -> "Ничья по соглашению!"
         state.isBoardFull -> "Ничья!"
         state.connectionPlayers.size < 2 -> "Ожидание соперника…"
@@ -51,6 +51,12 @@ fun scoreText(
 fun seriesTargetText(target: Int, lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> "до $target побед"
     Lang.EN -> "first to $target"
+}
+
+/** The win-line rule, as the room list phrases it. */
+fun winLengthText(length: Int, lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "линия $length"
+    Lang.EN -> "win $length"
 }
 
 fun errorText(

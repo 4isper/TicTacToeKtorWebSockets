@@ -228,4 +228,23 @@ class GameRoomTest {
             second.cancel()
         }
     }
+
+    @Test
+    fun `a player gets the settled room state immediately after joining`() = testApplication {
+        application {
+            testModule()
+        }
+        val client = createClient {
+            install(WebSockets)
+        }
+        client.webSocket("/play?room=joinstate&bot=easy") {
+            // the room broadcast can beat the handshake: read until both arrive
+            val (joined, state) = receiveHandshake()
+            assertEquals(PlayerSymbol.X, joined.symbol)
+            // the bot is reserved before the publish, so the first state already
+            // has two players — otherwise the client renders a dead one-player board
+            assertEquals(listOf(PlayerSymbol.X, PlayerSymbol.O), state.connectionPlayers)
+            assertEquals(listOf(PlayerSymbol.O), state.botPlayers)
+        }
+    }
 }

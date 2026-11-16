@@ -7,8 +7,11 @@ import com.m4isper.tictactoe.stats.LeaderboardResponse
 import com.m4isper.tictactoe.stats.Scoreboard
 import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.ThemeMode
+import com.m4isper.tictactoe.ui.advancedSettingsText
 import com.m4isper.tictactoe.ui.botExhibitionText
+import com.m4isper.tictactoe.ui.botLevelText
 import com.m4isper.tictactoe.ui.botNoneText
+import com.m4isper.tictactoe.ui.chatEnterHintText
 import com.m4isper.tictactoe.ui.chatPlaceholder
 import com.m4isper.tictactoe.ui.chatSendText
 import com.m4isper.tictactoe.ui.chatTitle
@@ -26,9 +29,13 @@ import com.m4isper.tictactoe.ui.fieldSizeText
 import com.m4isper.tictactoe.ui.fieldTurnText
 import com.m4isper.tictactoe.ui.fieldWinText
 import com.m4isper.tictactoe.ui.hintText
+import com.m4isper.tictactoe.ui.languageName
+import com.m4isper.tictactoe.ui.leaderboardLegend
 import com.m4isper.tictactoe.ui.leaderboardTitle
+import com.m4isper.tictactoe.ui.moveListLabel
 import com.m4isper.tictactoe.ui.namePlaceholder
 import com.m4isper.tictactoe.ui.okText
+import com.m4isper.tictactoe.ui.pageDescription
 import com.m4isper.tictactoe.ui.parseLang
 import com.m4isper.tictactoe.ui.profileNotFoundText
 import com.m4isper.tictactoe.ui.quickPlayText
@@ -36,9 +43,11 @@ import com.m4isper.tictactoe.ui.reactionLabel
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.resignButtonText
 import com.m4isper.tictactoe.ui.roomsTitle
+import com.m4isper.tictactoe.ui.scrollBoardText
 import com.m4isper.tictactoe.ui.searchPlaceholder
 import com.m4isper.tictactoe.ui.seriesOffText
 import com.m4isper.tictactoe.ui.seriesTargetText
+import com.m4isper.tictactoe.ui.skipLinkText
 import com.m4isper.tictactoe.ui.soundIcon
 import com.m4isper.tictactoe.ui.soundTitle
 import com.m4isper.tictactoe.ui.themeColor
@@ -47,6 +56,7 @@ import com.m4isper.tictactoe.ui.themeTitle
 import com.m4isper.tictactoe.ui.undoButtonText
 import com.m4isper.tictactoe.ui.urlEncode
 import com.m4isper.tictactoe.ui.winPlaceholderText
+import com.m4isper.tictactoe.ui.winRuleHintText
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.html.*
@@ -54,16 +64,16 @@ import io.ktor.server.http.content.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.css.*
-import kotlinx.css.properties.*
-import kotlinx.html.BODY
 import kotlinx.html.FORM
 import kotlinx.html.FormMethod
 import kotlinx.html.HEAD
 import kotlinx.html.HTML
+import kotlinx.html.HtmlBlockTag
 import kotlinx.html.InputType
 import kotlinx.html.a
 import kotlinx.html.body
 import kotlinx.html.button
+import kotlinx.html.details
 import kotlinx.html.div
 import kotlinx.html.form
 import kotlinx.html.h1
@@ -75,6 +85,7 @@ import kotlinx.html.input
 import kotlinx.html.label
 import kotlinx.html.lang
 import kotlinx.html.link
+import kotlinx.html.main
 import kotlinx.html.meta
 import kotlinx.html.numberInput
 import kotlinx.html.ol
@@ -82,6 +93,8 @@ import kotlinx.html.option
 import kotlinx.html.p
 import kotlinx.html.script
 import kotlinx.html.select
+import kotlinx.html.span
+import kotlinx.html.summary
 import kotlinx.html.textInput
 import kotlinx.html.title
 import kotlinx.html.ul
@@ -93,6 +106,7 @@ import java.awt.RenderingHints
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import javax.imageio.ImageIO
 import java.awt.Color as AwtColor
@@ -126,8 +140,9 @@ private const val ICON_SVG =
         """<g stroke="#e8e8f0" stroke-width="7"><circle cx="66" cy="66" r="13" fill="none"/></g></svg>"""
 
 private const val SERVICE_WORKER_JS =
-    """const CACHE = "ttt-v2"; const OFFLINE_URL = "/offline";""" +
+    """const CACHE = "ttt-v3"; const OFFLINE_URL = "/offline";""" +
         """const SHELL = ["/", "/styles.css", "/static/app.js", "/manifest.webmanifest", "/icon.svg", "/icon-192.png", "/icon-512.png", OFFLINE_URL];""" +
+        """const LIVE = ["/rooms", "/leaderboard", "/player"];""" +
         """self.addEventListener("install", function (e) {""" +
         """e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); })); });""" +
         """self.addEventListener("activate", function (e) {""" +
@@ -140,9 +155,16 @@ private const val SERVICE_WORKER_JS =
         """return caches.match(e.request).then(function (page) { return page || caches.match(OFFLINE_URL); });""" +
         """})); return; }""" +
         """if (e.request.method !== "GET") return;""" +
+        """var url = new URL(e.request.url);""" +
+        """if (url.origin !== self.location.origin) return;""" +
+        """if (LIVE.indexOf(url.pathname) !== -1) {""" +
+        """e.respondWith(fetch(e.request).then(function (res) {""" +
+        """if (res && res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(e.request, copy); }); }""" +
+        """return res; }).catch(function () {""" +
+        """return caches.match(e.request).then(function (hit) { return hit || Response.error(); }); })); return; }""" +
         """e.respondWith(caches.match(e.request).then(function (hit) {""" +
         """return hit || fetch(e.request).then(function (res) {""" +
-        """if (res && res.ok && new URL(e.request.url).origin === self.location.origin) {""" +
+        """if (res && res.ok) {""" +
         """var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put(e.request, copy); }); }""" +
         """return res; }); })); });"""
 
@@ -270,371 +292,38 @@ private fun Route.pageRoute() {
         val langParam = call.request.queryParameters["lang"]?.takeIf { it.isNotBlank() }
         val pageLang = langParam?.let(::parseLang)
             ?: detectLang(call.request.headers[HttpHeaders.AcceptLanguage])
-        call.respondHtml { page(pageLang, room, langParam) }
+        // the language switch must carry every existing setting (room, board, clock, …)
+        val query = call.request.queryParameters.entries()
+            .associate { (key, values) -> key to values.firstOrNull().orEmpty() }
+        call.respondHtml { page(pageLang, room, langParam, query) }
     }
 }
 
-private fun CssBuilder.styles() {
-    themeStyles()
-    layoutStyles()
-    boardStyles()
-    moveListStyles()
-    createStyles()
-    effectStyles()
-}
-
-/** The running move list beside the board. */
-private fun CssBuilder.moveListStyles() {
-    rule("#moves") {
-        display = Display.flex
-        flexWrap = FlexWrap.wrap
-        gap = 4.px
-        margin = Margin(vertical = 6.px)
-        padding = Padding(horizontal = 0.px)
-        listStyleType = ListStyleType.none
-        maxHeight = 90.px
-        overflowY = Overflow.auto
-    }
-    rule("#moves li") {
-        backgroundColor = Color("var(--panel)")
-        borderRadius = 6.px
-        padding = Padding(horizontal = 8.px, vertical = 2.px)
-        fontSize = 13.px
-        color = Color("var(--muted)")
-    }
-}
-
-private fun CssBuilder.themeStyles() {
-    rule(":root") {
-        put("--bg", "#14141f")
-        put("--panel", "#1f1f33")
-        put("--text", "#e8e8f0")
-        put("--muted", "#9a9ab8")
-        put("--accent", "#7aa2f7")
-        put("--win", "#2e7d4f")
-        put("--danger", "#ff7b7b")
-        put("--placeholder", "#6a6a85")
-    }
-    rule("@media (prefers-color-scheme: light)") {
-        // the automatic light theme spares a manually chosen dark one
-        rule(":root:not([data-theme=\"dark\"])") { lightPalette() }
-    }
-    rule(":root[data-theme=\"light\"]") { lightPalette() }
-    rule("body") {
-        fontFamily = "system-ui, sans-serif"
-        display = Display.flex
-        flexDirection = FlexDirection.column
-        alignItems = Align.center
-        backgroundColor = Color("var(--bg)")
-        color = Color("var(--text)")
-    }
-    rule("#status") {
-        fontSize = 22.px
-        minHeight = 30.px
-    }
-    rule("#error") {
-        color = Color("var(--danger)")
-        minHeight = 24.px
-    }
-    rule("#score") {
-        fontSize = 18.px
-        minHeight = 24.px
-        color = Color("var(--muted)")
-    }
-    rule("#clocks") {
-        display = Display.none
-        fontSize = 20.px
-        color = Color("var(--accent)")
-    }
-    rule("#copy-link") {
-        margin = Margin(vertical = 8.px)
-        padding = Padding(horizontal = 14.px, vertical = 8.px)
-        fontSize = 15.px
-        backgroundColor = Color("var(--panel)")
-        color = Color("var(--text)")
-        borderWidth = 0.px
-        borderRadius = 8.px
-        cursor = Cursor.pointer
-    }
-}
-
-/** The light palette, shared by the automatic (media query) and the manual (`data-theme`) selectors. */
-private fun CssBuilder.lightPalette() {
-    put("--bg", "#f4f4f8")
-    put("--panel", "#ffffff")
-    put("--text", "#1a1a24")
-    put("--muted", "#6a6a85")
-    put("--accent", "#4a6fd4")
-    put("--win", "#2e7d4f")
-    put("--danger", "#c0392b")
-    put("--placeholder", "#9a9ab8")
-}
-
-private fun CssBuilder.layoutStyles() {
-    rule("#rematch, #draw, #resign, #hint") {
-        display = Display.none
-        margin = Margin(vertical = 4.px)
-        padding = Padding(horizontal = 14.px, vertical = 8.px)
-        fontSize = 15.px
-        backgroundColor = Color("var(--panel)")
-        color = Color("var(--text)")
-        borderWidth = 0.px
-        borderRadius = 8.px
-        cursor = Cursor.pointer
-    }
-    rule("#rematch:disabled, #draw:disabled, #resign:disabled, #hint:disabled") {
-        opacity = 0.6
-        cursor = Cursor.default
-    }
-    nameRowStyles()
-    rule("#turn-bar") {
-        display = Display.none
-        height = 6.px
-        backgroundColor = Color("var(--panel)")
-        borderRadius = 3.px
-        margin = Margin(vertical = 6.px)
-        overflow = Overflow.hidden
-    }
-    rule("#turn-bar-fill") {
-        width = 100.pct
-        height = 100.pct
-        backgroundColor = Color("var(--accent)")
-        transition += Transition("width", 250.ms, Timing.linear)
-    }
-    sparklineStyles()
-    rule(":focus-visible") {
-        put("outline", "3px solid var(--accent)")
-        put("outline-offset", "2px")
-    }
-    rule("@media (prefers-reduced-motion: reduce)") {
-        rule(".cell.winning, .cell.pop, .reaction-bubble, #turn-bar-fill") {
-            put("animation", "none")
-            put("transition", "none")
-        }
-    }
-    rule(".pwa-notice, #install-button") {
-        position = Position.fixed
-        put("bottom", "12px")
-        backgroundColor = Color("var(--panel)")
-        color = Color("var(--text)")
-        padding = Padding(horizontal = 12.px, vertical = 8.px)
-        put("z-index", "50")
-    }
-    rule(".pwa-notice") {
-        put("left", "12px")
-        put("right", "12px")
-        display = Display.flex
-        gap = 8.px
-    }
-}
-
-private fun CssBuilder.nameRowStyles() {
-    rule(".name-row") {
-        display = Display.flex
-        gap = 4.px
-        margin = Margin(vertical = 4.px)
-    }
-    rule("#name, #player-search") {
-        backgroundColor = Color("var(--panel)")
-        color = Color("var(--text)")
-        borderWidth = 0.px
-        borderRadius = 8.px
-        padding = Padding(horizontal = 10.px, vertical = 8.px)
-        fontSize = 15.px
-    }
-    rule("#name::placeholder, #player-search::placeholder") {
-        color = Color("var(--placeholder)")
-    }
-    rule("#set-name") {
-        padding = Padding(horizontal = 14.px, vertical = 8.px)
-        fontSize = 15.px
-        backgroundColor = Color("var(--panel)")
-        color = Color("var(--text)")
-        borderWidth = 0.px
-        borderRadius = 8.px
-        cursor = Cursor.pointer
-    }
-}
-
-private fun CssBuilder.sparklineStyles() {
-    rule(".sparkline") {
-        width = 100.pct
-        height = 30.px
-        margin = Margin(vertical = 4.px)
-    }
-    rule(".sparkline polyline") {
-        // the svg properties are outside kotlinx.css's vocabulary
-        put("fill", "none")
-        put("stroke", "var(--accent)")
-        put("stroke-width", "2px")
-    }
-}
-
-private fun CssBuilder.boardStyles() {
-    rule(".row") {
-        display = Display.flex
-        gap = 4.px
-    }
-    rule(".cell") {
-        backgroundColor = Color("var(--panel)")
-        color = Color("var(--text)")
-        borderRadius = 8.px
-        borderWidth = 0.px
-        cursor = Cursor.pointer
-    }
-    rule(".cell:disabled") {
-        cursor = Cursor.default
-        opacity = 0.85
-    }
-    rule(".cell.hint") {
-        put("outline", "3px solid var(--accent)")
-        put("outline-offset", "-3px")
-    }
-    rule(".cell.pop") {
-        animation += Animation("cell-pop", 180.ms, Timing.easeOut)
-    }
-    rule(".cell.last-move") {
-        boxSizing = BoxSizing.borderBox
-        borderWidth = 2.px
-        borderStyle = BorderStyle.solid
-        borderColor = Color("var(--accent)")
-    }
-    rule(".cell.winning") {
-        backgroundColor = Color("var(--win)")
-        animation += Animation("win-pulse", 1200.ms, Timing.easeInOut, iterationCount = IterationCount.infinite)
-    }
-    rule(".replay-controls") {
-        display = Display.flex
-        alignItems = Align.center
-        gap = 4.px
-        margin = Margin(vertical = 4.px)
-    }
-    rule(".mini-cell") {
-        width = 26.px
-        height = 26.px
-        backgroundColor = Color("var(--panel)")
-        color = Color("var(--text)")
-        fontSize = 13.px
-        lineHeight = LineHeight("26px")
-        textAlign = TextAlign.center
-    }
-}
-
-/** The create-game form and the quick-play link. */
-private fun CssBuilder.createStyles() {
-    rule("#quick-play") {
-        display = Display.inlineBlock
-        margin = Margin(vertical = 6.px)
-        padding = Padding(horizontal = 14.px, vertical = 8.px)
-        fontSize = 15.px
-        backgroundColor = Color("var(--panel)")
-        color = Color("var(--text)")
-        borderRadius = 8.px
-        textDecoration = TextDecoration.none
-    }
-    rule("#create") {
-        margin = Margin(vertical = 12.px)
-    }
-    rule("#create form") {
-        display = Display.flex
-        flexWrap = FlexWrap.wrap
-        gap = 8.px
-        alignItems = Align.flexEnd
-        margin = Margin(vertical = 8.px)
-    }
-    rule("#create label") {
-        display = Display.flex
-        flexDirection = FlexDirection.column
-        gap = 2.px
-        fontSize = 12.px
-        color = Color("var(--muted)")
-    }
-    rule("#create input, #create select") {
-        backgroundColor = Color("var(--panel)")
-        color = Color("var(--text)")
-        borderWidth = 0.px
-        borderRadius = 8.px
-        padding = Padding(horizontal = 8.px, vertical = 6.px)
-        fontSize = 14.px
-        width = 96.px
-    }
-    rule("#create button") {
-        padding = Padding(horizontal = 14.px, vertical = 8.px)
-        fontSize = 15.px
-        backgroundColor = Color("var(--panel)")
-        color = Color("var(--text)")
-        borderWidth = 0.px
-        borderRadius = 8.px
-        cursor = Cursor.pointer
-    }
-}
-
-private fun CssBuilder.effectStyles() {
-    rule("#board") {
-        position = Position.relative
-        put("overflow-x", "auto") // a 10x10 board keeps 44px touch targets on narrow screens
-    }
-    rule("#reactions") {
-        display = Display.flex
-        gap = 8.px
-        margin = Margin(vertical = 6.px)
-    }
-    rule(".reaction") {
-        backgroundColor = Color("var(--panel)")
-        borderWidth = 0.px
-        borderRadius = 8.px
-        padding = Padding(horizontal = 10.px, vertical = 4.px)
-        fontSize = 18.px
-        cursor = Cursor.pointer
-    }
-    rule(".reaction-bubble") {
-        position = Position.absolute
-        bottom = 20.pct
-        fontSize = 30.px
-        pointerEvents = PointerEvents.none
-        animation += Animation("reaction-float", 2000.ms, Timing.easeOut, fillMode = FillMode.forwards)
-    }
-    rule("@keyframes reaction-float") {
-        rule("from") {
-            opacity = 1
-            transform { translateY(0.px) }
-        }
-        rule("to") {
-            opacity = 0
-            transform { translateY((-60).px) }
-        }
-    }
-    rule("@keyframes cell-pop") {
-        rule("from") {
-            opacity = 0
-            transform { scale(0.4) }
-        }
-        rule("to") {
-            opacity = 1
-            transform { scale(1) }
-        }
-    }
-    rule("@keyframes win-pulse") {
-        rule("from") {
-            opacity = 1
-        }
-        rule("to") {
-            opacity = 0.65
-        }
-    }
-}
-
-private fun HTML.page(pageLang: Lang, room: String?, langParam: String?) {
+private fun HTML.page(pageLang: Lang, room: String?, langParam: String?, query: Map<String, String>) {
     lang = when (pageLang) {
         Lang.RU -> "ru"
         Lang.EN -> "en"
     }
     head { pageHead(pageLang) }
     body {
-        pageHeading(pageLang, room, langParam)
-        controls(pageLang)
-        boardArea()
-        panels(pageLang, langParam)
+        a(href = "#main", classes = "skip-link") {
+            id = "skip-link"
+            +skipLinkText(pageLang)
+        }
+        main {
+            id = "main"
+            attributes["tabindex"] = "-1"
+            div(classes = "layout") {
+                div(classes = "game-column") {
+                    pageHeading(pageLang, room, langParam, query)
+                    controls(pageLang)
+                    boardArea(pageLang)
+                }
+                div(classes = "side-column") {
+                    panels(pageLang, langParam)
+                }
+            }
+        }
         script(src = "/static/app.js") {}
     }
 }
@@ -642,6 +331,7 @@ private fun HTML.page(pageLang: Lang, room: String?, langParam: String?) {
 private fun HEAD.pageHead(pageLang: Lang) {
     meta { charset = "utf-8" }
     meta(name = "viewport", content = "width=device-width, initial-scale=1")
+    meta(name = "description", content = pageDescription(pageLang))
     meta(name = "theme-color", content = themeColor(ThemeMode.AUTO, prefersLight = true)) {
         attributes["media"] = "(prefers-color-scheme: light)"
         attributes["id"] = "theme-color-light"
@@ -649,7 +339,7 @@ private fun HEAD.pageHead(pageLang: Lang) {
     meta(name = "theme-color", content = themeColor(ThemeMode.AUTO, prefersLight = false)) {
         attributes["id"] = "theme-color-dark"
     }
-    link(rel = "manifest", href = "/manifest.webmanifest")
+    link(rel = "manifest", href = "/manifest.webmanifest?lang=${pageLang.name.lowercase()}")
     link(rel = "icon", href = "/icon.svg")
     title {
         +"${when (pageLang) {
@@ -660,14 +350,34 @@ private fun HEAD.pageHead(pageLang: Lang) {
     link(rel = "stylesheet", href = "/styles.css")
 }
 
-private fun BODY.pageHeading(pageLang: Lang, room: String?, langParam: String?) {
+/** Keeps every join setting, swaps only the language parameter. */
+private fun languageHref(query: Map<String, String>, target: Lang): String {
+    val parts = query.filterKeys { it != "lang" }
+        .map { (key, value) -> "${urlEncode(key)}=${urlEncode(value)}" }
+        .plus("lang=${target.name.lowercase()}")
+    return "/?" + parts.joinToString("&")
+}
+
+private fun HtmlBlockTag.pageHeading(pageLang: Lang, room: String?, langParam: String?, query: Map<String, String>) {
+    div(classes = "lang-switch") {
+        listOf(Lang.RU, Lang.EN).forEach { target ->
+            a(href = languageHref(query, target)) {
+                attributes["aria-label"] = languageName(target)
+                if (target == pageLang) attributes["aria-current"] = "page"
+                +target.name
+            }
+        }
+    }
     h1 {
         +"${when (pageLang) {
             Lang.RU -> "Крестики-нолики"
             Lang.EN -> "Tic-tac-toe"
         }}"
     }
-    a(href = if (langParam == null) "/" else "/?lang=${urlEncode(langParam)}") {
+    // a fresh named room: the player can invite a friend from the very first screen
+    val quickRoom = "r" + UUID.randomUUID().toString().take(8)
+    val quickParams = "room=$quickRoom" + langParam?.let { "&lang=${urlEncode(it)}" }.orEmpty()
+    a(href = "/?$quickParams") {
         id = "quick-play"
         +quickPlayText(pageLang)
     }
@@ -685,15 +395,26 @@ private fun BODY.pageHeading(pageLang: Lang, room: String?, langParam: String?) 
     }
 }
 
-private fun BODY.controls(pageLang: Lang) {
+private fun HtmlBlockTag.controls(pageLang: Lang) {
     div {
-        id = "status"
-        attributes.putAll(mapOf("role" to "status", "aria-live" to "polite"))
+        id = "identity"
+        attributes["aria-live"] = "polite"
+    }
+    div(classes = "status-line") {
+        div {
+            id = "status"
+            attributes.putAll(mapOf("role" to "status", "aria-live" to "polite"))
+        }
+        span {
+            id = "timer"
+            attributes["aria-live"] = "off"
+        }
     }
     div {
         id = "score"
         attributes.putAll(mapOf("role" to "status", "aria-live" to "polite"))
     }
+    div { id = "rules" }
     div {
         id = "clocks"
         attributes.putAll(mapOf("role" to "timer", "aria-live" to "off"))
@@ -723,35 +444,49 @@ private fun BODY.controls(pageLang: Lang) {
         }
     }
     div { id = "connection-actions" }
-    button(classes = "secondary") {
-        id = "rematch"
-        +rematchButtonText(waiting = false, lang = pageLang)
-    }
-    button(classes = "secondary") {
-        id = "draw"
-        +drawButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
-    }
-    button(classes = "secondary") {
-        id = "undo"
-        +undoButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
-    }
-    button(classes = "secondary") {
-        id = "resign"
-        +resignButtonText(pageLang)
-    }
-    button(classes = "secondary") {
-        id = "hint"
-        +hintText(pageLang)
+    actionRow(pageLang)
+}
+
+private fun HtmlBlockTag.actionRow(pageLang: Lang) {
+    div(classes = "action-row") {
+        button(classes = "secondary") {
+            id = "rematch"
+            +rematchButtonText(waiting = false, lang = pageLang)
+        }
+        button(classes = "secondary") {
+            id = "draw"
+            +drawButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
+        }
+        button(classes = "secondary") {
+            id = "undo"
+            +undoButtonText(iOffered = false, opponentOffered = false, lang = pageLang)
+        }
+        button(classes = "secondary danger") {
+            id = "resign"
+            +resignButtonText(pageLang)
+        }
+        button(classes = "secondary") {
+            id = "hint"
+            +hintText(pageLang)
+        }
     }
 }
 
-private fun BODY.boardArea() {
+private fun HtmlBlockTag.boardArea(pageLang: Lang) {
     div {
         id = "turn-bar"
         div { id = "turn-bar-fill" }
     }
+    div {
+        id = "board-hint"
+        attributes["style"] = "display:none"
+        +scrollBoardText(pageLang)
+    }
     div { id = "board" }
-    ol { id = "moves" }
+    ol {
+        id = "moves"
+        attributes["aria-label"] = moveListLabel(pageLang)
+    }
     div {
         id = "error"
         attributes["role"] = "alert"
@@ -763,7 +498,7 @@ private fun BODY.boardArea() {
     }
 }
 
-private fun BODY.panels(pageLang: Lang, langParam: String?) {
+private fun HtmlBlockTag.panels(pageLang: Lang, langParam: String?) {
     createGameForm(pageLang, langParam)
     div {
         id = "reactions"
@@ -774,8 +509,41 @@ private fun BODY.panels(pageLang: Lang, langParam: String?) {
             }
         }
     }
+    chatPanel(pageLang)
+    div {
+        id = "rooms"
+        attributes["role"] = "region"
+        attributes["aria-label"] = roomsTitle(pageLang)
+        h2 { +roomsTitle(pageLang) }
+        ul { id = "rooms-rows" }
+    }
+    div {
+        id = "leaderboard"
+        attributes["role"] = "region"
+        attributes["aria-label"] = leaderboardTitle(pageLang)
+        h2 { +leaderboardTitle(pageLang) }
+        p(classes = "legend") { +leaderboardLegend(pageLang) }
+        input(InputType.text) {
+            id = "player-search"
+            placeholder = searchPlaceholder(pageLang)
+            attributes["aria-label"] = searchPlaceholder(pageLang)
+            maxLength = "20"
+        }
+        ul { id = "leaderboard-rows" }
+    }
+    div {
+        id = "profile"
+        attributes["role"] = "region"
+        attributes["aria-label"] = searchPlaceholder(pageLang)
+    }
+}
+
+/** The chat region: a live log and a single-line composer. */
+private fun HtmlBlockTag.chatPanel(pageLang: Lang) {
     div {
         id = "chat"
+        attributes["role"] = "region"
+        attributes["aria-label"] = chatTitle(pageLang)
         h2 { +chatTitle(pageLang) }
         div {
             id = "chat-log"
@@ -796,35 +564,35 @@ private fun BODY.panels(pageLang: Lang, langParam: String?) {
                 +chatSendText(pageLang)
             }
         }
-    }
-    div {
-        id = "rooms"
-        h2 { +roomsTitle(pageLang) }
-        ul { id = "rooms-rows" }
-    }
-    div {
-        id = "leaderboard"
-        h2 { +leaderboardTitle(pageLang) }
-        input(InputType.text) {
-            id = "player-search"
-            placeholder = searchPlaceholder(pageLang)
-            attributes["aria-label"] = searchPlaceholder(pageLang)
-            maxLength = "20"
+        p(classes = "chat-meta") {
+            span {
+                id = "chat-count"
+                +"0/$MAX_CHAT_LENGTH"
+            }
+            span {
+                id = "chat-hint"
+                +chatEnterHintText(pageLang)
+            }
         }
-        ul { id = "leaderboard-rows" }
     }
-    div { id = "profile" }
 }
 
 /** A GET form that composes a join link: the browser navigates, the client drops blank fields. */
-private fun BODY.createGameForm(pageLang: Lang, langParam: String?) {
+private fun HtmlBlockTag.createGameForm(pageLang: Lang, langParam: String?) {
     div {
         id = "create"
+        attributes["role"] = "region"
+        attributes["aria-label"] = createGameTitle(pageLang)
         h2 { +createGameTitle(pageLang) }
         form(action = "/", method = FormMethod.get) {
+            id = "create-form"
             langParam?.let { hiddenInput(name = "lang") { value = it } }
             createBoardFields(pageLang)
-            createTimeFields(pageLang)
+            p(classes = "field-hint") { +winRuleHintText(pageLang) }
+            details {
+                summary { +advancedSettingsText(pageLang) }
+                createTimeFields(pageLang)
+            }
             button {
                 +createGameSubmit(pageLang)
             }
@@ -844,6 +612,7 @@ private fun FORM.createBoardFields(pageLang: Lang) {
     label {
         +fieldSizeText(pageLang)
         numberInput(name = "size") {
+            id = "create-size"
             min = GameRules.MIN_BOARD_SIZE.toString()
             max = GameRules.MAX_BOARD_SIZE.toString()
             value = GameRules.DEFAULT_BOARD_SIZE.toString()
@@ -852,6 +621,7 @@ private fun FORM.createBoardFields(pageLang: Lang) {
     label {
         +fieldWinText(pageLang)
         numberInput(name = "win") {
+            id = "create-win"
             min = GameRules.MIN_WIN_LENGTH.toString()
             max = GameRules.MAX_BOARD_SIZE.toString()
             placeholder = winPlaceholderText(pageLang)
@@ -860,7 +630,7 @@ private fun FORM.createBoardFields(pageLang: Lang) {
 }
 
 /** Turn and game-clock budgets, the practice bot level and the series target. */
-private fun FORM.createTimeFields(pageLang: Lang) {
+private fun HtmlBlockTag.createTimeFields(pageLang: Lang) {
     label {
         +fieldTurnText(pageLang)
         numberInput(name = "turn") {
@@ -887,15 +657,15 @@ private fun FORM.createTimeFields(pageLang: Lang) {
             }
             option {
                 value = "easy"
-                +"easy"
+                +botLevelText("easy", pageLang)
             }
             option {
                 value = "normal"
-                +"normal"
+                +botLevelText("normal", pageLang)
             }
             option {
                 value = "hard"
-                +"hard"
+                +botLevelText("hard", pageLang)
             }
             option {
                 value = "2"

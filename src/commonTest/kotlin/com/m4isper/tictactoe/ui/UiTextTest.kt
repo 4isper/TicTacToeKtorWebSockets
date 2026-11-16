@@ -13,7 +13,7 @@ class UiTextTest {
             connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
             winningPlayer = PlayerSymbol.X,
         )
-        assertEquals("Победил X!", statusText(state, mySymbol = PlayerSymbol.O))
+        assertEquals("Победа — X!", statusText(state, mySymbol = PlayerSymbol.O))
     }
 
     @Test
@@ -57,7 +57,22 @@ class UiTextTest {
             winningPlayer = PlayerSymbol.X,
             playerNames = mapOf(PlayerSymbol.X to "Аня"),
         )
-        assertEquals("Победил Аня!", statusText(state, mySymbol = PlayerSymbol.O))
+        assertEquals("Победа — Аня!", statusText(state, mySymbol = PlayerSymbol.O))
+    }
+
+    @Test
+    fun `the win line reads in the page language`() {
+        assertEquals("линия 4", winLengthText(4))
+        assertEquals("win 4", winLengthText(4, Lang.EN))
+    }
+
+    @Test
+    fun `bot levels read in the page language`() {
+        assertEquals("лёгкий", botLevelText("easy"))
+        assertEquals("средний", botLevelText("normal"))
+        assertEquals("сложный", botLevelText("hard"))
+        assertEquals("easy", botLevelText("easy", Lang.EN))
+        assertEquals("custom", botLevelText("custom")) // an unknown level stays as it came
     }
 
     @Test

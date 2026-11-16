@@ -52,6 +52,48 @@ fun dismissText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.EN -> "Dismiss"
 }
 
+/** A live round must not be abandoned by one careless click on the quick-play link. */
+fun leaveGameText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Покинуть текущую партию и начать новую?"
+    Lang.EN -> "Leave this game and start a new one?"
+}
+
+/** Resigning changes the score and the rating, so it gets its own confirmation. */
+fun resignConfirmText(lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> "Сдаться? Соперник получит победу, раунд будет засчитан как поражение."
+    Lang.EN -> "Resign? The opponent wins the round and it counts as a loss."
+}
+
+/** The three-state theme control needs a visible label, not only an icon. */
+fun themeModeText(theme: ThemeMode, lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> when (theme) {
+        ThemeMode.AUTO -> "авто"
+        ThemeMode.LIGHT -> "светлая"
+        ThemeMode.DARK -> "тёмная"
+    }
+
+    Lang.EN -> when (theme) {
+        ThemeMode.AUTO -> "auto"
+        ThemeMode.LIGHT -> "light"
+        ThemeMode.DARK -> "dark"
+    }
+}
+
+/** History rows spell out the result; a glyph alone reads as punctuation. */
+fun resultText(result: String, lang: Lang = Lang.RU): String = when (lang) {
+    Lang.RU -> when (result) {
+        "WIN" -> "Победа"
+        "LOSS" -> "Поражение"
+        else -> "Ничья"
+    }
+
+    Lang.EN -> when (result) {
+        "WIN" -> "Win"
+        "LOSS" -> "Loss"
+        else -> "Draw"
+    }
+}
+
 fun installText(lang: Lang = Lang.RU): String = when (lang) {
     Lang.RU -> "Установить приложение"
     Lang.EN -> "Install app"

@@ -142,27 +142,6 @@ class ClientLogicTest {
     }
 
     @Test
-    fun `the move log appends fresh moves`() {
-        val before = GameState(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)))
-        val after = before.copy(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X, Cell(1, 0) to PlayerSymbol.O)))
-        assertEquals(listOf(Cell(0, 0), Cell(1, 0)), updatedMoveLog(before, after, listOf(Cell(0, 0))))
-    }
-
-    @Test
-    fun `an approved takeback drops the undone move`() {
-        val full = GameState(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X, Cell(1, 0) to PlayerSymbol.O)))
-        val reverted = full.copy(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)))
-        assertEquals(listOf(Cell(0, 0)), updatedMoveLog(full, reverted, listOf(Cell(0, 0), Cell(1, 0))))
-    }
-
-    @Test
-    fun `a round reset empties the move log`() {
-        val over = GameState(field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)), winningPlayer = PlayerSymbol.X)
-        val fresh = GameState()
-        assertTrue(updatedMoveLog(over, fresh, listOf(Cell(0, 0))).isEmpty())
-    }
-
-    @Test
     fun `a cell view renders the mark and disables taken cells`() {
         val state = GameState(
             field = Boards.fieldWith(listOf(Cell(0, 0) to PlayerSymbol.X)),
@@ -183,6 +162,17 @@ class ClientLogicTest {
         assertTrue(cellViews(null, state, mySymbol = null).all { it.disabled }) // spectator
         assertTrue(cellViews(null, state, mySymbol = PlayerSymbol.O).all { it.disabled }) // opponent slot empty
         assertTrue(cellViews(null, state, mySymbol = PlayerSymbol.X).all { it.disabled }) // no opponent yet
+    }
+
+    @Test
+    fun `a finished round leaves no clickable cells for either side`() {
+        val state = GameState(
+            connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            playerAtTurn = PlayerSymbol.O,
+            winningPlayer = PlayerSymbol.X,
+        )
+        assertTrue(cellViews(null, state, PlayerSymbol.O).all { it.disabled })
+        assertTrue(cellViews(null, state, PlayerSymbol.X).all { it.disabled })
     }
 
     @Test
@@ -227,6 +217,7 @@ class ClientLogicTest {
     fun `a hint shows on my turn in a practice round`() {
         val practice = GameState(
             connectionPlayers = listOf(PlayerSymbol.X, PlayerSymbol.O),
+            botPlayers = listOf(PlayerSymbol.X),
             playerNames = mapOf(PlayerSymbol.X to "Бот-тренер"),
             playerAtTurn = PlayerSymbol.O,
         )

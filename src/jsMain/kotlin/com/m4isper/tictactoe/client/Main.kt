@@ -5,6 +5,7 @@ import com.m4isper.tictactoe.domain.BotLevel
 import com.m4isper.tictactoe.domain.Cell
 import com.m4isper.tictactoe.domain.ErrorReason
 import com.m4isper.tictactoe.domain.GameRules
+import com.m4isper.tictactoe.domain.MAX_CHAT_LENGTH
 import com.m4isper.tictactoe.domain.PlayerSymbol
 import com.m4isper.tictactoe.game.GameState
 import com.m4isper.tictactoe.protocol.ClientMessage
@@ -12,11 +13,13 @@ import com.m4isper.tictactoe.protocol.ServerEvent
 import com.m4isper.tictactoe.protocol.protocolJson
 import com.m4isper.tictactoe.ui.Lang
 import com.m4isper.tictactoe.ui.MAX_AUTO_RETRIES
+import com.m4isper.tictactoe.ui.SessionRole
 import com.m4isper.tictactoe.ui.SharedReplay
 import com.m4isper.tictactoe.ui.SoundCue
 import com.m4isper.tictactoe.ui.ThemeMode
 import com.m4isper.tictactoe.ui.autoplayText
 import com.m4isper.tictactoe.ui.botLabel
+import com.m4isper.tictactoe.ui.botLevelText
 import com.m4isper.tictactoe.ui.cellNotation
 import com.m4isper.tictactoe.ui.clockText
 import com.m4isper.tictactoe.ui.connectingText
@@ -25,6 +28,7 @@ import com.m4isper.tictactoe.ui.connectionLostText
 import com.m4isper.tictactoe.ui.copiedText
 import com.m4isper.tictactoe.ui.copyFailedText
 import com.m4isper.tictactoe.ui.copyLinkText
+import com.m4isper.tictactoe.ui.createFormError
 import com.m4isper.tictactoe.ui.detectLang
 import com.m4isper.tictactoe.ui.dismissText
 import com.m4isper.tictactoe.ui.drawButtonText
@@ -36,6 +40,7 @@ import com.m4isper.tictactoe.ui.isRoundRestartTransition
 import com.m4isper.tictactoe.ui.isTurnTransition
 import com.m4isper.tictactoe.ui.joinQuery
 import com.m4isper.tictactoe.ui.leaderboardTitle
+import com.m4isper.tictactoe.ui.leaveGameText
 import com.m4isper.tictactoe.ui.noRoomsText
 import com.m4isper.tictactoe.ui.opponentLostText
 import com.m4isper.tictactoe.ui.parseLang
@@ -47,12 +52,17 @@ import com.m4isper.tictactoe.ui.reloadText
 import com.m4isper.tictactoe.ui.rematchButtonText
 import com.m4isper.tictactoe.ui.replayFromFragment
 import com.m4isper.tictactoe.ui.replayHintText
+import com.m4isper.tictactoe.ui.replayNextText
+import com.m4isper.tictactoe.ui.replayPrevText
 import com.m4isper.tictactoe.ui.replayToFragment
+import com.m4isper.tictactoe.ui.resignConfirmText
 import com.m4isper.tictactoe.ui.restartText
+import com.m4isper.tictactoe.ui.resultText
 import com.m4isper.tictactoe.ui.retryDelayMs
 import com.m4isper.tictactoe.ui.retryNowText
 import com.m4isper.tictactoe.ui.scoreText
 import com.m4isper.tictactoe.ui.seriesTargetText
+import com.m4isper.tictactoe.ui.sessionHeader
 import com.m4isper.tictactoe.ui.shouldAlertTurn
 import com.m4isper.tictactoe.ui.soundCue
 import com.m4isper.tictactoe.ui.soundIcon
@@ -61,24 +71,29 @@ import com.m4isper.tictactoe.ui.spectatorText
 import com.m4isper.tictactoe.ui.statusText
 import com.m4isper.tictactoe.ui.themeColor
 import com.m4isper.tictactoe.ui.themeIcon
+import com.m4isper.tictactoe.ui.themeModeText
 import com.m4isper.tictactoe.ui.themeTitle
 import com.m4isper.tictactoe.ui.timerSuffix
 import com.m4isper.tictactoe.ui.turnAlertBody
 import com.m4isper.tictactoe.ui.turnAlertTitle
 import com.m4isper.tictactoe.ui.turnSecondsText
+import com.m4isper.tictactoe.ui.undoAvailable
 import com.m4isper.tictactoe.ui.undoButtonText
 import com.m4isper.tictactoe.ui.updateNoticeText
-import com.m4isper.tictactoe.ui.updatedMoveLog
 import com.m4isper.tictactoe.ui.urlEncode
+import com.m4isper.tictactoe.ui.winLengthText
 import kotlinx.browser.document
 import kotlinx.browser.localStorage
+import kotlinx.browser.sessionStorage
 import kotlinx.browser.window
 import kotlinx.serialization.encodeToString
 import org.khronos.webgl.Uint8Array
 import org.khronos.webgl.get
 import org.w3c.dom.Element
+import org.w3c.dom.HTMLAnchorElement
 import org.w3c.dom.HTMLButtonElement
 import org.w3c.dom.HTMLElement
+import org.w3c.dom.HTMLFormElement
 import org.w3c.dom.HTMLInputElement
 import org.w3c.dom.HTMLTextAreaElement
 import org.w3c.dom.WebSocket
@@ -158,15 +173,19 @@ private fun showUpdateNotice(lang: Lang) {
     val text = document.createElement("span") as HTMLElement
     text.textContent = updateNoticeText(lang)
     val reload = document.createElement("button") as HTMLButtonElement
+    reload.className = "secondary"
     reload.textContent = reloadText(lang)
     reload.onclick = { window.location.reload() }
     val dismiss = document.createElement("button") as HTMLButtonElement
+    dismiss.className = "secondary"
     dismiss.textContent = dismissText(lang)
     dismiss.onclick = { notice.remove() }
     notice.appendChild(text)
     notice.appendChild(reload)
     notice.appendChild(dismiss)
     document.body?.appendChild(notice)
+    // the notice spans the bottom edge: lift the install button above it
+    (document.getElementById("install-button") as? HTMLElement)?.style?.bottom = "64px"
 }
 
 private fun captureInstallPrompt(lang: Lang) {
@@ -191,6 +210,7 @@ private fun showInstallButton(lang: Lang) {
             button.remove()
         }
     }
+    if (document.getElementById("pwa-notice") != null) button.style.bottom = "64px"
     document.body?.appendChild(button)
 }
 
@@ -238,6 +258,21 @@ private fun legacyCopy(text: String, onDone: (Boolean) -> Unit) {
 
 private const val PLAYER_KEY = "tictactoe-player-key"
 
+/** A list row that acts on click is a button for the keyboard too: focusable, named role, Enter/Space. */
+private fun HTMLElement.makeButtonLike(onActivate: () -> Unit) {
+    tabIndex = 0
+    setAttribute("role", "button")
+    style.cursor = "pointer"
+    onclick = { onActivate() }
+    onkeydown = { event ->
+        val key = event.asDynamic().key as? String
+        if (key == "Enter" || key == " ") {
+            event.preventDefault()
+            onActivate()
+        }
+    }
+}
+
 /** A persistent secret that owns the player's name across sessions; travels only in the WS join query. */
 private fun loadOrCreatePlayerKey(): String {
     localStorage.getItem(PLAYER_KEY)?.let { return it }
@@ -250,6 +285,9 @@ private fun loadOrCreatePlayerKey(): String {
 
 private class GameClient {
     private val status = document.getElementById("status") as HTMLElement
+    private val timer = document.getElementById("timer") as HTMLElement
+    private val identity = document.getElementById("identity") as HTMLElement
+    private val rulesLine = document.getElementById("rules") as HTMLElement
     private val board = document.getElementById("board") as HTMLElement
     private val errorBox = document.getElementById("error") as HTMLElement
     private val scoreDiv = document.getElementById("score") as HTMLElement
@@ -315,6 +353,7 @@ private class GameClient {
 
     companion object {
         const val NAME_KEY = "tictactoe-name"
+        const val ERROR_DISMISS_MS = 5_000
     }
 
     // answered before the game even started: the server closes the socket, so retrying cannot fix them
@@ -332,6 +371,7 @@ private class GameClient {
     private var socket: WebSocket? = null
     private var hintWorker: Worker? = null
     private var mySymbol: PlayerSymbol? = null
+    private var joined = false
     private var pendingReconnectToken: String? = null
     private var retry = 0
     private var fatal = false
@@ -341,9 +381,10 @@ private class GameClient {
     private var turnTotalMs = 0.0
     private var clocksSnapshot: Map<PlayerSymbol, Long> = emptyMap()
     private var clocksBase = 0.0
-    private var moveLog: List<Cell> = emptyList()
     private var countdownTimer: Int? = null
     private var opponentLostTimer: Int? = null
+    private var errorTimer: Int? = null
+    private var confirmedName: String? = null
 
     // mirrors the server's reconnectGraceMs: how long a dropped player's slot is held
     private val reconnectGraceSeconds = 10
@@ -352,12 +393,38 @@ private class GameClient {
         socket?.send(protocolJson.encodeToString<ClientMessage>(message))
     }
 
+    /** Errors never linger: a stale refusal must not outlive the round that caused it. */
     private fun showError(message: String) {
+        errorTimer?.let { window.clearTimeout(it) }
         errorBox.textContent = message
+        errorTimer = if (message.isEmpty()) {
+            null
+        } else {
+            window.setTimeout({ clearErrors() }, ERROR_DISMISS_MS)
+        }
+    }
+
+    private fun clearErrors() {
+        errorTimer?.let { window.clearTimeout(it) }
+        errorTimer = null
+        errorBox.textContent = ""
     }
 
     private fun showStatus(text: String) {
         status.textContent = text
+    }
+
+    /** Countdowns live outside the polite region: four writes a second would flood a screen reader. */
+    private fun showTimer(text: String) {
+        timer.textContent = text
+    }
+
+    /** One painter for the two header lines; the pure view model owns every string. */
+    private fun renderHeader() {
+        val header = sessionHeader(lastState ?: GameState(), mySymbol, joined, lang)
+        identity.textContent = header.identity
+        identity.className = if (header.role == SessionRole.SPECTATOR) "spectator" else ""
+        rulesLine.textContent = header.rules
     }
 
     /** A shared link opens nothing but the replay: the board stays idle while the game plays out. */
@@ -368,6 +435,12 @@ private class GameClient {
         board.style.display = "none"
         turnBar.style.display = "none"
         (document.getElementById("reactions") as? HTMLElement)?.style?.display = "none"
+        // no connection in this view: the name and chat controls would be dead
+        (document.getElementById("name") as? HTMLElement)?.style?.display = "none"
+        (document.getElementById("set-name") as? HTMLElement)?.style?.display = "none"
+        (document.getElementById("chat") as? HTMLElement)?.style?.display = "none"
+        identity.style.display = "none"
+        rulesLine.style.display = "none"
 
         // rebuild the final position so the header can announce the outcome
         var field: List<List<PlayerSymbol?>> = GameRules.emptyField(replay.boardSize)
@@ -394,6 +467,7 @@ private class GameClient {
         panels.mountReplay(host, replay.boardSize, replay.moves)
 
         val back = document.createElement("button") as HTMLButtonElement
+        back.className = "secondary"
         back.textContent = when (lang) {
             Lang.RU -> "← К игре"
             Lang.EN -> "← Back to the game"
@@ -417,7 +491,7 @@ private class GameClient {
     private fun renderMoveLog() {
         val current = lastState ?: return
         movesList.innerHTML = ""
-        moveLog.forEachIndexed { i, cell ->
+        current.moves.forEachIndexed { i, cell ->
             val li = document.createElement("li") as HTMLElement
             li.textContent = "${i + 1}. ${current.field[cell.y][cell.x]} ${cellNotation(cell.x, cell.y)}"
             movesList.appendChild(li)
@@ -439,8 +513,8 @@ private class GameClient {
         val state = event.state
         val previous = lastState
         lastState = state
+        renderHeader()
         updateCountdowns(previous, state)
-        moveLog = updatedMoveLog(previous, state, moveLog)
         renderMoveLog()
         turnAlert.onState(previous, state, mySymbol)
         updateActionButtons(state)
@@ -451,6 +525,7 @@ private class GameClient {
     private fun updateCountdowns(previous: GameState?, state: GameState) {
         countdownTimer?.let { window.clearInterval(it) }
         countdownTimer = null
+        showTimer("")
         restartCountdown(previous, state)
         turnCountdown(previous, state)
     }
@@ -462,6 +537,7 @@ private class GameClient {
         roundDeadline = 0.0
         turnDeadline = 0.0
         turnBar.style.display = "none"
+        showTimer("")
     }
 
     private fun restartCountdown(previous: GameState?, state: GameState) {
@@ -474,7 +550,7 @@ private class GameClient {
                 val msLeft = roundDeadline - Date.now()
                 if (msLeft <= 0) return@setInterval
                 if (opponentLostTimer == null) {
-                    showStatus(statusText(current, mySymbol, lang) + " · " + restartText(msLeft.toLong(), lang))
+                    showTimer(" · " + restartText(msLeft.toLong(), lang))
                 }
             }, 250)
         } else {
@@ -499,7 +575,7 @@ private class GameClient {
                 if (clocksSnapshot.isNotEmpty()) renderClocks()
                 // the away-plate owns the status line while the opponent is gone
                 if (opponentLostTimer == null) {
-                    showStatus(statusText(current, mySymbol, lang) + timerSuffix(msLeft.toLong(), lang))
+                    showTimer(timerSuffix(msLeft.toLong(), lang))
                 }
             }, 250)
         } else {
@@ -546,17 +622,16 @@ private class GameClient {
 
     private fun updateDrawButton(state: GameState) {
         val roundOver = state.isRoundOver
-        drawButton.style.display = if (!roundOver && mySymbol != null && state.connectionPlayers.size >= 2) "block" else "none"
+        // a bot never agrees to a draw: the offer only makes sense between humans
+        val visible = !roundOver && mySymbol != null && state.connectionPlayers.size >= 2 && state.botPlayers.isEmpty()
+        drawButton.style.display = if (visible) "block" else "none"
         val iOffered = mySymbol != null && mySymbol in state.drawPlayers
         val opponentOffered = state.drawPlayers.any { it != mySymbol }
         drawButton.textContent = drawButtonText(iOffered, opponentOffered, lang)
     }
 
     private fun updateUndoButton(state: GameState) {
-        val roundOver = state.isRoundOver
-        val undoVisible = !roundOver && mySymbol != null && state.connectionPlayers.size >= 2 &&
-            (state.undoOfferBy != null || state.playerAtTurn != mySymbol)
-        undoButton.style.display = if (undoVisible) "block" else "none"
+        undoButton.style.display = if (undoAvailable(state, mySymbol)) "block" else "none"
         val iOfferedUndo = mySymbol != null && state.undoOfferBy == mySymbol
         val opponentOfferedUndo = state.undoOfferBy != null && state.undoOfferBy != mySymbol
         undoButton.textContent = undoButtonText(iOfferedUndo, opponentOfferedUndo, lang)
@@ -622,25 +697,44 @@ private class GameClient {
     }
 
     private fun handleMessage(text: String) {
+        fun rememberName(state: GameState) {
+            // the server is the source of truth: show the name it accepted
+            val myName = mySymbol?.let { symbol -> state.playerNames[symbol] }
+            if (myName != null && myName != confirmedName) {
+                confirmedName = myName
+                localStorage.setItem(NAME_KEY, myName)
+                nameInput?.let { it.value = myName }
+            }
+        }
         when (val event = protocolJson.decodeFromString<ServerEvent>(text)) {
             is ServerEvent.Joined -> {
                 mySymbol = event.symbol
-                localStorage.setItem(tokenKey, event.token)
-                showError("")
+                joined = true
+                renderHeader()
+                sessionStorage.setItem(tokenKey, event.token)
+                clearErrors()
+                // A busy server can broadcast the room state before this handshake.
+                // That first render had no symbol, so redraw everything depending on
+                // it — otherwise the cells stay disabled and the hint hidden all round.
+                lastState?.let { state ->
+                    rememberName(state)
+                    updateActionButtons(state)
+                    boardRenderer.render(state, state, mySymbol)
+                }
             }
 
             is ServerEvent.StateChanged -> {
-                pendingReconnectToken?.let { localStorage.setItem(tokenKey, it) }
+                // the world moved on: a refusal of an earlier action is stale now
+                clearErrors()
+                pendingReconnectToken?.let { sessionStorage.setItem(tokenKey, it) }
                 pendingReconnectToken = null
-                // the server is the source of truth: cache the name it attributes to me
-                val myName = mySymbol?.let { symbol -> event.state.playerNames[symbol] }
-                if (myName != null) localStorage.setItem(NAME_KEY, myName)
+                rememberName(event.state)
                 showState(event)
             }
 
             is ServerEvent.Error -> {
                 pendingReconnectToken = null
-                if (event.reason == ErrorReason.UNKNOWN_TOKEN) localStorage.removeItem(tokenKey)
+                if (event.reason == ErrorReason.UNKNOWN_TOKEN) sessionStorage.removeItem(tokenKey)
                 if (event.reason in fatalReasons) fatal = true
                 showError(errorText(event.reason, lang))
             }
@@ -655,7 +749,8 @@ private class GameClient {
     private fun appendChat(event: ServerEvent.Chat) {
         val log = document.getElementById("chat-log") as? HTMLElement ?: return
         val line = document.createElement("p") as HTMLElement
-        line.className = "chat-line"
+        val myName = confirmedName ?: localStorage.getItem(NAME_KEY)
+        line.className = if (event.name != null && event.name == myName) "chat-line mine" else "chat-line"
         line.textContent = "${event.name ?: spectatorText(lang)}: ${event.text}"
         log.appendChild(line)
         while (log.childElementCount > 50) log.firstElementChild?.remove()
@@ -670,7 +765,14 @@ private class GameClient {
             input.onkeydown = { event ->
                 if (event.asDynamic().key == "Enter") sendChatLine()
             }
+            input.oninput = { updateChatCount() }
         }
+        updateChatCount()
+    }
+
+    private fun updateChatCount() {
+        val input = document.getElementById("chat-input") as? HTMLInputElement ?: return
+        (document.getElementById("chat-count") as? HTMLElement)?.textContent = "${input.value.length}/$MAX_CHAT_LENGTH"
     }
 
     private fun sendChatLine() {
@@ -679,16 +781,19 @@ private class GameClient {
         if (text.isBlank()) return
         send(ClientMessage.Chat(text))
         input.value = ""
+        updateChatCount()
     }
 
     private fun connect() {
+        joined = false
+        renderHeader()
         showStatus(if (retry == 0) connectingText(lang) else reconnectingText(lang))
         socket = WebSocket(wsUrl)
         socket?.onopen = {
             retry = 0
             hideRetryButton()
-            showError("")
-            val stored = localStorage.getItem(tokenKey)
+            clearErrors()
+            val stored = sessionStorage.getItem(tokenKey)
             if (stored != null) {
                 pendingReconnectToken = stored
                 send(ClientMessage.Reconnect(stored))
@@ -753,7 +858,39 @@ private class GameClient {
         }
     }
 
+    /** Two destructive navigation/round actions share one confirmation guard. */
+    private fun installGuards() {
+        (document.getElementById("quick-play") as? HTMLAnchorElement)?.onclick = { event ->
+            if (inLiveRound() && !window.confirm(leaveGameText(lang))) event.preventDefault()
+        }
+        resignButton.onclick = {
+            if (window.confirm(resignConfirmText(lang))) send(ClientMessage.RequestResign)
+        }
+        installCreateFormGuard()
+    }
+
+    /** A bad setting must not navigate away, and neither should a live round. */
+    private fun installCreateFormGuard() {
+        (document.getElementById("create-form") as? HTMLFormElement)?.addEventListener("submit", { event ->
+            val size = (document.getElementById("create-size") as? HTMLInputElement)?.value?.toIntOrNull()
+            val win = (document.getElementById("create-win") as? HTMLInputElement)?.value?.toIntOrNull()
+            val invalid = createFormError(size, win, lang)
+            if (invalid != null) {
+                event.preventDefault()
+                showError(invalid)
+            } else if (inLiveRound() && !window.confirm(leaveGameText(lang))) {
+                event.preventDefault()
+            }
+        })
+    }
+
+    private fun inLiveRound(): Boolean {
+        val state = lastState ?: return false
+        return joined && mySymbol != null && state.connectionPlayers.size >= 2 && !state.isRoundOver
+    }
+
     fun start() {
+        installGuards()
         copyLink?.let { button ->
             button.onclick = {
                 copyTextWithFeedback(
@@ -769,7 +906,6 @@ private class GameClient {
         rematchButton.onclick = { send(ClientMessage.RequestRematch) }
         drawButton.onclick = { send(ClientMessage.RequestDraw) }
         undoButton.onclick = { send(ClientMessage.RequestUndo) }
-        resignButton.onclick = { send(ClientMessage.RequestResign) }
         hintButton.onclick = { requestHint() }
 
         document.querySelectorAll("#reactions button").asDynamic().forEach { node: dynamic ->
@@ -783,7 +919,8 @@ private class GameClient {
             fun submitName() {
                 val name = nameInput.value.trim()
                 if (name.isNotEmpty()) send(ClientMessage.SetName(name))
-                nameInput.value = ""
+                // keep the typed value: the server may still refuse it, and the
+                // next state replaces it with the confirmed name
             }
             setNameButton.onclick = { submitName() }
             nameInput.onkeydown = { event ->
@@ -872,10 +1009,12 @@ private class TurnAlert(private val lang: Lang) {
     private val baseTitle = window.document.title
     private var permissionAsked = false
 
-    /** Notification permission needs one user gesture; the first click anywhere is as good as any. */
+    /** Notification permission needs a user gesture; the first move on the board is the deliberate one. */
     fun install() {
-        document.addEventListener("pointerdown", {
+        document.addEventListener("pointerdown", { event ->
             if (permissionAsked) return@addEventListener
+            val target = event.target as? HTMLElement ?: return@addEventListener
+            if (target.closest("#board") == null) return@addEventListener
             permissionAsked = true
             try {
                 window.asDynamic().Notification?.requestPermission()
@@ -974,6 +1113,7 @@ private class Preferences(
         soundButton.textContent = soundIcon(muted)
         soundButton.title = soundTitle(muted, lang)
         soundButton.setAttribute("aria-label", soundTitle(muted, lang))
+        soundButton.setAttribute("aria-pressed", muted.toString())
     }
 
     private fun renderTheme() {
@@ -983,7 +1123,7 @@ private class Preferences(
         } else {
             root.setAttribute("data-theme", theme.name.lowercase())
         }
-        themeButton.textContent = themeIcon(theme)
+        themeButton.textContent = "${themeIcon(theme)} ${themeModeText(theme, lang)}"
         themeButton.title = themeTitle(theme, lang)
         themeButton.setAttribute("aria-label", themeTitle(theme, lang))
         updateThemeColorMetas()
@@ -1015,9 +1155,8 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                     entries.forEachIndexed { index, entry ->
                         val li = document.createElement("li") as HTMLElement
                         li.textContent = "${index + 1}. ${entry.name} — ${entry.stats.rating} · ${entry.stats.wins} : ${entry.stats.losses} : ${entry.stats.draws}"
-                        li.style.cursor = "pointer"
                         li.title = entry.name as String
-                        li.onclick = { showProfile(entry.name as String) }
+                        li.makeButtonLike { showProfile(entry.name as String) }
                         rows.appendChild(li)
                     }
                 }
@@ -1044,17 +1183,16 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                         val li = document.createElement("li") as HTMLElement
                         val details = buildString {
                             append("${room.boardSize}×${room.boardSize}")
-                            if (room.winLength != room.boardSize) append(", win ${room.winLength}")
+                            if (room.winLength != room.boardSize) append(", ${winLengthText(room.winLength as Int, lang)}")
                             val level = room.botLevel as? String
-                            if (level != null) append(", ${botLabel(lang)}: $level")
+                            if (level != null) append(", ${botLabel(lang)}: ${botLevelText(level, lang)}")
                             val seconds = room.turnSeconds as? Int
                             if (seconds != null && seconds != 30) append(", ${turnSecondsText(seconds, lang)}")
                             val series = room.seriesTarget as? Int
                             if (series != null) append(", ${seriesTargetText(series, lang)}")
                         }
                         li.textContent = "${room.name} — ${room.players}/2 · $details"
-                        li.style.cursor = "pointer"
-                        li.onclick = {
+                        li.makeButtonLike {
                             val langSuffix = langParam?.let { "&lang=${urlEncode(it)}" } ?: ""
                             window.location.href = "${window.location.pathname}?room=${urlEncode(room.name as String)}$langSuffix"
                         }
@@ -1080,7 +1218,7 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                 }
                 response.json().then { data: dynamic ->
                     profileDiv.innerHTML = ""
-                    val title = document.createElement("h3")
+                    val title = document.createElement("h3") as HTMLElement
                     title.textContent = "${data.name as String} · #${data.rank as Int} · ${data.stats.rating as Int}"
                     val ul = document.createElement("ul") as HTMLElement
                     val replayDiv = document.createElement("div") as HTMLElement
@@ -1091,10 +1229,9 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                         val d = Date(rec.epochMs as Double)
                         val stamp = "${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')} " +
                             "${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}"
-                        li.textContent = "${resultMark(rec.result as String)} ${if (opponent != null) "vs $opponent · " else ""}$stamp"
-                        li.style.cursor = "pointer"
+                        li.textContent = "${resultText(rec.result as String, lang)} ${if (opponent != null) "vs $opponent · " else ""}$stamp"
                         li.title = replayHintText(lang)
-                        li.onclick = { showReplay(rec, replayDiv) }
+                        li.makeButtonLike { showReplay(rec, replayDiv) }
                         ul.appendChild(li)
                     }
                     profileDiv.appendChild(title)
@@ -1103,6 +1240,11 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
                     profileDiv.appendChild(replayDiv)
                     mountHistoryPages(data, name, profileDiv)
                     mountHeadToHead(data, profileDiv)
+                    // opening a profile from the leaderboard must not leave it off-screen
+                    title.setAttribute("tabindex", "-1")
+                    title.focus()
+                    val absoluteTop = profileDiv.getBoundingClientRect().top + window.scrollY
+                    window.scrollTo(0.0, absoluteTop)
                 }
             }.catch { /* the profile is decorative */ }
         } catch (ignored: Throwable) {
@@ -1132,10 +1274,12 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
         val current = (data.page ?: js("0")) as Int
         val row = document.createElement("div") as HTMLElement
         val older = document.createElement("button") as HTMLButtonElement
+        older.className = "secondary"
         older.textContent = "‹"
         older.disabled = current >= pages - 1
         older.onclick = { showProfile(name, current + 1) }
         val newer = document.createElement("button") as HTMLButtonElement
+        newer.className = "secondary"
         newer.textContent = "›"
         newer.disabled = current <= 0
         newer.onclick = { showProfile(name, current - 1) }
@@ -1182,12 +1326,6 @@ private class SidePanels(private val lang: Lang, private val langParam: String?)
         profileDiv.appendChild(head)
         profileDiv.appendChild(ul)
     }
-
-    private fun resultMark(result: String): String = when (result) {
-        "WIN" -> "✓"
-        "LOSS" -> "✗"
-        else -> "="
-    }
 }
 
 /** One mounted replay: a stepper, autoplay and arrow keys over a mini board. */
@@ -1207,13 +1345,22 @@ private class ReplayView(
     private val boardDiv = document.createElement("div") as HTMLElement
 
     init {
+        prev.className = "secondary"
+        next.className = "secondary"
+        play.className = "secondary"
         prev.textContent = "‹"
         next.textContent = "›"
         play.textContent = "▶"
         play.title = autoplayText(lang)
+        prev.setAttribute("aria-label", replayPrevText(lang))
+        next.setAttribute("aria-label", replayNextText(lang))
+        play.setAttribute("aria-label", autoplayText(lang))
+        play.setAttribute("aria-pressed", "false")
         val share = document.createElement("button") as HTMLButtonElement
+        share.className = "secondary"
         share.textContent = "🔗"
         share.title = copyLinkText(lang)
+        share.setAttribute("aria-label", copyLinkText(lang))
         val controls = document.createElement("div") as HTMLElement
         controls.className = "replay-controls"
         controls.appendChild(prev)
@@ -1224,6 +1371,8 @@ private class ReplayView(
 
         boardDiv.style.display = "grid"
         boardDiv.style.setProperty("grid-template-columns", "repeat($boardSize, 26px)")
+        boardDiv.style.setProperty("gap", "2px")
+        boardDiv.style.justifyContent = "center"
 
         prev.onclick = {
             stopPlaying()
@@ -1258,6 +1407,7 @@ private class ReplayView(
             stopPlaying()
         } else {
             play.textContent = "⏸"
+            play.setAttribute("aria-pressed", "true")
             playTimer = window.setInterval({ step(1) }, 700)
         }
     }
@@ -1266,6 +1416,7 @@ private class ReplayView(
         playTimer?.let { window.clearInterval(it) }
         playTimer = null
         play.textContent = "▶"
+        play.setAttribute("aria-pressed", "false")
     }
 
     private fun render() {

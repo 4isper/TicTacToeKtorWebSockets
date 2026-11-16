@@ -1,4 +1,4 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('./diagnostics');
 
 // CSS locators keep the tests independent of the UI language; cells carry X/O text.
 const cell = (page, x, y) => page.locator('#board .cell').nth(y * 3 + x);
